@@ -102,7 +102,7 @@ Expected: Next.js production build exits 0 and emits `/` plus `/api/layline/anal
 
 - [ ] **Step 4: Verify rendered page**
 
-Start the production app on a free port. Check the root page at desktop and phone widths for the intro handoff, course rail visibility rule, replay console, Debrief, engine room, and absence of console errors.
+Start the production app on a free port. Check the root page at desktop and phone widths for the intro transition, course rail visibility rule, replay console, Debrief, engine room, and absence of console errors.
 
 - [ ] **Step 5: Commit and open a pull request**
 
