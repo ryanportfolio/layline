@@ -127,10 +127,14 @@ export function Transport() {
       {/* The chart was only ever the no-WebGL stand-in. It is a way of looking
           at the race in its own right, so it gets a control beside the rigs and
           keeps the clock the scene was running on. */}
-      <div className={styles.segGroup}>
+      <div className={clsx(styles.segGroup, styles.viewGroup)}>
         <button
           type="button"
-          className={clsx(styles.segButton, chart2d && styles.segButtonOn)}
+          className={clsx(
+            styles.segButton,
+            styles.viewButton,
+            chart2d && styles.segButtonOn,
+          )}
           aria-label="Top down chart view"
           aria-pressed={chart2d}
           data-control="chart2d"
@@ -140,20 +144,40 @@ export function Transport() {
         </button>
       </div>
 
-      <div className={styles.segGroup} role="group" aria-label="Camera rig">
-        {RIGS.map((entry) => (
-          <button
-            key={entry.name}
-            type="button"
-            className={clsx(styles.segButton, rig === entry.name && styles.segButtonOn)}
-            aria-label={`Camera rig ${entry.label}`}
-            aria-pressed={rig === entry.name}
-            onClick={() => setRig(entry.name)}
-          >
-            {entry.label}
-          </button>
-        ))}
-      </div>
+      {chart2d ? (
+        <button
+          type="button"
+          className={styles.return3dButton}
+          aria-label="Return to 3D camera views"
+          data-control="return-3d"
+          onClick={() => setChart2d(false)}
+        >
+          Switch to 3D
+        </button>
+      ) : (
+        <div
+          className={clsx(styles.segGroup, styles.viewGroup)}
+          role="group"
+          aria-label="Camera rig"
+        >
+          {RIGS.map((entry) => (
+            <button
+              key={entry.name}
+              type="button"
+              className={clsx(
+                styles.segButton,
+                styles.viewButton,
+                rig === entry.name && styles.segButtonOn,
+              )}
+              aria-label={`Camera rig ${entry.label}`}
+              aria-pressed={rig === entry.name}
+              onClick={() => setRig(entry.name)}
+            >
+              {entry.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
