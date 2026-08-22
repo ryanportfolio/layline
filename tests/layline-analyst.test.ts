@@ -12,7 +12,12 @@ import {
   serializeChip,
   SUGGESTED_QUESTIONS,
 } from "../src/lib/layline/analyst/protocol";
-import { detectManeuvers, runTool, standingsAt } from "../src/lib/layline/analyst/tools";
+import { boatState, detectManeuvers, runTool, standingsAt } from "../src/lib/layline/analyst/tools";
+import { maneuversOf } from "../src/lib/layline/analytics";
+import { knots } from "../src/lib/layline/format";
+import { vmgOf as dockVmg } from "../src/components/layline/hud/live";
+import { poseAt } from "../src/lib/layline/interpolate";
+import type { Pose } from "../src/lib/layline/types";
 import { standingsAt as hudStandings } from "../src/lib/layline/interpolate";
 import { POST } from "../src/app/api/layline/analyst/route";
 
@@ -73,6 +78,56 @@ test("maneuver detection is identical across two runs", () => {
   const second = JSON.stringify(detectManeuvers(generateRace(RACE_SEED)));
   assert.equal(first, second);
   assert.ok(JSON.parse(first).length > 0, "expected at least one tack or gybe in the race");
+});
+
+test("the analyst and the timeline markers report one set of maneuvers", () => {
+  const race = generateRace(RACE_SEED);
+  let counted = 0;
+  for (const boat of race.boats) {
+    const markers = maneuversOf(race, boat.id);
+    const tool = detectManeuvers(race, boat.id);
+    assert.equal(tool.length, markers.length, `${boat.sail} marker and tool counts differ`);
+    for (let i = 0; i < markers.length; i++) {
+      assert.equal(tool[i].t, markers[i].t);
+      assert.equal(tool[i].kind, markers[i].kind);
+      assert.equal(
+        tool[i].speedLossKnots,
+        markers[i].lossKnots,
+        `${boat.sail} ${markers[i].kind} at ${markers[i].t}: tool says ${tool[i].speedLossKnots}, marker says ${markers[i].lossKnots}`,
+      );
+      counted += 1;
+    }
+  }
+  assert.ok(counted >= 12, `expected the fleet's turns, counted ${counted}`);
+});
+
+test("boat_state reports the dock's VMG and the strip's speed to the mark", () => {
+  const race = generateRace(RACE_SEED);
+  const pose: Pose = { x: 0, y: 0, hdg: 0, heel: 0, twa: 0, sog: 0, cog: 0, kite: 0 };
+  let sawRun = false;
+  for (let t = race.tMin; t <= race.tMax; t += 0.25) {
+    const state = boatState(race, "usa", t);
+    assert.ok(!("error" in state));
+
+    /* The tile's number, computed by the dock's own function on the same fix. */
+    poseAt(race, "usa", t, "raw", pose);
+    assert.equal(state.vmgKnots, knots(dockVmg(pose)), `VMG disagrees with the dock at t=${t}`);
+
+    if (state.leg === "beat" || state.leg === "run") {
+      assert.notEqual(state.toMarkKnots, null, `no speed to the mark on the ${state.leg} at t=${t}`);
+    } else {
+      /* Off the racing legs there is no mark to make good toward, and the
+       * strip prints nothing; the tool must not invent a number either. */
+      assert.equal(state.toMarkKnots, null, `${state.leg} at t=${t} reported ${state.toMarkKnots}`);
+    }
+
+    if (state.leg === "run") {
+      sawRun = true;
+      assert.ok(Number(state.vmgKnots) < 0, "running away from the wind reads negative on the dock");
+      assert.ok(Number(state.toMarkKnots) > 0, "gaining on the mark reads positive on the strip");
+    }
+  }
+  assert.ok(sawRun, "expected part of the run in the sampled window");
 });
 
 test("a maneuver never reports negative speed loss", () => {

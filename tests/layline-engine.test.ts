@@ -136,5 +136,15 @@ test("display edge: the prestart clock counts down, the gap column stays honest"
   assert.equal(clock(65.9), "1:05");
   assert.equal(gap({ rank: 3, leg: "prestart", gapSeconds: 4 }), MISSING);
   assert.equal(gap({ rank: 1, leg: "beat", gapSeconds: 0 }), "LDR");
-  assert.equal(gap({ rank: 3, leg: "run", gapSeconds: 2.6 }), "+3 s");
+  /* Tenths under ten seconds: a fleet inside half a second of itself has to
+   * read as six different boats, not six copies of "+0 s". */
+  assert.equal(gap({ rank: 3, leg: "run", gapSeconds: 2.6 }), "+2.6 s");
+  assert.equal(gap({ rank: 2, leg: "beat", gapSeconds: 0.061 }), "+0.1 s");
+  assert.equal(gap({ rank: 4, leg: "beat", gapSeconds: 0.469 }), "+0.5 s");
+  assert.equal(gap({ rank: 5, leg: "run", gapSeconds: -1e-12 }), "+0.0 s");
+  /* Ten up reads whole, and the rounding decides the branch, so 9.97 cannot
+   * print itself as a ten with a tenth on it. */
+  assert.equal(gap({ rank: 6, leg: "run", gapSeconds: 9.94 }), "+9.9 s");
+  assert.equal(gap({ rank: 6, leg: "run", gapSeconds: 9.97 }), "+10 s");
+  assert.equal(gap({ rank: 6, leg: "run", gapSeconds: 42.4 }), "+42 s");
 });

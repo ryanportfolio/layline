@@ -85,14 +85,45 @@ function QualityGovernor() {
   return null;
 }
 
-/* On-demand rendering needs someone to ask for the frame, and only a change
- * that moves the picture may ask. Playing, rate, the ready flags and the freeze
- * itself all travel through this store too, and a frame drawn for one of those
- * is a frame nobody wanted: while the loop is running it is one more draw per
- * store write, and while it is frozen it breaks the promise that a held page
- * renders nothing at all. */
+/* A held canvas draws only when it is told to, and only a change that moves
+ * the picture may tell it. Playing, rate, the ready flags and the freeze itself
+ * all travel through this store too, and a frame drawn for one of those is a
+ * frame nobody wanted.
+ *
+ * The hold runs the loop at "never" rather than "demand": there is no request
+ * queue to race, so a stray store write cannot slip a frame past the freeze,
+ * and each drawn frame carries a stated delta instead of however long the
+ * shutter took. The timestamp restarts at every freeze because the renderer
+ * zeroes its own clock on the way in. */
+const FROZEN_STEP = 1 / 60;
+
 function DemandBridge() {
-  const invalidate = useThree((state) => state.invalidate);
+  const advance = useThree((state) => state.advance);
+  const width = useThree((state) => state.size.width);
+  const height = useThree((state) => state.size.height);
+  const frozen = useReplay((state) => state.frozen);
+  const stamp = useRef(0);
+  const holding = useRef(false);
+
+  /* Also on a resize, which is the one thing that moves the picture without
+   * going through the store: a viewport, dock or font change rewrites the
+   * camera aspect and the dock measurements the rigs frame against, and the
+   * loop at "never" ignores the renderer's own invalidation. This effect runs
+   * after the observers that take those measurements, so the frame it asks for
+   * is drawn against the settled layout. */
+  useEffect(() => {
+    if (!frozen) {
+      holding.current = false;
+      return;
+    }
+    /* The renderer zeroes its own clock on the way into the hold, so the stamp
+     * starts again with it and only with it. */
+    if (!holding.current) stamp.current = 0;
+    holding.current = true;
+    stamp.current += FROZEN_STEP;
+    advance(stamp.current);
+  }, [frozen, advance, width, height]);
+
   useEffect(
     () =>
       useReplay.subscribe((state, previous) => {
@@ -103,10 +134,11 @@ function DemandBridge() {
           state.mode !== previous.mode ||
           state.followId !== previous.followId
         ) {
-          invalidate();
+          stamp.current += FROZEN_STEP;
+          advance(stamp.current);
         }
       }),
-    [invalidate],
+    [advance],
   );
   return null;
 }
@@ -124,7 +156,7 @@ export function LaylineScene({ race }: { race: RaceData }) {
   return (
     <Canvas
       dpr={[1, 2]}
-      frameloop={frozen ? "demand" : "always"}
+      frameloop={frozen ? "never" : "always"}
       camera={{ position: [44, 34, 76], fov: 40, near: 1, far: 12000 }}
       gl={{
         /* Multisampling is free here only because nothing post-processes the

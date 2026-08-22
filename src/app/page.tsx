@@ -3,10 +3,13 @@ import { clock } from "@/lib/layline/format";
 import { generateRace } from "@/lib/layline/sim";
 import { RACE_SEED } from "@/lib/layline/types";
 import { AnalystSection } from "@/components/layline/analyst/AnalystSection";
+import { CourseRail } from "@/components/layline/CourseRail";
+import { IntroOverlay } from "@/components/layline/intro/IntroOverlay";
 import { LaylineApp } from "@/components/layline/LaylineApp";
 import { NotesSection } from "@/components/layline/NotesSection";
 import { TrackChart } from "@/components/layline/svg/TrackChart";
 import styles from "./layline.module.css";
+import "./scrollbar.css";
 
 export const metadata: Metadata = {
   title: "Layline · Race Replay",
@@ -22,10 +25,15 @@ export default function LaylinePage() {
   const fleet = new Map(race.boats.map((boat) => [boat.id, boat]));
 
   return (
-    <div className={styles.shell}>
+    <div className={styles.shell} data-layline-page>
       <a className={styles.skip} href="#replay-console">
         Skip to the replay console
       </a>
+
+      {/* Inside the shell so it reads the page's tokens, over everything the
+          shell paints so the wait belongs to one picture. Rendered after the
+          skip link, which stays the first thing a keyboard reaches. */}
+      <IntroOverlay />
 
       <div className={styles.prototypeBar}>
         <strong>Race replay prototype</strong>
@@ -35,7 +43,7 @@ export default function LaylinePage() {
 
       <div className={styles.statusBanner} role="status">
         <strong>Build in progress · replay and analysis both running</strong>
-        <span>still landing: heel and trim on the instrument dock, a broadcast opening shot</span>
+        <span>still landing: heel and trim on the instrument dock</span>
       </div>
 
       <main className={styles.main}>
@@ -44,6 +52,7 @@ export default function LaylinePage() {
           className={styles.console}
           aria-label="Race replay console"
           tabIndex={-1}
+          data-leg="Replay console"
         >
           <LaylineApp>
             <div className={styles.fallback}>
@@ -102,6 +111,12 @@ export default function LaylinePage() {
       </main>
 
       <footer className={styles.colophon}>Spec work by Ryan Allen | all demo concepts</footer>
+
+      {/* The right margin, drawn as the course. Inside the shell so it inherits
+          the console's palette, and last so nothing is stacked over it. It
+          stands the platform bar down itself, at mount, and only at the widths
+          where it actually draws. */}
+      <CourseRail />
     </div>
   );
 }

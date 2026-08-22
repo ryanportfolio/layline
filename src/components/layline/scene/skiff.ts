@@ -845,27 +845,49 @@ function sailShell(s: Shell, spec: SailSpec, lee: number, cloth: Color): void {
   }
 }
 
-/* The mainsail's four corners in the boom node's own frame, tack and clew then
- * head and peak. Anything that has to know how much of the picture a boat
- * covers has to look here as well as at the hull: the cloth is the widest thing
- * on the boat and it swings with the boom, so the hull's own corners do not
- * follow it. Derived from the same numbers the sail is cut from, because an
- * envelope typed in by hand drifts away from the cloth the first time the cut
- * changes. */
-export const MAIN_CORNERS = [
-  MAIN_SPEC.tack[0],
-  MAIN_SPEC.tack[1],
-  MAIN_SPEC.tack[2],
-  MAIN_SPEC.tack[0],
-  MAIN_SPEC.tack[1],
-  MAIN_SPEC.tack[2] + MAIN_CHORD[0],
-  MAIN_SPEC.head[0],
-  MAIN_SPEC.head[1],
-  MAIN_SPEC.head[2],
-  MAIN_SPEC.head[0],
-  MAIN_SPEC.head[1],
-  MAIN_SPEC.head[2] + MAIN_CHORD[MAIN_CHORD.length - 1],
-];
+/* The mainsail's outline in the boom node's own frame: the luff at the tack and
+ * the head, then the leech sampled up the span. Anything that has to know how
+ * much of the picture a boat covers has to look here as well as at the hull: the
+ * cloth is the widest thing on the boat and it swings with the boom, so the
+ * hull's own corners do not follow it.
+ *
+ * The leech is sampled rather than taken as the chord between clew and peak,
+ * because this is a square top with roach in it: at mid hoist the cut stands
+ * nearly half a metre outboard of that chord, and at chase range half a metre is
+ * the strip of cloth a label placed off the corners alone comes down on. Both
+ * lateral signs, since the twist swings the leech toward whichever side the
+ * boat is on and one box has to hold either. Derived from the numbers the sail
+ * is cut from, because an envelope typed in by hand drifts away from the cloth
+ * the first time the cut changes. */
+function mainOutline(): number[] {
+  const points: number[] = [
+    MAIN_SPEC.tack[0],
+    MAIN_SPEC.tack[1],
+    MAIN_SPEC.tack[2],
+    MAIN_SPEC.head[0],
+    MAIN_SPEC.head[1],
+    MAIN_SPEC.head[2],
+  ];
+  const spans = 4;
+  for (let step = 0; step <= spans; step++) {
+    const v = step / spans;
+    const chord = curveAt(MAIN_CHORD, v);
+    const theta = (MAIN_SPEC.trim + MAIN_SPEC.twist * Math.pow(v, 1.3)) * DEG;
+    const y =
+      MAIN_SPEC.tack[1] +
+      (MAIN_SPEC.head[1] - MAIN_SPEC.tack[1]) * v +
+      chord * MAIN_SPEC.rise * (1 - v);
+    const z =
+      MAIN_SPEC.tack[2] +
+      (MAIN_SPEC.head[2] - MAIN_SPEC.tack[2]) * v +
+      Math.cos(theta) * chord;
+    const x = Math.sin(theta) * chord;
+    points.push(x, y, z, -x, y, z);
+  }
+  return points;
+}
+
+export const MAIN_CORNERS = mainOutline();
 
 /** Mainsail and boom, in a frame whose origin is the mast at the waterline. */
 export function mainGeometry(lee: number): BufferGeometry {

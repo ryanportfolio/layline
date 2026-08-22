@@ -50,6 +50,8 @@ export function Transport() {
   const rate = useReplay((state) => state.rate);
   const mode = useReplay((state) => state.mode);
   const rig = useReplay((state) => state.rig);
+  const chart2d = useReplay((state) => state.chart2d);
+  const setChart2d = useReplay((state) => state.setChart2d);
   const toggle = useReplay((state) => state.toggle);
   const step = useReplay((state) => state.step);
   const setRate = useReplay((state) => state.setRate);
@@ -121,6 +123,22 @@ export function Transport() {
       </button>
 
       <span className={styles.transportSpacer} />
+
+      {/* The chart was only ever the no-WebGL stand-in. It is a way of looking
+          at the race in its own right, so it gets a control beside the rigs and
+          keeps the clock the scene was running on. */}
+      <div className={styles.segGroup}>
+        <button
+          type="button"
+          className={clsx(styles.segButton, chart2d && styles.segButtonOn)}
+          aria-label="Top down chart view"
+          aria-pressed={chart2d}
+          data-control="chart2d"
+          onClick={() => setChart2d(!chart2d)}
+        >
+          2D
+        </button>
+      </div>
 
       <div className={styles.segGroup} role="group" aria-label="Camera rig">
         {RIGS.map((entry) => (

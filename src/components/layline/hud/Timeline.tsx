@@ -2,10 +2,17 @@
 
 import { useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from "react";
 import styles from "@/app/layline.module.css";
+import { maneuversOf } from "@/lib/layline/analytics";
 import { clock } from "@/lib/layline/format";
 import { FIX_HZ, type RaceData } from "@/lib/layline/types";
 import { useReplay } from "../store";
 import { onLive, sampleLive, setText } from "./live";
+
+/* Ten units across, drawn into a 10px glyph. A tack turns the bow up through
+ * the wind and a gybe turns it down through it, so the chevrons point the way
+ * the turn goes and a viewer can tell the two apart without reading a key. */
+const TACK_GLYPH = "M1.5 6.9 L5 2.7 L8.5 6.9";
+const GYBE_GLYPH = "M1.5 3.1 L5 7.3 L8.5 3.1";
 
 /* The strip shows the fixes either side of the playhead rather than the whole
  * race: 4 Hz across five minutes is more ticks than there are pixels. */
@@ -70,6 +77,12 @@ export function Timeline({ race }: { race: RaceData }) {
     () => new Map(race.boats.map((boat) => [boat.id, boat.hue])),
     [race],
   );
+  /* Only the followed boat's turns. Six boats' worth would be a fence, and the
+     rest of this panel already reads one boat at a time. Re-derived when the
+     console follows somebody else; every marker is a race time, so nothing
+     here is on the clock's path. */
+  const maneuvers = useMemo(() => maneuversOf(race, followId), [race, followId]);
+  const followed = race.boats.find((entry) => entry.id === followId) ?? race.boats[0];
 
   /* Frozen at mount so React never rewrites what the listener below owns. */
   const seed = useRef({
@@ -233,6 +246,39 @@ export function Timeline({ race }: { race: RaceData }) {
       </div>
 
       <span className={styles.timeClockTotal}>{clock(race.tMax)}</span>
+
+      <span className={styles.manLabel}>Turns</span>
+      <div
+        className={styles.manRail}
+        role="group"
+        aria-label={`Tacks and gybes for ${followed.sail}`}
+      >
+        {maneuvers.map((maneuver) => (
+          <button
+            key={maneuver.t}
+            type="button"
+            className={styles.manMark}
+            style={{ left: pct(maneuver.t) }}
+            data-maneuver={maneuver.kind}
+            data-at={maneuver.t}
+            /* The reading names its own definition: Debrief measures the same
+               turn from the first fix of its window, which is a different
+               number, and a tooltip that said only "off the entry speed" would
+               be claiming to be that one. */
+            title={`${maneuver.kind === "tack" ? "Tack" : "Gybe"} at ${clock(maneuver.t)}, ${maneuver.lossKnots} kn below its fastest reading in the 4 s before the turn`}
+            aria-label={`Go to the ${maneuver.kind} at ${clock(maneuver.t)}`}
+            onClick={() => {
+              const store = useReplay.getState();
+              store.pause();
+              store.seek(maneuver.t);
+            }}
+          >
+            <svg className={styles.manGlyph} viewBox="0 0 10 10" aria-hidden="true">
+              <path d={maneuver.kind === "tack" ? TACK_GLYPH : GYBE_GLYPH} />
+            </svg>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

@@ -1,118 +1,119 @@
-import { FIX_HZ } from "@/lib/layline/types";
+import { RACE_SEED } from "@/lib/layline/types";
 import type { RaceData } from "@/lib/layline/types";
-import { FixRateDiagram, HermiteDiagram, ShortArcDiagram } from "./svg/diagrams";
+import { finishGap45, finishGaps } from "./engine/benchData";
+import { buildBoard } from "./engine/boardData";
+import { EngineRoom, FinishStrip } from "./engine/EngineRoom";
+import engine from "./engine/engine.module.css";
 import styles from "@/app/layline.module.css";
 
-/* The excerpt is the feed in the units it is stored in, so the numbers can be
- * checked against the drawings above without a conversion in the way. */
-const EXCERPT_BOAT = "nzl";
-const EXCERPT_FROM = 18;
-const EXCERPT_ROWS = 6;
-
+/* The engine room builds its own copy of the race from the same seed on the
+ * client, the way the console and the Debrief panel already do, rather than
+ * putting ~260 KB of telemetry in the page payload for a section that reads
+ * one boat's tack.
+ *
+ * The finish strip is the exception and the reason the race prop is read here:
+ * a finish time is a sub-tick crossing at the far end of the sim, and Node and
+ * the browser land up to fifteen milliseconds apart on it. Six numbers built
+ * on the server travel down as props, so the page prints the times the test
+ * pins instead of whichever engine drew them last.
+ *
+ * The build board reads the same server race. It is static markup with no
+ * clock behind it, so it costs nothing on the client and cannot disagree with
+ * the finish strip about which race this is. */
 export function NotesSection({ race }: { race: RaceData }) {
-  const fixes = race.fixes[EXCERPT_BOAT];
-  const start = fixes.findIndex((fix) => fix.t >= EXCERPT_FROM);
-  const excerpt = fixes.slice(start, start + EXCERPT_ROWS);
-  const boat = race.boats.find((entry) => entry.id === EXCERPT_BOAT);
-  const sail = boat === undefined ? EXCERPT_BOAT.toUpperCase() : boat.sail;
-
+  const order = finishGaps(race);
+  const board = buildBoard(race);
   return (
-    <section className={styles.notes} aria-labelledby="notes-heading">
-      <h2 id="notes-heading" className={styles.notesHeading}>
-        How the replay works
-      </h2>
-      <div className={styles.note}>
-        <div>
-          <h3 className={styles.noteHeading}>Four fixes a second</h3>
-          <p className={styles.noteBody}>
-            Each boat reports {FIX_HZ} times a second: position, speed over the ground, heading,
-            heel, wind angle. One reading every {(1000 / FIX_HZ).toFixed(0)} milliseconds.
-          </p>
-          <p className={styles.noteBody}>
-            A screen refreshes sixty times a second. Draw only the fixes and each one holds for
-            fifteen frames, then jumps. The boat reaches the mark in the right place at the right
-            time and looks wrong the whole way there.
-          </p>
+    <section
+      className={styles.notes}
+      aria-labelledby="notes-heading"
+      data-leg="How the replay works"
+    >
+      <EngineRoom />
+
+      <div className={engine.stands}>
+        <p className={engine.kicker}>Build status</p>
+        <h2 className={engine.standsHeading}>Where this build stands</h2>
+      </div>
+      <div className={`${engine.panel} ${engine.boardPanel}`}>
+        <div className={engine.boardHead}>
+          <div>
+            <p className={engine.railLabel}>Three lanes · one seeded race</p>
+            <ul className={engine.boardKey}>
+              <li className={engine.boardKeyItem}>
+                <span className={engine.dot} aria-hidden="true" />
+                Running on this page
+              </li>
+              <li className={engine.boardKeyItem}>
+                <span className={`${engine.dot} ${engine.dotLanding}`} aria-hidden="true" />
+                Still landing
+              </li>
+            </ul>
+          </div>
+          {/* The count is read off the rows below, so the headline figure and
+              the dots beside it can only ever say the same thing. */}
+          <div className={engine.ident}>
+            <p className={engine.identLine}>Rows on this board</p>
+            <p className={engine.tallyValue}>
+              {board.running}
+              <span className={engine.tallySlash}>/</span>
+              {board.rows}
+            </p>
+            <p className={engine.tallySub}>Running</p>
+          </div>
         </div>
-        <FixRateDiagram race={race} />
-      </div>
 
-      <div className={styles.note}>
-        <div>
-          <h3 className={styles.noteHeading}>Between the fixes</h3>
-          <p className={styles.noteBody}>
-            A cubic curve fills each gap, one segment per pair of fixes. What matters is where the
-            curve gets its direction. A tangent guessed from the fixes either side cuts the corner
-            off every tack.
-          </p>
-          <p className={styles.noteBody}>
-            Each fix already carries a speed and a course, measured at that instant. Use those as
-            the tangents and the curve leaves every fix on the heading that fix reported, and
-            arrives at the next one the same way. The turn keeps its shape. The speed through it
-            stays honest.
-          </p>
+        <div className={engine.board}>
+          {board.lanes.map((lane) => (
+            <div key={lane.name} className={engine.lane}>
+              <h3 className={engine.laneName}>{lane.name}</h3>
+              <ul className={engine.laneRows}>
+                {lane.rows.map((row) => (
+                  <li
+                    key={row.label}
+                    className={row.state === "landing" ? `${engine.row} ${engine.rowLanding}` : engine.row}
+                  >
+                    <span
+                      className={row.state === "landing" ? `${engine.dot} ${engine.dotLanding}` : engine.dot}
+                      aria-hidden="true"
+                    />
+                    <span className={engine.rowLabel}>
+                      {row.label}
+                      <span className={engine.srOnly}>
+                        {row.state === "landing" ? " (still landing)" : " (running)"}
+                      </span>
+                    </span>
+                    {row.value === undefined ? (
+                      <span className={engine.rowBlank} aria-hidden="true" />
+                    ) : (
+                      <span className={engine.rowValue}>
+                        {row.value}
+                        {row.unit === undefined ? null : (
+                          <span className={engine.rowUnit}>{row.unit}</span>
+                        )}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
-        <HermiteDiagram race={race} />
-      </div>
 
-      <div className={styles.note}>
-        <div>
-          <h3 className={styles.noteHeading}>Heading is a circle</h3>
-          <p className={styles.noteBody}>
-            Position, speed and heel are plain numbers and interpolate like plain numbers. Heading
-            is not. It lives on a circle where 359 sits next to 0, so a boat crossing the top of
-            the circle produces two readings that look far apart and are not.
+        <div className={engine.boardFoot}>
+          <p className={engine.boardNote}>
+            Every figure on this board is counted out of the race the replay above is running, so
+            the board follows the seed rather than describing it
           </p>
-          <p className={styles.noteBody}>
-            Every angle in the engine interpolates the short way round: heading, course over
-            ground, wind direction, wind angle. Turn rate is capped at a figure no hull can beat,
-            so one bad reading bends the curve and never spins the boat.
-          </p>
+          <div className={engine.ident} aria-hidden="true">
+            <p className={engine.identLine}>One seed · every number</p>
+            <p className={engine.standsIdentValue}>{RACE_SEED}</p>
+            <p className={engine.identSub}>Race seed</p>
+          </div>
         </div>
-        <ShortArcDiagram race={race} />
       </div>
 
-      <div className={styles.excerpt}>
-        <table className={styles.excerptTable}>
-          <caption>
-            {EXCERPT_ROWS} consecutive fixes from {sail}, a second and a quarter of the feed, in
-            the units the engine stores. Everything on this page reads from rows like these
-          </caption>
-          <thead>
-            <tr>
-              <th scope="col">T s</th>
-              <th scope="col">X m</th>
-              <th scope="col">Y m</th>
-              <th scope="col">SOG m/s</th>
-              <th scope="col">HDG deg</th>
-            </tr>
-          </thead>
-          <tbody>
-            {excerpt.map((fix) => (
-              <tr key={fix.t}>
-                <td>{fix.t.toFixed(2)}</td>
-                <td>{fix.x.toFixed(2)}</td>
-                <td>{fix.y.toFixed(2)}</td>
-                <td>{fix.sog.toFixed(2)}</td>
-                <td>{fix.hdg.toFixed(1)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <h2 className={styles.notesHeading}>Where this build stands</h2>
-      <p className={styles.notesLead}>
-        Both halves are on the page. Running now: the replay engine, a seeded six boat race at
-        four fixes a second, the boat models with wake and spray, three broadcast camera rigs,
-        the raw fixes lens, the instrument and standings docks, water, sky, and the chart the
-        page falls back to without WebGL. The laylines and marks draw on a damped display wind,
-        so one gusty reading cannot swing them. The replay steps fix by fix, one reading at a
-        time. Debrief answers questions about the race through tools that read this same feed:
-        the start boat by boat, every tack and gybe with the speed it cost, two boats compared
-        over any window. Still in work: heel and trim on the instrument dock, and an opening
-        shot that frames the fleet before the gun.
-      </p>
+      <FinishStrip order={order} gap={finishGap45(order)} />
     </section>
   );
 }

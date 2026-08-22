@@ -1,0 +1,97 @@
+/* ============================================================================
+   THE PLATFORM BAR ON THIS ROUTE.
+
+   Two decisions live here, and both hang off <html>, which is why they are in a
+   plain stylesheet rather than layline.module.css: a CSS module refuses any
+   selector that carries no local class.
+
+   1. EVERYWHERE THE RAIL IS NOT DRAWING, THE REAL BAR IS PAINTED IN THE
+      CONSOLE'S OWN INKS. Below 901px, and on any visit where the rail never
+      mounted, the platform bar is what the reader gets, so it is drawn in the
+      page ground with the dim ink for the thumb and the panel hairline down the
+      channel instead of the browser's grey. 10px channel, 4px of thumb inside a
+      3px transparent inset over padding-box, square corners: the console draws
+      no radius anywhere, so its bar takes none either.
+
+   2. WHERE THE RAIL DOES DRAW, THAT BAR STANDS DOWN. The attribute is stamped
+      by CourseRail at mount, never statically, and the rule is gated to the
+      same width the rail draws at. Both halves of that gate are load bearing: a
+      static rule would leave every no-JS visitor with no bar at all, and an
+      ungated one would take the bar off every handset while the rail sat there
+      at display: none.
+
+   THE ORDER OF THOSE TWO IS LOAD BEARING, and it was wrong first time round.
+   `html[data-layline-rail]` and `html:has([data-layline-page])` have the SAME
+   specificity: :has() contributes its most specific argument, so an attribute
+   selector either way, 0-1-1 both. With the suppression written first, the
+   painted bar below it won every tie and handed a mounted rail a second,
+   native scrollbar beside it. Measured in Chromium: ::-webkit-scrollbar
+   resolved to 10px at 1440px with the rail up, where the suppression asked for
+   0. So the suppression now comes LAST and also carries :has() itself, which
+   takes it to 0-2-1 and makes it independent of the order it is written in.
+
+   Scoped by :has() on a server-rendered attribute rather than by JS, so the
+   paint is there on the first frame and, just as important, stops matching the
+   moment a client-side navigation takes the layline DOM off the page.
+
+   The colours are literals because <html> sits outside the .shell block where
+   the tokens are declared. They are --page-ground, --ink-dim and --rule, in
+   that order, and prototype-layline.test.mjs fails if they ever drift from it.
+
+   THE COST, stated: any styled bar replaces the macOS overlay scrollbar, which
+   hides itself, with a permanent one. Taken deliberately on a page whose whole
+   subject is reading a position on a course.
+   ========================================================================= */
+
+html:has([data-layline-page])::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+html:has([data-layline-page])::-webkit-scrollbar-track {
+  background: #070f16;
+}
+
+html:has([data-layline-page])::-webkit-scrollbar-track:vertical {
+  border-left: 1px solid rgba(164, 188, 203, 0.28);
+}
+
+html:has([data-layline-page])::-webkit-scrollbar-track:horizontal {
+  border-top: 1px solid rgba(164, 188, 203, 0.28);
+}
+
+html:has([data-layline-page])::-webkit-scrollbar-thumb {
+  background: #a4bccb;
+  background-clip: padding-box;
+  border: 3px solid transparent;
+  border-radius: 0;
+}
+
+html:has([data-layline-page])::-webkit-scrollbar-corner {
+  background: #070f16;
+}
+
+/* Blink honours scrollbar-color and drops the ::-webkit-scrollbar geometry the
+   moment it sees it, so the standard properties stay behind this guard and only
+   engines with no ::-webkit-scrollbar of their own read them. Same handling
+   every campaign bar on this site uses. */
+@supports not selector(::-webkit-scrollbar) {
+  html:has([data-layline-page]) {
+    scrollbar-width: thin;
+    scrollbar-color: #a4bccb #070f16;
+  }
+}
+
+/* The suppression, last and at 0-2-1, so it beats every painted-bar rule above
+   in both engines: the standard property for the ones that read it, the
+   pseudo-element geometry for the ones that do not. */
+@media (min-width: 901px) {
+  html[data-layline-rail]:has([data-layline-page]) {
+    scrollbar-width: none;
+  }
+
+  html[data-layline-rail]:has([data-layline-page])::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+}

@@ -54,9 +54,9 @@ export type LegName = "prestart" | "beat" | "run" | "finished";
 export interface ProgressSample {
   t: number;
   leg: LegName;
-  dtf: number; // meters to the finish, measured along the course axis
+  dtf: number; // meters to the finish, as arc length along the course polyline
   rank: number; // 1-based; during the prestart this is entry order
-  gapMeters: number; // to the leader along the course axis, 0 for the leader
+  gapMeters: number; // to the leader along that same arc, 0 for the leader
   gapSeconds: number; // gapMeters over the leader's along-course speed, clamped
 }
 

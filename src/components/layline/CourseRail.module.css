@@ -1,0 +1,247 @@
+/* ============================================================================
+   THE COURSE RAIL. The right margin, drawn as the course.
+
+   This is not a bar dressed as an instrument. The axis is the course, the marks
+   are this document's real sections at their real share of it, the thumb is a
+   hull whose length is the viewport's true share, and the amber pair that
+   converges on the next mark is a layline. The rail inherits the console's
+   closed palette from .shell and takes nothing it is not entitled to:
+
+     --ink        the boat, and the mark you have rounded
+     --ink-dim    a mark still ahead of you, and the callout's second line
+     --rule       the course axis and the rail's own border, at the console's
+                  one hairline weight
+     --whitecap   foam, and only foam
+     --wind       the laylines. Amber is the wind on this page and a layline is
+                  a wind fact, so this is the same amber the dial needle and the
+                  ladder rungs take, spent on the same meaning
+     --hud-ground the callout, which is a dock panel and is treated as one
+
+   BANNED HERE, same as the console: gradients, blur, shadow, rounded pills,
+   and any de-emphasis expressed as an opacity on an ink rather than as a token.
+   The two opacities that do ship are on MOTION quantities (wake extension,
+   layline proximity), where the value is the reading, not a dimmer.
+
+   THE COST, stated: drawing this means standing the platform's bar down, which
+   on macOS replaces an overlay scrollbar that hides itself with a permanent
+   24px margin. The trade is taken on one prototype page whose whole subject is
+   reading a course, and it is gated to widths of 901px and up, where the
+   console runs its overlay layout. Below that the platform bar stays and is
+   painted in the console's own inks instead (see scrollbar.css).
+   ========================================================================= */
+
+.rail {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  width: 24px;
+  background: var(--page-ground);
+  border-left: 1px solid var(--rule);
+  /* The drag is a pointer gesture the browser must not also read as a scroll. */
+  touch-action: none;
+  user-select: none;
+  /* Site doctrine: anything that answers a press carries the mark. */
+  cursor: var(--house-cursor);
+}
+
+/* Below 901px the console stops overlaying its stage and becomes a column, the
+   page is read with a thumb rather than a pointer, and the platform's own bar
+   is left in place. There is nothing here to draw. */
+@media (max-width: 900px) {
+  .rail {
+    display: none;
+  }
+}
+
+/* A page with no distance to run has no position to report. */
+.rail[data-scrollable="false"] {
+  display: none;
+}
+
+.plot {
+  display: block;
+  width: 24px;
+  height: 100%;
+  overflow: visible;
+}
+
+/* The plot is drawn furniture, not a control surface. Only the hull answers a
+   press; every other mark in here lets the press through to the track, which
+   is what turns a press on open water into a course change rather than a grab
+   on a boat that is not there. */
+.axis,
+.gate,
+.mark,
+.laylines,
+.wake {
+  pointer-events: none;
+}
+
+/* ---- the course --------------------------------------------------------- */
+
+.axis {
+  stroke: var(--rule);
+  stroke-width: 1;
+}
+
+/* Start and finish are the same drawing: a mark, a committee boat, and the
+   water between them. Dim until you are standing on it. */
+.gate line {
+  stroke: var(--rule);
+  stroke-width: 1;
+}
+
+.gate circle {
+  fill: var(--ink-dim);
+}
+
+/* Crossing the line inks it, and it stays inked while the reader is on it.
+   SETTLE, so it arrives rather than snapping, and one-shot: nothing here
+   loops. */
+.gate[data-end="finish"] line,
+.gate[data-end="finish"] circle {
+  transition:
+    stroke var(--settle) var(--ease),
+    fill var(--settle) var(--ease);
+}
+
+.rail[data-finished="true"] .gate[data-end="finish"] line {
+  stroke: var(--ink);
+}
+
+.rail[data-finished="true"] .gate[data-end="finish"] circle {
+  fill: var(--ink);
+}
+
+/* ---- the marks ---------------------------------------------------------- */
+
+/* A mark ahead is an open ring, the way a course diagram draws one you have not
+   got to yet. Rounding it fills it. The two ticks either side are the mark
+   reading against the rail's edges, at the console's one hairline weight. */
+.markRing {
+  fill: var(--page-ground);
+  stroke: var(--ink-dim);
+  stroke-width: 1;
+  /* A third of SETTLE. Rounding a mark is a state that flips while the reader
+     is moving, and at the full 1.2s the ink was still arriving two marks
+     later. The finish keeps the whole 1.2s, because arriving there is the one
+     thing on this rail that happens once. */
+  transition:
+    fill calc(var(--settle) / 3) var(--ease),
+    stroke calc(var(--settle) / 3) var(--ease);
+}
+
+.markRule {
+  stroke: var(--rule);
+  stroke-width: 1;
+}
+
+.mark[data-rounded="true"] .markRing {
+  fill: var(--ink);
+  stroke: var(--ink);
+}
+
+/* ---- the laylines ------------------------------------------------------- */
+
+/* Two hairlines converging on the mark you are running at. Their strength is
+   range to the mark, written per frame by the paint loop, so the opacity here
+   is a reading and not a dimmer on an ink. */
+.laylines line {
+  stroke: var(--wind);
+  stroke-width: 1;
+}
+
+/* ---- the boat ----------------------------------------------------------- */
+
+.hull {
+  /* The one thing in the plot a press can land on. */
+  pointer-events: auto;
+  fill: var(--page-ground);
+  stroke: var(--ink);
+  stroke-width: 1.25;
+  stroke-linejoin: round;
+  /* The bow answers the direction of travel by turning end for end about the
+     hull's own centre. fill-box keeps that centre on the hull rather than on
+     the whole plot. */
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 0.24s var(--ease);
+}
+
+.hull[data-bow="up"] {
+  transform: scaleY(-1);
+}
+
+/* Foam, broken the way foam is: two dashed hairlines opening off the transom
+   quarters, their run and their strength both taken from speed over the ground.
+   Butt caps, deliberately: round caps drew a dot at zero length, which put foam
+   behind a boat that was standing still. */
+.wake {
+  fill: none;
+  stroke: var(--whitecap);
+  stroke-width: 1;
+  stroke-dasharray: 1 3;
+}
+
+/* ---- the callout -------------------------------------------------------- */
+
+/* A dock panel, treated as one: the panel ground, one hairline rule, no shadow.
+   It reads the leg you are on in the page's own voice and the distance left to
+   run in the measured voice, in the only unit this document can honestly
+   measure itself in. */
+.callout {
+  position: absolute;
+  top: 0;
+  right: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: max-content;
+  max-width: 168px;
+  padding: 6px 10px;
+  background: var(--hud-ground);
+  border: 1px solid var(--rule);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s var(--ease);
+}
+
+.rail:hover .callout,
+.rail[data-drag="true"] .callout {
+  opacity: 1;
+}
+
+.calloutName {
+  color: var(--ink);
+  font-family: var(--font-archivo), sans-serif;
+  font-size: 11px;
+  line-height: 14px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.calloutRun {
+  color: var(--ink-dim);
+  font-family: var(--font-martian), monospace;
+  font-size: 10px;
+  line-height: 14px;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- reduced motion ----------------------------------------------------- */
+
+/* SETTLE becomes a cut. Every position on the rail is exact either way: the
+   wake is already held at zero by the paint loop, and nothing here was ever
+   the only way to read where you are. */
+@media (prefers-reduced-motion: reduce) {
+  .gate[data-end="finish"] line,
+  .gate[data-end="finish"] circle,
+  .markRing,
+  .hull,
+  .callout {
+    transition-duration: 0s;
+  }
+}

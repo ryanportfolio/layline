@@ -22,10 +22,10 @@ export const KNOWLEDGE: KnowledgeChunk[] = [
   },
   {
     id: "vmg",
-    title: "VMG",
-    terms: ["vmg", "velocity", "made", "good", "along", "course", "speed"],
+    title: "VMG and speed to the mark",
+    terms: ["vmg", "velocity", "made", "good", "along", "course", "speed", "mark", "tomark"],
     text:
-      "VMG, velocity made good, is the share of boat speed actually spent closing the course. Here it is speed over ground times the cosine of course over ground, taken toward the windward mark on the beat and toward the finish on the run. A boat can be fastest through the water and still lose on VMG by sailing too wide an angle.",
+      "Velocity made good is the share of boat speed actually spent getting somewhere, and this page shows two of them because there are two somewheres. The dock's VMG tile resolves speed onto the wind axis: positive climbing to windward, negative on the run, since a boat running is sailing away from the wind it is measured against. The strip beside it, labelled To mark, resolves speed onto the course axis toward whichever mark is next, so it stays positive whenever the boat is gaining. They agree only when the wind lies straight down the course. A boat can be fastest through the water and lose on either one by sailing too wide an angle.",
   },
   {
     id: "tack-gybe",

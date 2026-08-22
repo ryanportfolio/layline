@@ -38,12 +38,20 @@ interface ReplayStore {
   mode: ReplayMode;
   rig: RigName;
   followId: string;
+  /* The top-down chart in place of the rendered scene, on the same clock. A
+   * mode, not a fallback: the renderer stays up behind it, because the clock
+   * runs inside its frame loop and a chart with no clock is a picture. */
+  chart2d: boolean;
   reducedMotion: boolean;
   /* True once the renderer has put a frame on screen, not merely once the
    * canvas element exists: the fallback chart stays up until there is an
    * actual image to replace it with. */
   webglOk: boolean;
   hudReady: boolean;
+  /* True once the page-load intro has let go of the viewport. Autoplay waits
+   * on it: the prestart is five seconds long and spending it behind a cover
+   * would mean the gun goes off where nobody can see it. */
+  introDone: boolean;
   /* Capture hold. The frame loop stops advancing the clock and the canvas
    * drops to on-demand rendering, so a screenshot is taken of a stated time
    * rather than of whenever the shutter happened to fall. */
@@ -57,10 +65,12 @@ interface ReplayStore {
   setRate: (rate: PlayRate) => void;
   setMode: (mode: ReplayMode) => void;
   setRig: (rig: RigName) => void;
+  setChart2d: (on: boolean) => void;
   follow: (boatId: string) => void;
   setReducedMotion: (reduced: boolean) => void;
   setWebglOk: (ok: boolean) => void;
   setHudReady: (ready: boolean) => void;
+  setIntroDone: (done: boolean) => void;
   freeze: () => void;
   thaw: () => void;
 }
@@ -80,9 +90,11 @@ export const useReplay = create<ReplayStore>((set, get) => ({
   mode: "smooth",
   rig: "tv",
   followId: "nzl",
+  chart2d: false,
   reducedMotion: false,
   webglOk: false,
   hudReady: false,
+  introDone: false,
   frozen: false,
 
   /* Play from the end means play it again: the replay never loops on its own,
@@ -127,10 +139,12 @@ export const useReplay = create<ReplayStore>((set, get) => ({
   setRate: (rate) => set({ rate }),
   setMode: (mode) => set({ mode }),
   setRig: (rig) => set({ rig }),
+  setChart2d: (on) => set({ chart2d: on }),
   follow: (boatId) => set({ followId: boatId }),
   setReducedMotion: (reduced) => set({ reducedMotion: reduced }),
   setWebglOk: (ok) => set({ webglOk: ok }),
   setHudReady: (ready) => set({ hudReady: ready }),
+  setIntroDone: (done) => set({ introDone: done }),
   freeze: () => set({ frozen: true, playing: false }),
   thaw: () => set({ frozen: false }),
 }));
