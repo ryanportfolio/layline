@@ -24,6 +24,7 @@ import {
   trackColour,
   type LineArrays,
 } from "./course";
+import { dockBand } from "./dock";
 import { swellDirection } from "./waves";
 
 const DEG = Math.PI / 180;
@@ -39,6 +40,11 @@ const TRACK_CAP = 288;
  * both trips. */
 const DECIMATE = 0.8;
 const TRACK_HALF = 0.26;
+/* And the widest that half metre is ever allowed to draw. Half a metre of
+ * ribbon under a boat twelve metres from a chase camera is forty pixels of
+ * painted water, which reads as a carpet the boat is driving along rather than
+ * as where it has been. */
+const TRACK_MAX_PX = 3.5;
 const TRACK_FADE = 0.9;
 /* Time constant on the fade. At twenty seconds the tail is down to five percent
  * of the head, which is where a track stops being a line and starts being a
@@ -72,6 +78,7 @@ function newRibbon(colour: Color): Ribbon {
       const v = row * 2 + side;
       arrays.position[v * 3 + 1] = TRACK_LIFT;
       arrays.span[v] = side === 0 ? -TRACK_HALF : TRACK_HALF;
+      arrays.maxPx[v] = TRACK_MAX_PX;
       arrays.color[v * 3] = colour.r;
       arrays.color[v * 3 + 1] = colour.g;
       arrays.color[v * 3 + 2] = colour.b;
@@ -236,8 +243,11 @@ export function BoatTracks({ race }: { race: RaceData }) {
     const height = state.gl.domElement.height;
     kit.material.uniforms.uTime.value = t;
     kit.material.uniforms.uHeight.value = height;
+    kit.material.uniforms.uDpr.value = height / Math.max(state.size.height, 1);
+    kit.material.uniforms.uDock.value = dockBand.pixels;
     kit.dotMaterial.uniforms.uTime.value = t;
     kit.dotMaterial.uniforms.uHeight.value = height;
+    kit.dotMaterial.uniforms.uDock.value = dockBand.pixels;
 
     for (let i = 0; i < count; i++) {
       const node = ribbonNodes[i];

@@ -34,16 +34,33 @@ export const LAYLINE_LIFT = 0.2;
 export const START_LIFT = 0.26;
 export const TRACK_LIFT = 0.32;
 
-/* Half widths in metres, and the alpha each class is drawn at. */
-export const RUNG_HALF = 0.16;
+/* Half widths in metres, and the alpha each class is drawn at. The rung is the
+ * quietest thing on the sea and the first to fall under the floor: at a hundred
+ * and sixty metres the old sixteen centimetres drew two pixels of a colour the
+ * water had already taken most of, which is a rung a viewer cannot find and so
+ * cannot lay two boats against. */
+export const RUNG_HALF = 0.2;
 export const ZONE_HALF = 0.22;
 export const LAYLINE_HALF = 0.26;
 export const START_HALF = 0.4;
 
-export const RUNG_FADE = 0.22;
+export const RUNG_FADE = 0.34;
 export const ZONE_FADE = 0.36;
 export const LAYLINE_FADE = 0.66;
 export const START_FADE = 0.88;
+
+/* And the widest each class is ever drawn on screen, in pixels of the picture.
+ * A line authored in metres has no ceiling of its own: half a metre of layline
+ * is four pixels from the tactical rig and thirty five from a chase camera
+ * twelve metres off it, at which point the graphic has stopped being a line and
+ * become paint on the water. The floor below keeps a far line whole; these keep
+ * a near one a line. Every class of casing carries the same multiple of its
+ * line's ceiling that it does of its width, so the pair stay a rule around a
+ * line at any range. */
+export const RUNG_MAX_PX = 2.5;
+export const ZONE_MAX_PX = 2.5;
+export const LAYLINE_MAX_PX = 3.5;
+export const START_MAX_PX = 5;
 
 /* Wake foam and whitecaps run the same value as the line work drawn over them,
  * so a dash crossing a boat's wake loses its edges and a rung breaks. The
@@ -52,19 +69,27 @@ export const START_FADE = 0.88;
  * puts a dark rule either side of the line, which is what the line is read off.
  * It sits a hair lower so the pair never argue about depth. */
 export const CASE_DROP = 0.03;
-export const RUNG_CASE_HALF = 0.42;
-export const START_CASE_HALF = 0.9;
-export const RUNG_CASE_FADE = 0.3;
-export const START_CASE_FADE = 0.46;
+export const RUNG_CASE_HALF = 0.52;
+/* The start line is the one graphic that has to survive being drawn over the
+ * fleet's own wake at the gun, where the foam carries the same value the ink
+ * does. Wide enough and dark enough to put a rule either side of the line
+ * rather than a hint of one. */
+export const START_CASE_HALF = 1.4;
+export const RUNG_CASE_FADE = 0.42;
+export const START_CASE_FADE = 0.7;
+export const RUNG_CASE_MAX_PX = 6.5;
+export const START_CASE_MAX_PX = 16;
 
 const lineVertex = /* glsl */ `
 uniform float uTime;
 uniform vec2 uWind;
 uniform float uHeight;
 uniform float uMinPx;
+uniform float uDpr;
 
 attribute vec2 aPerp;
 attribute float aSpan;
+attribute float aMaxPx;
 attribute vec3 aColor;
 attribute float aFade;
 attribute float aTime;
@@ -84,8 +109,13 @@ void main() {
   /* Under about a pixel and a half a line stops being thin and starts being
      intermittent, so a far line is widened to keep it whole. What the widening
      buys in pixels it gives back in alpha, or a line would read heavier the
-     further away it got. */
-  float wide = max(abs(aSpan), uMinPx * 0.5 * perPixel);
+     further away it got. The ceiling is the same argument the other way up: a
+     near line is narrowed back to the weight its class is allowed, and the
+     compensation is held at one so narrowing never turns it solid. The ceiling
+     is stated in pixels of the picture rather than of the buffer, so it reads
+     the same weight on a display that draws two samples for each of them. */
+  float held = max(aMaxPx * uDpr, uMinPx) * 0.5 * perPixel;
+  float wide = clamp(abs(aSpan), uMinPx * 0.5 * perPixel, held);
   vec2 column = position.xz + aPerp * (wide * sign(aSpan));
   vec2 base = laylineColumn(column, uTime, uWind, cameraPosition.xz);
   vec3 disp;
@@ -95,25 +125,38 @@ void main() {
   vec3 world = vec3(column.x, disp.y + position.y, column.y);
   float age = max(uTime - aTime, 0.0);
   vColor = aColor;
-  vAlpha = aFade * exp(-age * aLife) * (abs(aSpan) / wide);
+  vAlpha = aFade * exp(-age * aLife) * min(1.0, abs(aSpan) / wide);
   gl_Position = projectionMatrix * viewMatrix * vec4(world, 1.0);
 }
 `;
 
+/* The console ground is 0.86 opaque, so a graphic run under the bottom panel
+ * does not disappear behind it: fourteen percent of a hue track comes through as
+ * a coloured band across the leg labels, the rounding ticks and the playhead.
+ * The line work stops above the panel instead, faded out over a band rather than
+ * cut, so nothing on the water ever reaches the console whatever the camera is
+ * doing. The band is zero at the narrow width, where the panels leave the canvas
+ * and stack under it. */
 const lineFragment = /* glsl */ `
+uniform float uHeight;
+uniform float uDock;
+
 varying vec3 vColor;
 varying float vAlpha;
 
 void main() {
   if (vAlpha < 0.005) discard;
-  gl_FragColor = vec4(vColor, clamp(vAlpha, 0.0, 1.0));
+  float clear = uDock > 0.0 ? smoothstep(uDock, uDock + uHeight * 0.06, gl_FragCoord.y) : 1.0;
+  float alpha = vAlpha * clear;
+  if (alpha < 0.005) discard;
+  gl_FragColor = vec4(vColor, clamp(alpha, 0.0, 1.0));
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }
 `;
 
 export const CourseLineMaterial = shaderMaterial(
-  { uTime: 0, uWind: new Vector2(0, 1), uHeight: 900, uMinPx: 1.7 },
+  { uTime: 0, uWind: new Vector2(0, 1), uHeight: 900, uMinPx: 1.7, uDpr: 1, uDock: 0 },
   lineVertex,
   lineFragment,
 );
@@ -162,6 +205,9 @@ void main() {
 `;
 
 const dotFragment = /* glsl */ `
+uniform float uHeight;
+uniform float uDock;
+
 varying vec3 vColor;
 varying float vAlpha;
 varying vec2 vUv;
@@ -171,7 +217,8 @@ void main() {
   if (r > 1.0) discard;
   /* A rim rather than a soft edge. Softened all the way out the dots blur into
      one another at four a second and stop reading as separate measurements. */
-  float alpha = vAlpha * (1.0 - smoothstep(0.78, 1.0, r));
+  float clear = uDock > 0.0 ? smoothstep(uDock, uDock + uHeight * 0.06, gl_FragCoord.y) : 1.0;
+  float alpha = vAlpha * (1.0 - smoothstep(0.78, 1.0, r)) * clear;
   if (alpha < 0.005) discard;
   gl_FragColor = vec4(vColor * mix(1.0, 0.45, smoothstep(0.6, 0.92, r)), alpha);
   #include <tonemapping_fragment>
@@ -190,6 +237,7 @@ export const TrackDotMaterial = shaderMaterial(
     uLife: 0.14,
     uHeight: 900,
     uMinPx: 2.4,
+    uDock: 0,
   },
   dotVertex,
   dotFragment,
@@ -199,6 +247,7 @@ export interface LineArrays {
   position: Float32Array;
   perp: Float32Array;
   span: Float32Array;
+  maxPx: Float32Array;
   color: Float32Array;
   fade: Float32Array;
   time: Float32Array;
@@ -210,6 +259,7 @@ export function lineArrays(verts: number): LineArrays {
     position: new Float32Array(verts * 3),
     perp: new Float32Array(verts * 2),
     span: new Float32Array(verts),
+    maxPx: new Float32Array(verts),
     color: new Float32Array(verts * 3),
     fade: new Float32Array(verts),
     time: new Float32Array(verts),
@@ -223,6 +273,7 @@ export function attachLineArrays(geometry: BufferGeometry, arrays: LineArrays): 
   geometry.setAttribute("position", new BufferAttribute(arrays.position, 3));
   geometry.setAttribute("aPerp", new BufferAttribute(arrays.perp, 2));
   geometry.setAttribute("aSpan", new BufferAttribute(arrays.span, 1));
+  geometry.setAttribute("aMaxPx", new BufferAttribute(arrays.maxPx, 1));
   geometry.setAttribute("aColor", new BufferAttribute(arrays.color, 3));
   geometry.setAttribute("aFade", new BufferAttribute(arrays.fade, 1));
   geometry.setAttribute("aTime", new BufferAttribute(arrays.time, 1));
@@ -233,6 +284,7 @@ export function markLineArrays(geometry: BufferGeometry): void {
   geometry.attributes.position.needsUpdate = true;
   geometry.attributes.aPerp.needsUpdate = true;
   geometry.attributes.aSpan.needsUpdate = true;
+  geometry.attributes.aMaxPx.needsUpdate = true;
   geometry.attributes.aColor.needsUpdate = true;
   geometry.attributes.aFade.needsUpdate = true;
 }
@@ -279,6 +331,7 @@ export function pushSegment(
   bz: number,
   lift: number,
   half: number,
+  maxPx: number,
   color: Color,
   fade: number,
 ): void {
@@ -302,6 +355,7 @@ export function pushSegment(
     arrays.perp[v * 2] = px;
     arrays.perp[v * 2 + 1] = pz;
     arrays.span[v] = corner === 1 || corner === 2 ? half : -half;
+    arrays.maxPx[v] = maxPx;
     arrays.color[v * 3] = color.r;
     arrays.color[v * 3 + 1] = color.g;
     arrays.color[v * 3 + 2] = color.b;
@@ -322,6 +376,7 @@ export function pushRun(
   bz: number,
   lift: number,
   half: number,
+  maxPx: number,
   color: Color,
   fade: number,
   step: number,
@@ -340,51 +395,11 @@ export function pushRun(
       az + dz * u1,
       lift,
       half,
+      maxPx,
       color,
       fade,
     );
   }
-}
-
-/* Casing first, then the line, because the pool is drawn in the order it is
- * written and the casing is the thing that has to be underneath. Both passes
- * run whole so a joint between two spans never puts one span's casing over the
- * previous span's line. */
-export function pushCasedRun(
-  buffer: LineBuffer,
-  ax: number,
-  az: number,
-  bx: number,
-  bz: number,
-  lift: number,
-  half: number,
-  color: Color,
-  fade: number,
-  step: number,
-  casing: Color,
-  caseHalf: number,
-  caseFade: number,
-): void {
-  pushRun(buffer, ax, az, bx, bz, lift - CASE_DROP, caseHalf, casing, caseFade, step);
-  pushRun(buffer, ax, az, bx, bz, lift, half, color, fade, step);
-}
-
-export function pushCasedSegment(
-  buffer: LineBuffer,
-  ax: number,
-  az: number,
-  bx: number,
-  bz: number,
-  lift: number,
-  half: number,
-  color: Color,
-  fade: number,
-  casing: Color,
-  caseHalf: number,
-  caseFade: number,
-): void {
-  pushSegment(buffer, ax, az, bx, bz, lift - CASE_DROP, caseHalf, casing, caseFade);
-  pushSegment(buffer, ax, az, bx, bz, lift, half, color, fade);
 }
 
 export function pushRing(
@@ -394,6 +409,7 @@ export function pushRing(
   radius: number,
   lift: number,
   half: number,
+  maxPx: number,
   color: Color,
   fade: number,
   segments: number,
@@ -404,7 +420,7 @@ export function pushRing(
     const angle = (i / segments) * Math.PI * 2;
     const nx = cx + Math.cos(angle) * radius;
     const nz = cz + Math.sin(angle) * radius;
-    pushSegment(buffer, px, pz, nx, nz, lift, half, color, fade);
+    pushSegment(buffer, px, pz, nx, nz, lift, half, maxPx, color, fade);
     px = nx;
     pz = nz;
   }

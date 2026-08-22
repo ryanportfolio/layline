@@ -37,6 +37,7 @@ const PROGRESS_EVERY = SIM_HZ / PROGRESS_HZ;
 const T_PRESTART = -10;
 const LEG_LENGTH = 100;
 const LINE_HALF = 35;
+const MARK_X = 0;
 const ZONE_RADIUS = 8;
 const RUN_OUT = 6;
 const HORIZON = 90;
@@ -247,6 +248,7 @@ interface Sim {
   wide: number;
   desired: number;
   dtf: number;
+  rounded: boolean;
   toGo: number;
   tacks: number;
   gybes: number;
@@ -371,16 +373,31 @@ function pushFix(b: Sim, t: number): void {
   });
 }
 
-/* Distance still to sail down the course axis, and it only ever counts down.
- * Both branches clamp at the length of one leg, which is where they meet: a
- * boat carrying its turn past the mark's latitude has no beat left to sail and
- * no run sailed yet, so it holds at the whole run rather than trading places
- * with the fleet still below it. A boat that has crossed the line has none of
- * it left. */
-function distanceToFinish(y: number, run: boolean, done: boolean): number {
+/* What the corner is worth in course length. A hull still swinging round the
+ * buoy has some of the course left that a hull already pointing down the run
+ * does not, and the axis cannot see the difference. Eight metres is the mark
+ * zone, and it is also the ceiling: charge the corner more than that and a boat
+ * carving the tightest rounding in the fleet counts down faster than it sails,
+ * which is the leaderboard outrunning the picture the other way. */
+const TURN_ARC = ZONE_RADIUS;
+const COURSE_ARC = 2 * LEG_LENGTH + TURN_ARC;
+
+/* Distance still to sail, as one arc length along the course polyline: up the
+ * axis to the mark, round the corner, down the axis to the line. Measured on y
+ * alone the corner is invisible, and it is where the fleet spends its closest
+ * seconds: boats round wide, so a hull crosses the mark's latitude on the way
+ * in and again on the way out and hangs above it in between, sailing hard for
+ * no y at all. Above that latitude the angle swept round the buoy is what
+ * counts down instead, zero where a boat crosses going up and half a turn where
+ * it crosses coming back, so the arc meets the axis exactly at both crossings
+ * and a rounding hands nobody a step in either direction. A boat that has
+ * crossed the line has none of it left. */
+function distanceToFinish(x: number, y: number, rounded: boolean, done: boolean): number {
   if (done) return 0;
-  if (run) return Math.min(y, LEG_LENGTH);
-  return LEG_LENGTH + Math.max(LEG_LENGTH - y, 0);
+  const above = y - LEG_LENGTH;
+  if (above > 0) return LEG_LENGTH + TURN_ARC * (1 - Math.atan2(above, x - MARK_X) / Math.PI);
+  if (rounded) return Math.max(y, 0);
+  return COURSE_ARC - y;
 }
 
 /* The fallback a give-way role falls to when neither the tack rule nor a live
@@ -463,7 +480,7 @@ function buildPrestart(b: Sim, w: Wind, ticks: number): void {
       b.prog.push({
         t: q(t),
         leg: "prestart",
-        dtf: q(distanceToFinish(py[k], false, false)),
+        dtf: q(distanceToFinish(px[k], py[k], false, false)),
         rank: b.entry + 1,
         gapMeters: 0,
         gapSeconds: 0,
@@ -939,7 +956,7 @@ export function generateRace(seed: number): RaceData {
   const course: Course = {
     startPin: { x: -LINE_HALF, y: 0 },
     startBoat: { x: LINE_HALF, y: 0 },
-    windward: { x: 0, y: LEG_LENGTH },
+    windward: { x: MARK_X, y: LEG_LENGTH },
     zoneRadius: ZONE_RADIUS,
   };
   const windCount = Math.ceil((HORIZON - T_PRESTART) * WIND_HZ) + 1;
@@ -977,6 +994,7 @@ export function generateRace(seed: number): RaceData {
     wide: 0,
     desired: 0,
     dtf: 0,
+    rounded: false,
     toGo: 0,
     tacks: 0,
     gybes: 0,
@@ -1030,6 +1048,9 @@ export function generateRace(seed: number): RaceData {
   const roleAt = new Float64Array(boats.length * boats.length);
   let finished = 0;
   let lastFixT = 0;
+  /* Held between the crossing and the scoring of it, because places are not
+   * settled until every hull that crossed inside the tick has been seen. */
+  const crossed: Sim[] = [];
   /* The pace the gaps are measured against freezes when the leader stops
    * racing, so a boat still on the water is not scored against a hull that is
    * coasting down with its sails eased. */
@@ -1244,12 +1265,27 @@ export function generateRace(seed: number): RaceData {
       const prevY = b.y;
       stepBoat(b, t, twd, tws);
 
-      if (b.phase === PHASE_ARC || b.phase === PHASE_APPROACH) {
+      /* The arc is measured to the closest hull, not to the first tick that
+       * reads as a run: a boat is still rounding while it is still closing on
+       * the buoy, whatever the kite is doing. Carried through the run leg so
+       * the minimum is taken after the boat has left the mark behind. */
+      if (b.phase >= PHASE_APPROACH && b.phase <= PHASE_RUN) {
         const d = Math.hypot(b.x - markX, b.y - markY);
         if (d < b.markMin) {
           b.markMin = d;
           b.tRound = t;
         }
+      }
+      /* Which side of the corner the published arc measures from. A rounding to
+       * port comes in on the buoy's right and leaves on its left, so the hull
+       * crossing the mark's own meridian above it is the moment the beat behind
+       * it stops counting and the run in front of it starts. A boat that carves
+       * the turn tight enough to bear away below the mark's own latitude before
+       * it gets across that meridian has rounded just the same, and the leg it
+       * is sailing says so: read off the quadrant alone it would count the beat
+       * all the way down the run. */
+      if (!b.rounded && b.phase >= PHASE_APPROACH) {
+        if (b.phase === PHASE_RUN || (b.y > markY && b.x < markX)) b.rounded = true;
       }
       if (b.phase === PHASE_RUN && prevY > 0 && b.y <= 0) {
         const f = prevY / (prevY - b.y);
@@ -1257,13 +1293,26 @@ export function generateRace(seed: number): RaceData {
         b.finishTwa = Math.abs(b.twa);
         b.phase = PHASE_DONE;
         b.locked = true;
+        crossed.push(b);
+      }
+      if (b.phase === PHASE_DONE && t > b.tFinish + RUN_OUT) b.active = false;
+    }
+
+    /* Two hulls can cross inside one tick and the fleet array is not the order
+     * they crossed in. Places go on the interpolated crossing time, which is
+     * the only thing the line itself measured. */
+    if (crossed.length > 0) {
+      if (crossed.length > 1) {
+        crossed.sort((a, b) => a.tFinish - b.tFinish || a.meta.id.localeCompare(b.meta.id));
+      }
+      for (const b of crossed) {
         finished++;
         b.place = finished;
         events.push({ kind: "rounding", t: q(b.tRound), boatId: b.meta.id });
         events.push({ kind: "finish", t: q(b.tFinish), boatId: b.meta.id, rank: finished });
         results.push({ boatId: b.meta.id, rank: finished, elapsed: q(b.tFinish) });
       }
-      if (b.phase === PHASE_DONE && t > b.tFinish + RUN_OUT) b.active = false;
+      crossed.length = 0;
     }
 
     if (k % FIX_EVERY === 0) {
@@ -1276,7 +1325,7 @@ export function generateRace(seed: number): RaceData {
 
     if (k % PROGRESS_EVERY === 0) {
       for (const b of boats) {
-        if (b.active) b.dtf = distanceToFinish(b.y, b.phase >= PHASE_RUN, b.phase === PHASE_DONE);
+        if (b.active) b.dtf = distanceToFinish(b.x, b.y, b.rounded, b.phase === PHASE_DONE);
       }
       order2.sort((i, j) => boats[i].dtf - boats[j].dtf || boats[i].place - boats[j].place);
       const lead = boats[order2[0]];

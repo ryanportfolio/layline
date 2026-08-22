@@ -180,7 +180,7 @@ const WELL_HALF = 1.16;
 const WELL_LIP = 0.26;
 const WELL_RAIL = 0.11;
 const STAFF_Z = 2.4;
-const STAFF_TOP = 4.02;
+const STAFF_TOP = 4.32;
 /* A signal staff is a broomstick, but a broomstick is a third of a pixel at the
  * ranges these rigs frame her from, and a staff nobody can see makes the flag
  * on it look like a sticker. Wide enough to hold a couple of pixels from the
@@ -377,33 +377,44 @@ export function committeeGeometry(): BufferGeometry {
   );
 
   /* The code flag, three bands the way a signal flag is made. She lies head to
-   * wind on her anchor and the wind runs up the course, so cloth streaming
-   * straight aft is edge on to the two rigs that ever frame her, which is how a
-   * flag ends up being nothing at all. It flies off the quarter instead, well
-   * clear of the staff, with a wave across it that grows toward the fly the way
-   * cloth does: three quarters of a metre of it faces a camera astern and a
-   * metre faces one abeam, and the wave gives the two halves different light
-   * from either. The material draws both faces of it. */
-  const flagLow = 3.02;
-  const flagHigh = 3.86;
-  const flagRoot = 0.09;
-  const flagFly = 1.24;
-  /* Thirty eight degrees off the centreline, resolved once rather than left as
-   * a trig call inside a loop that runs at build time only. */
-  const FLY_ACROSS = 0.6157;
-  const FLY_AFT = 0.788;
+   * wind on her anchor and the wind runs up the course, so a panel of cloth with
+   * no width is the same nothing from every position the rigs ever frame her
+   * from, and pointing that panel somewhere else only moves which rig loses it:
+   * the helicopter looks down the course and the chase looks along the line.
+   *
+   * The answer is a flag with body. It flies out off the quarter, and the cloth
+   * waves ACROSS the fly rather than along it, half a metre of curl with the head
+   * carried further round than the foot. So the surface turns through most of a
+   * half circle between hoist and fly, and whichever way a camera is pointed some
+   * of it is facing the eye while the rest takes different light. The material
+   * draws both faces, because a flag has two sides and she swings all replay. */
+  const flagLow = 3.0;
+  const flagHigh = 4.02;
+  const flagRoot = 0.1;
+  const flagFly = 1.62;
+  /* Fifty two degrees off the centreline for the fly, and the curl runs square
+   * to it. Both resolved here rather than left as trig inside a build loop. */
+  const FLY_ACROSS = 0.788;
+  const FLY_AFT = 0.6157;
+  const CURL = 0.46;
   const FLAG_SPANS = 9;
   const bands: [number, Rgb][] = [
     [0.34, rgb(FLAG_FIELD)],
     [0.68, rgb(FLAG_PANEL)],
     [1.0, rgb(FLAG_FIELD)],
   ];
-  const flagX = (u: number): number =>
-    flagRoot + u * flagFly * FLY_ACROSS + Math.sin(u * Math.PI * 1.7) * 0.16 * (0.3 + 0.7 * u);
-  const flagZ = (u: number): number => STAFF_Z + 0.06 + u * flagFly * FLY_AFT;
+  /* How far off the fly line the cloth is at this point, and how much more of
+   * that the head takes than the foot. */
+  const flagWave = (u: number): number => Math.sin(u * Math.PI * 1.75) * CURL * (0.4 + 0.6 * u);
+  const flagX = (u: number, twist: number): number =>
+    flagRoot + u * flagFly * FLY_ACROSS - flagWave(u) * twist * FLY_AFT;
+  const flagZ = (u: number, twist: number): number =>
+    STAFF_Z + 0.05 + u * flagFly * FLY_AFT + flagWave(u) * twist * FLY_ACROSS;
   /* The cloth sags toward the fly, which is what stops the strip reading as a
    * painted board. */
-  const flagDrop = (u: number): number => u * u * 0.11;
+  const flagDrop = (u: number): number => u * u * 0.12;
+  const FOOT_TWIST = 0.45;
+  const HEAD_TWIST = 1.35;
   for (let i = 0; i < FLAG_SPANS; i++) {
     const u0 = i / FLAG_SPANS;
     const u1 = (i + 1) / FLAG_SPANS;
@@ -413,10 +424,10 @@ export function committeeGeometry(): BufferGeometry {
     const drop1 = flagDrop(u1);
     quad(
       shell,
-      [flagX(u0), flagLow - drop0, flagZ(u0)],
-      [flagX(u1), flagLow - drop1, flagZ(u1)],
-      [flagX(u1), flagHigh - drop1, flagZ(u1)],
-      [flagX(u0), flagHigh - drop0, flagZ(u0)],
+      [flagX(u0, FOOT_TWIST), flagLow - drop0, flagZ(u0, FOOT_TWIST)],
+      [flagX(u1, FOOT_TWIST), flagLow - drop1, flagZ(u1, FOOT_TWIST)],
+      [flagX(u1, HEAD_TWIST), flagHigh - drop1, flagZ(u1, HEAD_TWIST)],
+      [flagX(u0, HEAD_TWIST), flagHigh - drop0, flagZ(u0, HEAD_TWIST)],
       colour,
     );
   }
