@@ -57,7 +57,7 @@ npm run dev
 
 Open http://localhost:3000. Node 20 or newer. No database, no assets to download: the race is generated from seed ${facts.seed} on first render, identically on the server and in your browser.
 
-No API key either. The committed \`.env\` runs Debrief in mock mode, where the route answers out of the same tools a model would call, off the same race, with no network. To point it at a real model instead, put \`OPENROUTER_API_KEY\` in \`.env.local\` and set \`LAYLINE_ANALYST_MOCK=0\` there; the mock flag wins whenever both are set.
+No API key either. The committed \`.env\` runs Debrief in mock mode, where the route answers out of the same tools a model would call, off the same race, with no network. The three suggested questions come back in full; a question of your own gets the standings and a line saying plainly that it is a stand-in, because with no model nothing here can read it. To point it at a real model, put \`OPENROUTER_API_KEY\` in \`.env.local\` and set \`LAYLINE_ANALYST_MOCK=0\` there; the mock flag wins whenever both are set.
 
 ## What you are looking at
 

@@ -248,6 +248,11 @@ function mockDownwind(race: RaceData): MockStep[] {
   return steps;
 }
 
+/* Anything the scripted answers do not cover. Saying so is the whole point:
+ * without a model this route cannot read a new question, and answering it with
+ * the standings as though it had would be the one dishonest thing in the
+ * build. The standings still come from the tools, so the reader gets real
+ * numbers and a straight account of why they are these ones. */
 function mockStandings(race: RaceData): MockStep[] {
   const steps: MockStep[] = [statusStep(race, "standings_at", { t: 45 })];
   const mid = standingsAt(race, 45);
@@ -258,7 +263,9 @@ function mockStandings(race: RaceData): MockStep[] {
   steps.push({
     kind: "text",
     value:
-      `The standings tell that one best. At ${mid.raceClock} ${lead.sail} led on the ${lead.leg} ${serializeChip(45, lead.boatId)}, ` +
+      `No model is answering right now, so this reply is a stand-in: the three suggested questions are scripted and ` +
+      `everything else gets the standings. Set OPENROUTER_API_KEY to have a model read your question and call the tools itself. ` +
+      `Meanwhile, at ${mid.raceClock} ${lead.sail} led on the ${lead.leg} ${serializeChip(45, lead.boatId)}, ` +
       `with ${second.sail} ${gapWords(second.gapSeconds)} back and ${third.sail} third at ${gapWords(third.gapSeconds)}. ` +
       `By ${final.raceClock} the race was done: ${w1.sail} first, ${w2.sail} second, ${w3.sail} third ${serializeChip(60)}.`,
   });
@@ -324,8 +331,21 @@ const RATE_LIMIT = 10;
 const RATE_WINDOW_MS = 60_000;
 const rateBook = new Map<string, { count: number; windowStart: number }>();
 
+/* Who to bill a request to. A caller can send any x-forwarded-for it likes and
+ * rotate it every request, which would hand each one a fresh bucket, so the
+ * platform's own header wins and the fallback takes the LAST hop in the chain,
+ * the one the trusted proxy appended, not the first one the client wrote. */
+function callerKey(req: Request): string {
+  const real = req.headers.get("x-real-ip")?.trim();
+  if (real !== undefined && real !== "") return real;
+  const chain = req.headers.get("x-forwarded-for");
+  if (chain === null) return "local";
+  const hops = chain.split(",").map((hop) => hop.trim()).filter((hop) => hop !== "");
+  return hops.length === 0 ? "local" : hops[hops.length - 1];
+}
+
 function rateLimited(req: Request, now: number): boolean {
-  const ip = (req.headers.get("x-forwarded-for") ?? "local").split(",")[0].trim();
+  const ip = callerKey(req);
   const entry = rateBook.get(ip);
   if (entry === undefined || now - entry.windowStart >= RATE_WINDOW_MS) {
     if (rateBook.size > 500) {
