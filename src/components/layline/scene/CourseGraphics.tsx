@@ -1,41 +1,48 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { Color, DoubleSide, MeshStandardMaterial, type Group, type Mesh } from "three";
 import { hashString, mulberry32 } from "@/lib/prng";
 import type { Pose, RaceData } from "@/lib/layline/types";
 import { sampleLive } from "../hud/live";
 import { useReplay } from "../store";
 import {
+  CASE_DROP,
   CourseLineMaterial,
   LAYLINE_FADE,
   LAYLINE_HALF,
   LAYLINE_LIFT,
+  LAYLINE_MAX_PX,
   RUNG_CASE_FADE,
   RUNG_CASE_HALF,
+  RUNG_CASE_MAX_PX,
   RUNG_FADE,
   RUNG_HALF,
   RUNG_LIFT,
+  RUNG_MAX_PX,
   START_CASE_FADE,
   START_CASE_HALF,
+  START_CASE_MAX_PX,
   START_FADE,
   START_HALF,
   START_LIFT,
+  START_MAX_PX,
   ZONE_FADE,
   ZONE_HALF,
   ZONE_LIFT,
+  ZONE_MAX_PX,
   bearingVector,
   commitLines,
   displayTwd,
   newLineBuffer,
-  pushCasedRun,
-  pushCasedSegment,
   pushRing,
   pushRun,
+  pushSegment,
   resetLines,
   tackingAngle,
 } from "./course";
+import { dockBand, watchDockBand } from "./dock";
 import { COMMITTEE_STAFF_Z, committeeGeometry, markGeometry } from "./marks";
 import { sampleWave, swellDirection, type WaveSample } from "./waves";
 
@@ -57,8 +64,10 @@ const LAYLINE_STEP = 4;
 /* Fifty metres of ladder, perpendicular to the true wind rather than to the
  * course axis: two boats on one rung have the same water left to sail, and that
  * only holds against the wind. Five rungs run from one spacing above the mark
- * to fifty metres past the start line, which covers the beat and carries the
- * run home. */
+ * to fifty metres past the start line, which is every rung the tactical frustum
+ * can hold: from a hundred and sixty metres up at a 45 degree field it sees
+ * about a hundred and fifty metres of course, so a sixth rung would be drawn
+ * behind the camera or over the horizon either way. */
 const RUNG_SPACING = 50;
 const RUNG_FIRST = 1;
 const RUNG_LAST = 3;
@@ -157,6 +166,28 @@ function gunTime(race: RaceData): number {
   return 0;
 }
 
+/* What the swell is doing this frame, in one object owned by the component and
+ * rewritten in place. The water height under the furniture is asked for about
+ * fifteen times a frame, and a closure over the frame's locals would be an
+ * allocation every one of those frames. */
+interface Swell {
+  t: number;
+  dirX: number;
+  dirZ: number;
+  eyeX: number;
+  eyeZ: number;
+  probe: WaveSample;
+}
+
+function newSwell(): Swell {
+  return { t: 0, dirX: 0, dirZ: 0, eyeX: 0, eyeZ: 0, probe: { height: 0, jacobian: 1 } };
+}
+
+function surfaceAt(swell: Swell, x: number, z: number): number {
+  return sampleWave(x, z, swell.t, swell.dirX, swell.dirZ, swell.eyeX, swell.eyeZ, swell.probe)
+    .height;
+}
+
 /**
  * Course graphics, drawn on the water. The wind owns the amber, so the laylines,
  * the ladder and the zone ring all take it and separate on alpha instead; ink is
@@ -165,10 +196,11 @@ function gunTime(race: RaceData): number {
  * the instruments read.
  */
 export function CourseGraphics({ race }: { race: RaceData }) {
+  const gl = useThree((state) => state.gl);
   const wind = useMemo(() => swellDirection(race), [race]);
   const kit = useMemo(() => buildCourse(wind[0], wind[1]), [wind]);
   const spare = useMemo(newPose, []);
-  const probe = useMemo<WaveSample>(() => ({ height: 0, jacobian: 1 }), []);
+  const swell = useMemo(newSwell, []);
   const heading = useMemo<[number, number]>(() => [0, -1], []);
   const bearing = useMemo<[number, number]>(() => [0, -1], []);
   const gun = useMemo(() => gunTime(race), [race]);
@@ -179,6 +211,9 @@ export function CourseGraphics({ race }: { race: RaceData }) {
   const committeeHullRef = useRef<Mesh>(null);
 
   useEffect(() => kit.dispose, [kit]);
+  /* Where the console starts, for every shader that draws on the water. One
+   * watcher for the layer, read by the tracks as well as by the furniture. */
+  useEffect(() => watchDockBand(gl.domElement), [gl]);
 
   useFrame((state) => {
     const { t, mode, rig } = useReplay.getState();
@@ -191,8 +226,12 @@ export function CourseGraphics({ race }: { race: RaceData }) {
 
     kit.lineMaterial.uniforms.uTime.value = t;
     /* The drawing buffer, not the CSS box: the pixel a line is held against is
-     * the sample the rasteriser writes. */
-    kit.lineMaterial.uniforms.uHeight.value = state.gl.domElement.height;
+     * the sample the rasteriser writes. The ratio between the two carries the
+     * screen ceilings, which are stated in pixels of the picture. */
+    const buffer = state.gl.domElement.height;
+    kit.lineMaterial.uniforms.uHeight.value = buffer;
+    kit.lineMaterial.uniforms.uDpr.value = buffer / Math.max(state.size.height, 1);
+    kit.lineMaterial.uniforms.uDock.value = dockBand.pixels;
 
     const lines = kit.lines;
     resetLines(lines);
@@ -204,25 +243,46 @@ export function CourseGraphics({ race }: { race: RaceData }) {
     const acrossX = -upZ;
     const acrossZ = upX;
 
+    /* Casing first and whole, then the line whole, because the pool is drawn in
+     * the order it is written: run the two together span by span and a joint
+     * puts one span's casing over the previous span's line. The rung leans on
+     * that casing harder than anything else on the water does, because it is the
+     * one graphic held deliberately under the laylines and a quiet amber over
+     * open sea is a grey line. */
     if (rig === "tactical") {
       for (let step = -RUNG_FIRST; step <= RUNG_LAST; step++) {
         const offset = -step * RUNG_SPACING;
         const cx = markX + upX * offset;
         const cz = markZ + upZ * offset;
-        pushCasedRun(
+        const fromX = cx - acrossX * RUNG_HALF_SPAN;
+        const fromZ = cz - acrossZ * RUNG_HALF_SPAN;
+        const toX = cx + acrossX * RUNG_HALF_SPAN;
+        const toZ = cz + acrossZ * RUNG_HALF_SPAN;
+        pushRun(
           lines,
-          cx - acrossX * RUNG_HALF_SPAN,
-          cz - acrossZ * RUNG_HALF_SPAN,
-          cx + acrossX * RUNG_HALF_SPAN,
-          cz + acrossZ * RUNG_HALF_SPAN,
+          fromX,
+          fromZ,
+          toX,
+          toZ,
+          RUNG_LIFT - CASE_DROP,
+          RUNG_CASE_HALF,
+          RUNG_CASE_MAX_PX,
+          kit.casing,
+          RUNG_CASE_FADE,
+          RUNG_STEP,
+        );
+        pushRun(
+          lines,
+          fromX,
+          fromZ,
+          toX,
+          toZ,
           RUNG_LIFT,
           RUNG_HALF,
+          RUNG_MAX_PX,
           kit.amber,
           RUNG_FADE,
           RUNG_STEP,
-          kit.casing,
-          RUNG_CASE_HALF,
-          RUNG_CASE_FADE,
         );
       }
     }
@@ -234,6 +294,7 @@ export function CourseGraphics({ race }: { race: RaceData }) {
       course.zoneRadius,
       ZONE_LIFT,
       ZONE_HALF,
+      ZONE_MAX_PX,
       kit.amber,
       ZONE_FADE,
       ZONE_SEGMENTS,
@@ -245,7 +306,8 @@ export function CourseGraphics({ race }: { race: RaceData }) {
      * has a windward mark to fetch. */
     if (rig === "tactical" || live.leg === "beat") {
       const angle = tackingAngle(race, t, mode, spare);
-      for (const side of [1, -1]) {
+      for (let s = 0; s < 2; s++) {
+        const side = s === 0 ? 1 : -1;
         const approach = bearingVector(twd - angle * side, bearing);
         pushRun(
           lines,
@@ -255,6 +317,7 @@ export function CourseGraphics({ race }: { race: RaceData }) {
           markZ - approach[1] * LAYLINE_RUN,
           LAYLINE_LIFT,
           LAYLINE_HALF,
+          LAYLINE_MAX_PX,
           kit.amber,
           LAYLINE_FADE,
           LAYLINE_STEP,
@@ -276,35 +339,54 @@ export function CourseGraphics({ race }: { race: RaceData }) {
     for (let i = 0; i < dashes; i++) {
       const from = (i * runLength) / dashes;
       const to = from + DASH_LENGTH;
-      pushCasedSegment(
+      const fromX = pinX + (runX * from) / runLength;
+      const fromZ = pinZ + (runZ * from) / runLength;
+      const toX = pinX + (runX * to) / runLength;
+      const toZ = pinZ + (runZ * to) / runLength;
+      pushSegment(
         lines,
-        pinX + (runX * from) / runLength,
-        pinZ + (runZ * from) / runLength,
-        pinX + (runX * to) / runLength,
-        pinZ + (runZ * to) / runLength,
+        fromX,
+        fromZ,
+        toX,
+        toZ,
+        START_LIFT - CASE_DROP,
+        START_CASE_HALF,
+        START_CASE_MAX_PX,
+        kit.casing,
+        START_CASE_FADE,
+      );
+      pushSegment(
+        lines,
+        fromX,
+        fromZ,
+        toX,
+        toZ,
         START_LIFT,
         START_HALF,
+        START_MAX_PX,
         lineColour,
         START_FADE,
-        kit.casing,
-        START_CASE_HALF,
-        START_CASE_FADE,
       );
     }
 
     commitLines(lines);
 
-    const surface = (x: number, z: number): number =>
-      sampleWave(x, z, t, wind[0], wind[1], camera.x, camera.z, probe).height;
+    swell.t = t;
+    swell.dirX = wind[0];
+    swell.dirZ = wind[1];
+    swell.eyeX = camera.x;
+    swell.eyeZ = camera.z;
 
     const windward = windwardRef.current;
     if (windward !== null) {
-      const height = surface(markX, markZ);
+      const height = surfaceAt(swell, markX, markZ);
       const slopeX =
-        (surface(markX + MARK_TILT_ARM, markZ) - surface(markX - MARK_TILT_ARM, markZ)) /
+        (surfaceAt(swell, markX + MARK_TILT_ARM, markZ) -
+          surfaceAt(swell, markX - MARK_TILT_ARM, markZ)) /
         (2 * MARK_TILT_ARM);
       const slopeZ =
-        (surface(markX, markZ + MARK_TILT_ARM) - surface(markX, markZ - MARK_TILT_ARM)) /
+        (surfaceAt(swell, markX, markZ + MARK_TILT_ARM) -
+          surfaceAt(swell, markX, markZ - MARK_TILT_ARM)) /
         (2 * MARK_TILT_ARM);
       windward.position.set(markX, height, markZ);
       windward.rotation.set(
@@ -317,12 +399,14 @@ export function CourseGraphics({ race }: { race: RaceData }) {
 
     const pin = pinRef.current;
     if (pin !== null) {
-      const height = surface(pinX, pinZ);
+      const height = surfaceAt(swell, pinX, pinZ);
       const slopeX =
-        (surface(pinX + MARK_TILT_ARM, pinZ) - surface(pinX - MARK_TILT_ARM, pinZ)) /
+        (surfaceAt(swell, pinX + MARK_TILT_ARM, pinZ) -
+          surfaceAt(swell, pinX - MARK_TILT_ARM, pinZ)) /
         (2 * MARK_TILT_ARM);
       const slopeZ =
-        (surface(pinX, pinZ + MARK_TILT_ARM) - surface(pinX, pinZ - MARK_TILT_ARM)) /
+        (surfaceAt(swell, pinX, pinZ + MARK_TILT_ARM) -
+          surfaceAt(swell, pinX, pinZ - MARK_TILT_ARM)) /
         (2 * MARK_TILT_ARM);
       pin.position.set(pinX, height, pinZ);
       pin.rotation.set(
@@ -348,10 +432,15 @@ export function CourseGraphics({ race }: { race: RaceData }) {
       const sternZ = originZ + bow[1] * COMMITTEE_STERN;
       const rightX = -bow[1];
       const rightZ = bow[0];
-      const bowY = surface(bowX, bowZ);
-      const sternY = surface(sternX, sternZ);
-      const portY = surface(originX - rightX * COMMITTEE_BEAM, originZ - rightZ * COMMITTEE_BEAM);
-      const starboardY = surface(
+      const bowY = surfaceAt(swell, bowX, bowZ);
+      const sternY = surfaceAt(swell, sternX, sternZ);
+      const portY = surfaceAt(
+        swell,
+        originX - rightX * COMMITTEE_BEAM,
+        originZ - rightZ * COMMITTEE_BEAM,
+      );
+      const starboardY = surfaceAt(
+        swell,
         originX + rightX * COMMITTEE_BEAM,
         originZ + rightZ * COMMITTEE_BEAM,
       );

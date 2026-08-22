@@ -6,9 +6,12 @@ import styles from "@/app/layline.module.css";
 import { CaptureBridge } from "./CaptureBridge";
 import { Instruments } from "./hud/Instruments";
 import { Standings } from "./hud/Standings";
+import { StartLine } from "./hud/StartLine";
 import { Timeline } from "./hud/Timeline";
 import { TopBar } from "./hud/TopBar";
 import { Transport } from "./hud/Transport";
+import { VmgStrip } from "./hud/VmgStrip";
+import { ChartView } from "./svg/ChartView";
 import { AUTOPLAY_FROM, raceData, useReplay } from "./store";
 
 /* WebGL cannot render on the server, and the loading state has nothing to add:
@@ -22,6 +25,7 @@ const SceneIsland = dynamic(() => import("./scene/LaylineScene").then((m) => m.L
 export function LaylineApp({ children }: { children: ReactNode }) {
   const race = useMemo(() => raceData(), []);
   const live = useReplay((state) => state.webglOk);
+  const chart2d = useReplay((state) => state.chart2d);
 
   /* On desktop the chart lives 350ms past the renderer's first frame so it
    * can fade out instead of cutting; boot inside its own 1.2s reveal delay
@@ -59,7 +63,14 @@ export function LaylineApp({ children }: { children: ReactNode }) {
   return (
     <div className={styles.stage}>
       <div className={live ? `${styles.canvasLayer} ${styles.canvasLive}` : styles.canvasLayer}>
-        <SceneIsland race={race} />
+        {/* 2D mode hides the renderer, it does not unmount it: the replay clock
+            runs inside the render loop, and the boat plates the scene owns hang
+            off the same element. Hidden, both stop being seen and neither stops
+            working, so the mode switch is instant in both directions. */}
+        <div className={chart2d ? styles.sceneHeld : styles.sceneShown}>
+          <SceneIsland race={race} />
+        </div>
+        {live && chart2d ? <ChartView race={race} /> : null}
       </div>
 
       <TopBar race={race} />
@@ -76,6 +87,8 @@ export function LaylineApp({ children }: { children: ReactNode }) {
         {live ? (
           <div className={styles.panel}>
             <Transport />
+            <StartLine race={race} />
+            <VmgStrip race={race} />
             <Timeline race={race} />
           </div>
         ) : null}

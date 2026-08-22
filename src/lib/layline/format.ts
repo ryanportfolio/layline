@@ -21,6 +21,17 @@ export function knots(mps: number): string {
   return s === "-0.0" ? "0.0" : s;
 }
 
+/**
+ * Metres to one decimal. A boat sits a couple of hull lengths off the line in
+ * the last seconds of a prestart, so whole metres would round the reading that
+ * decides the start away.
+ */
+export function meters(m: number): string {
+  if (!Number.isFinite(m)) return MISSING;
+  const s = m.toFixed(1);
+  return s === "-0.0" ? "0.0" : s;
+}
+
 /** Degrees to the nearest whole degree, signed for twa, unsigned for bearings. */
 export function deg(a: number): string {
   if (!Number.isFinite(a)) return MISSING;
@@ -49,10 +60,19 @@ export function clock(t: number): string {
 /**
  * Standings gap. Nobody trails anybody before the gun, so the prestart reads
  * MISSING rather than a gap measured against a line no one has crossed.
+ *
+ * Under ten seconds the tenth is the reading. This fleet spends the beat
+ * inside half a second of itself, and whole seconds put five of the six rows
+ * on the same "+0 s" while the lead was actually changing hands. Ten seconds
+ * up, the tenth is noise against the number beside it and the column reads
+ * whole.
  */
 export function gap(row: { rank: number; leg: LegName; gapSeconds: number }): string {
   if (row.leg === "prestart") return MISSING;
   if (!Number.isFinite(row.gapSeconds)) return MISSING;
   if (row.rank <= 1) return "LDR";
-  return `+${Math.round(row.gapSeconds)} s`;
+  const tenths = Math.round(row.gapSeconds * 10) / 10;
+  if (tenths >= 10) return `+${Math.round(row.gapSeconds)} s`;
+  const reading = tenths.toFixed(1);
+  return `+${reading === "-0.0" ? "0.0" : reading} s`;
 }

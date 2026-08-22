@@ -38,6 +38,10 @@ interface ReplayStore {
   mode: ReplayMode;
   rig: RigName;
   followId: string;
+  /* The top-down chart in place of the rendered scene, on the same clock. A
+   * mode, not a fallback: the renderer stays up behind it, because the clock
+   * runs inside its frame loop and a chart with no clock is a picture. */
+  chart2d: boolean;
   reducedMotion: boolean;
   /* True once the renderer has put a frame on screen, not merely once the
    * canvas element exists: the fallback chart stays up until there is an
@@ -57,6 +61,7 @@ interface ReplayStore {
   setRate: (rate: PlayRate) => void;
   setMode: (mode: ReplayMode) => void;
   setRig: (rig: RigName) => void;
+  setChart2d: (on: boolean) => void;
   follow: (boatId: string) => void;
   setReducedMotion: (reduced: boolean) => void;
   setWebglOk: (ok: boolean) => void;
@@ -80,6 +85,7 @@ export const useReplay = create<ReplayStore>((set, get) => ({
   mode: "smooth",
   rig: "tv",
   followId: "nzl",
+  chart2d: false,
   reducedMotion: false,
   webglOk: false,
   hudReady: false,
@@ -127,6 +133,7 @@ export const useReplay = create<ReplayStore>((set, get) => ({
   setRate: (rate) => set({ rate }),
   setMode: (mode) => set({ mode }),
   setRig: (rig) => set({ rig }),
+  setChart2d: (on) => set({ chart2d: on }),
   follow: (boatId) => set({ followId: boatId }),
   setReducedMotion: (reduced) => set({ reducedMotion: reduced }),
   setWebglOk: (ok) => set({ webglOk: ok }),
