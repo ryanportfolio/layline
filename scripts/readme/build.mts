@@ -60,7 +60,7 @@ if ((tracks?.length ?? 0) !== facts.boats) {
 
 /* The clip and its poster are recorded by hand, so the build cannot rebuild
  * them; it can refuse to ship a README that points at a missing one. */
-for (const asset of ["assets/video/debrief.webm", "assets/img/debrief-poster.jpg"]) {
+for (const asset of ["assets/video/debrief.webm", "assets/img/debrief-loop.webp"]) {
   const full = path.join(ROOT, asset);
   if (!fs.existsSync(full)) fail(`${asset} is missing`);
   else if (fs.statSync(full).size < 20_000) fail(`${asset} is too small to be the real capture`);

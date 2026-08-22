@@ -74,11 +74,9 @@ The race itself is simulated at 20 Hz by [`src/lib/layline/sim.ts`](src/lib/layl
 
 ## Debrief, the race analyst
 
-<video src="https://raw.githubusercontent.com/ryanportfolio/layline/main/assets/video/debrief.webm" poster="assets/img/debrief-poster.jpg" width="100%" controls muted playsinline preload="metadata" title="Debrief answering a question about the start, then the replay jumping to the moment in the answer">
-<a href="https://raw.githubusercontent.com/ryanportfolio/layline/main/assets/video/debrief.webm"><img alt="Debrief answering a question about the start, then the replay jumping to the moment in the answer" src="assets/img/debrief-poster.jpg" width="100%"></a>
-</video>
+<a href="assets/video/debrief.webm"><img alt="Debrief answering a question about the start, then the replay jumping to the moment in the answer" src="assets/img/debrief-loop.webp" width="100%"></a>
 
-One take on the live demo, real time, nothing cut: the question goes in, the status line names each tool as it runs, the answer types out with every moment it names sitting in a chip, and clicking one puts the replay on that second with that boat docked.
+One take on the live demo, real time, nothing cut: the question goes in, the status line names each tool as it runs, the answer types out with every moment it names sitting in a chip, and clicking one puts the replay on that second with that boat docked. Click the loop above for the [full clip](assets/video/debrief.webm), which starts on the race itself.
 
 <picture>
 <source media="(max-width: 500px) and (prefers-color-scheme: dark)" srcset="assets/debrief-narrow-dark.svg">

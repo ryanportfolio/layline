@@ -17,16 +17,12 @@ const esc = (s: string) =>
     /* alt text quotes the question; an unescaped quote ends the attribute. */
     .replace(/"/g, "&quot;");
 
-/* GitHub renders a <video> in a README, but only from an absolute URL: a
- * repo relative path resolves to the HTML blob page, not the file. The raw
- * host serves the same bytes CI verifies. The poster is a real frame, so a
- * client that drops the element still shows the moment it captures. */
-const RAW = "https://raw.githubusercontent.com/ryanportfolio/layline/main";
-
-function video(base: string, alt: string): string {
-  return `<video src="${RAW}/assets/video/${base}.webm" poster="assets/img/${base}-poster.jpg" width="100%" controls muted playsinline preload="metadata" title="${esc(alt)}">
-<a href="${RAW}/assets/video/${base}.webm"><img alt="${esc(alt)}" src="assets/img/${base}-poster.jpg" width="100%"></a>
-</video>`;
+/* GitHub strips <video> from a README, and its raw host labels a .webm
+ * audio/webm, so an embedded player is not available here. The capture ships
+ * twice instead: an animated WebP that plays inline in any markdown viewer,
+ * linked to the webm itself, which GitHub previews on its blob page. */
+function clip(base: string, alt: string): string {
+  return `<a href="assets/video/${base}.webm"><img alt="${esc(alt)}" src="assets/img/${base}-loop.webp" width="100%"></a>`;
 }
 
 function pic(base: string, alt: string): string {
@@ -106,9 +102,9 @@ The race itself is simulated at ${facts.simHz} Hz by [\`src/lib/layline/sim.ts\`
 
 ## Debrief, the race analyst
 
-${video("debrief", "Debrief answering a question about the start, then the replay jumping to the moment in the answer")}
+${clip("debrief", "Debrief answering a question about the start, then the replay jumping to the moment in the answer")}
 
-One take on the live demo, real time, nothing cut: the question goes in, the status line names each tool as it runs, the answer types out with every moment it names sitting in a chip, and clicking one puts the replay on that second with that boat docked.
+One take on the live demo, real time, nothing cut: the question goes in, the status line names each tool as it runs, the answer types out with every moment it names sitting in a chip, and clicking one puts the replay on that second with that boat docked. Click the loop above for the [full clip](assets/video/debrief.webm), which starts on the race itself.
 
 ${pic("debrief", `One Debrief tool call: the question "${facts.debrief.question}", the status line the stream prints while ${facts.debrief.tool} runs, and the ${facts.debrief.start.length} rows it returns. ${facts.debrief.start.map((r) => `${r.sail} crossed ${r.afterGun} seconds after the gun from ${r.shortText} m short of the line`).join(", ")}.`)}
 
