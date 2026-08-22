@@ -1,0 +1,31 @@
+{
+  "name": "layline",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/layline-engine.test.ts tests/layline-console.test.ts",
+    "readme": "tsx scripts/readme/build.mts"
+  },
+  "dependencies": {
+    "@react-three/drei": "^10.0.0",
+    "@react-three/fiber": "^9.7.0",
+    "clsx": "^2.1.1",
+    "next": "^15.5.23",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "three": "^0.171.0",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@types/three": "^0.171.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

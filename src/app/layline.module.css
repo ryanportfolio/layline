@@ -1,0 +1,1498 @@
+/* ============================================================================
+   LAYLINE. Art direction contract for the race replay console.
+
+   ONE MEANING PER VALUE. The palette below is closed. Grading may retune a hex;
+   what a colour MEANS never moves.
+     sky      zenith to horizon, plus a warm tint that only exists near the sun
+     water    deep and mid for the fresnel blend, scatter for light through the
+              back of a crest, glint for the sun path, whitecap for crest foam
+     shore    the bluff and terminals on the horizon, under their own haze
+     hud      one panel ground, one ink for labels and numerals, one dim ink for
+              de-emphasis. Dim is a token, never an opacity: composited contrast
+              has to be knowable
+     wind     amber, and amber is the wind. Dial needle, laylines, ladder rungs,
+              the start line before the gun. Nothing else may borrow it
+     raw      violet, and violet is raw telemetry. Fix ticks, the raw-mode chip,
+              raw trail dots. It is not a wind colour and not a warning colour
+     hues     one per nation, carried across chip, label, trail, gennaker and
+              livery so a boat is the same colour everywhere it appears
+
+   TWO TYPEFACES, TWO JOBS. Archivo carries the wordmark, dock labels, buttons
+   and standings names; dock labels are caps with +4% tracking and fixed axis
+   settings. Martian Mono is quarantined to measured values: the clock, the
+   instruments, every table figure, tabular numerals throughout. A number set in
+   Archivo is a number nobody measured, and a button set in mono is a lie about
+   where the data is.
+
+   FOUR MOTION VERBS, AND AN EFFECT THAT IS NOT ONE OF THEM DOES NOT SHIP.
+   TRACK is clock-driven interpolated boat and camera motion, the only
+   continuous one. SCRUB is user time travel: the data is evaluated at the new
+   time and never eased into place. SNAP is the raw lens, a zero-order hold at
+   the fix rate, steppy on purpose. SETTLE is a UI or camera transition, 1.2s
+   at the outside, power2.inOut, never looping. Reduced motion turns SETTLE into
+   a cut and leaves every other verb reachable by hand.
+
+   BANNED HERE: post-processing and bloom, orbit controls, caustic stripe and
+   tiled water textures, invented numerals, decorative status lights, drop
+   shadows on panels (a 1px dim rule does that job), and gradients inside any
+   panel. The sky and the water are the only gradient surfaces on the page.
+
+   THE ONE BOLD IDEA is the raw lens, and the whole rest of the console stays
+   quiet so it lands: one toggle swaps 60fps interpolated motion for the 4 Hz
+   fixes underneath it, trails become dots, a violet chip appears and the
+   timeline grows a fix tick strip. Showing real telemetry stutter risks reading
+   as a bug, so it is labelled everywhere it appears and smooth playback is one
+   click away.
+   ========================================================================= */
+
+.shell {
+  /* A night ground, so the pointer takes the frost cut of the mark */
+  --house-cursor: var(--house-cursor-frost);
+
+  --sky-zenith: #33628c;
+  --sky-horizon: #d9e6ee;
+  --sun-tint: #f3ddc0;
+
+  --water-deep: #0a2a44;
+  --water-mid: #12456b;
+  --water-scatter: #1c6b53;
+  --glint: #ffd9a0;
+  --whitecap: #eaf2f5;
+  --shore: #16212a;
+
+  --hud-ground: rgba(7, 15, 22, 0.86);
+  /* The opaque form of the panel ground, for surfaces with no water behind
+     them: the notes, the tables, the no-WebGL console. */
+  --page-ground: #070f16;
+  --ink: #ecf5f9;
+  --ink-dim: #a4bccb;
+  --rule: rgba(164, 188, 203, 0.28);
+
+  --wind: #ffb648;
+  --raw: #b48cff;
+
+  --hue-fra: #3b74ff;
+  --hue-usa: #e4353f;
+  --hue-gbr: #e8eef4;
+  --hue-nzl: #23282e;
+  --hue-aus: #2fae62;
+  --hue-jpn: #ff5d8f;
+
+  --settle: 1.2s;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+  min-height: 100vh;
+  background: var(--page-ground);
+  color: var(--ink);
+  font-family: var(--font-archivo), sans-serif;
+  font-size: 16px;
+  line-height: 26px;
+}
+
+.shell *,
+.shell *::before,
+.shell *::after {
+  box-sizing: border-box;
+}
+
+/* A registration box, not a glow: 2px, offset, square, the same on every
+   focusable thing so keyboard position is never ambiguous. */
+.shell :is(a, button, [tabindex]):focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: 0;
+}
+
+.skip {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  z-index: 20;
+  padding: 8px 16px;
+  transform: translateY(-200%);
+  background: var(--page-ground);
+  border: 1px solid var(--rule);
+  color: var(--ink);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.skip:focus-visible {
+  transform: translateY(0);
+}
+
+/* ---- prototype bar (site convention, system register in mono) ---- */
+
+.prototypeBar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 24px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--page-ground);
+  color: var(--ink-dim);
+  font-family: var(--font-martian), monospace;
+  font-size: 11px;
+  line-height: 16px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.prototypeBar strong {
+  color: var(--ink);
+  font-weight: 400;
+}
+
+.prototypeBar a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.prototypeBar a:hover {
+  color: var(--ink);
+}
+
+/* ---- build status banner ---- */
+
+/* Loud on purpose: the owner demos this page mid-build, so the state of the
+   build is stated where nobody can miss it, not whispered in the bar. */
+.statusBanner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--hud-ground);
+  color: var(--ink-dim);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.statusBanner strong {
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* ---- console ---- */
+
+.main {
+  display: block;
+}
+
+.console {
+  display: flex;
+  /* Bar 33px plus the single-line status banner 45px. The banner wraps on
+     narrow viewports, but those run the stacked mobile layout where this
+     height rule no longer governs. */
+  height: calc(100vh - 78px);
+  min-height: 520px;
+  padding: 8px;
+}
+
+.stage {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  background: var(--water-deep);
+}
+
+.canvasLayer {
+  position: absolute;
+  inset: 0;
+}
+
+.canvasLayer canvas {
+  display: block;
+}
+
+/* ---- boat labels ---- */
+
+/* The one graphic on this page that lives outside the four docks, because a
+   plate that named a boat from inside a dock could not point at it. It is built
+   as DOM rather than drawn in the scene so the type is real type at any
+   distance, and it is written to with transforms only: no layout, no paint of
+   anything but the plate itself. */
+.labelLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  font-family: var(--font-archivo), sans-serif;
+  pointer-events: none;
+}
+
+.boatLabel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  color: var(--ink-dim);
+}
+
+/* One pixel tall and scaled to length, so the stem grows without a layout pass
+   when a plate is pushed clear of its neighbour. */
+.labelStem {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  background: currentColor;
+  transform-origin: 50% 100%;
+}
+
+.labelBox {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  height: 16px;
+  padding: 0 6px;
+  background: var(--hud-ground);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  white-space: nowrap;
+  transform-origin: 50% 100%;
+}
+
+.labelChip {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.labelSail {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  line-height: 16px;
+}
+
+.labelRank {
+  font-family: var(--font-martian), monospace;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  line-height: 16px;
+}
+
+/* The boat the console is reading takes the full ink; the rest sit at the dim
+   token, which is the same de-emphasis the standings use. */
+.boatLabelLead {
+  color: var(--ink);
+}
+
+.boatLabelLead .labelBox {
+  border-color: var(--ink-dim);
+}
+
+/* A plate whose boat is behind another one keeps a short stem instead of a line
+   run down to a waterline the near hull is covering, and steps back to the dim
+   token while it does: the plate still names the boat, it just stops claiming to
+   point at a place the picture is not showing. After the followed rule on
+   purpose, because a covered boat is covered whether or not it is the one being
+   read. */
+.boatLabelCovered {
+  color: var(--ink-dim);
+}
+
+/* Four docks on an 8px grid. Nothing on this page floats mid-canvas: a panel
+   is in one of these or it is not on screen. */
+
+.dockTop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 16px;
+  height: 48px;
+  padding: 0 16px;
+  background: var(--hud-ground);
+  border-bottom: 1px solid var(--rule);
+}
+
+.dockLeft,
+.dockRight,
+.dockBottom {
+  position: absolute;
+  z-index: 3;
+}
+
+.dockLeft {
+  left: 8px;
+  top: 56px;
+  width: 264px;
+}
+
+.dockRight {
+  right: 8px;
+  top: 56px;
+  width: 264px;
+}
+
+.dockBottom {
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+}
+
+/* The instrument docks arrive with the HUD. Until something fills them they
+   are not drawn at all, so the no-WebGL console is never framed by empty
+   boxes. */
+.dockLeft:empty,
+.dockRight:empty,
+.dockBottom:empty {
+  display: none;
+}
+
+.wordmarkBlock {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+
+.wordmark {
+  font-size: 20px;
+  font-variation-settings: "wdth" 112, "wght" 700;
+  letter-spacing: 0.16em;
+  line-height: 1;
+}
+
+.wordmarkMeta {
+  color: var(--ink-dim);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+/* ---- HUD: one panel treatment, one active-state treatment ---- */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  background: var(--hud-ground);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+}
+
+.dockLabel {
+  margin: 0;
+  padding: 0 8px;
+  color: var(--ink-dim);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  line-height: 16px;
+  text-transform: uppercase;
+}
+
+.hudLabel {
+  color: var(--ink-dim);
+  font-family: var(--font-archivo), sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  line-height: 16px;
+  text-transform: uppercase;
+}
+
+/* The unit belongs to the label, so the value beside it stays a bare figure
+   and one number can only be formatted in one place. It steps back from the
+   figure by weight and by the dim ink, never by an opacity: what a unit
+   contrasts at has to be readable off the palette. */
+.hudUnit {
+  color: var(--ink-dim);
+  font-weight: 400;
+}
+
+/* ---- top bar: clock, leg, wind ---- */
+
+.clockBlock {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.raceClock {
+  font-family: var(--font-martian), monospace;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.legChip {
+  padding: 4px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  color: var(--ink-dim);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  line-height: 12px;
+  text-transform: uppercase;
+}
+
+.windGroup {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.rawChip {
+  padding: 4px 8px;
+  background: rgba(180, 140, 255, 0.14);
+  border: 1px solid var(--raw);
+  border-radius: 2px;
+  color: var(--raw);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  line-height: 12px;
+}
+
+.windBlock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.windDial {
+  display: block;
+  width: 44px;
+  height: 44px;
+  flex: none;
+}
+
+.windFace {
+  fill: none;
+  stroke: var(--rule);
+  stroke-width: 1;
+}
+
+/* The surveyed range, not a reading: the breeze swings +-8 deg about the
+   course axis and the band is where that swing lives. */
+.windBand {
+  fill: var(--wind);
+  opacity: 0.24;
+}
+
+.windTicks line {
+  stroke: var(--ink-dim);
+  stroke-width: 1;
+}
+
+.windNeedle {
+  stroke: var(--wind);
+  stroke-width: 1.6;
+}
+
+.windHead {
+  fill: var(--wind);
+}
+
+.windHub {
+  fill: var(--ink-dim);
+}
+
+.windReadout {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.windValueRow {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.windValue {
+  font-family: var(--font-martian), monospace;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  line-height: 16px;
+}
+
+/* ---- standings ---- */
+
+.standingList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.standingRow {
+  display: grid;
+  grid-template-columns: 20px 10px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  background: transparent;
+  border: 0;
+  border-left: 2px solid transparent;
+  color: var(--ink-dim);
+  font-family: var(--font-archivo), sans-serif;
+  text-align: left;
+}
+
+.standingRow:hover {
+  background: rgba(236, 245, 249, 0.06);
+  color: var(--ink);
+}
+
+.standingRowFollowed {
+  background: rgba(236, 245, 249, 0.08);
+  border-left-color: var(--ink);
+  color: var(--ink);
+}
+
+.standingRank {
+  font-family: var(--font-martian), monospace;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.standingChip {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+/* A near-black or near-white hue has nothing to hold against the panel ground,
+   so it gets a rule around it instead of a brighter version of itself. */
+.chipOutlined {
+  border: 1px solid var(--ink-dim);
+}
+
+.standingSail {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.standingGap {
+  font-family: var(--font-martian), monospace;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---- instruments ---- */
+
+.instrHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 8px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.instrNation {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+}
+
+.instrSail {
+  color: var(--ink-dim);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+
+.instrName {
+  margin: 0;
+  padding: 0 8px;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.instrGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 8px;
+  padding: 0 8px 8px;
+}
+
+.instrCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.instrValueRow {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.instrValue {
+  font-family: var(--font-martian), monospace;
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  line-height: 26px;
+}
+
+.instrTack {
+  color: var(--ink-dim);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+/* ---- transport ---- */
+
+.transportRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.playButton {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  color: var(--ink);
+}
+
+.playButton:hover {
+  background: rgba(236, 245, 249, 0.08);
+}
+
+.playIcon {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.segGroup {
+  display: flex;
+  flex: none;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.segButton {
+  padding: 7px 12px;
+  background: transparent;
+  border: 0;
+  border-right: 1px solid var(--rule);
+  color: var(--ink-dim);
+  font-family: var(--font-archivo), sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  line-height: 16px;
+  text-transform: uppercase;
+}
+
+.segButton:last-child {
+  border-right: 0;
+}
+
+.segButton:hover {
+  color: var(--ink);
+}
+
+.segButtonOn {
+  background: rgba(236, 245, 249, 0.14);
+  color: var(--ink);
+}
+
+.snapButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  color: var(--ink-dim);
+  font-family: var(--font-archivo), sans-serif;
+}
+
+.snapButton:hover {
+  color: var(--ink);
+}
+
+.snapButtonOn {
+  background: rgba(180, 140, 255, 0.14);
+  border-color: var(--raw);
+  color: var(--raw);
+}
+
+.snapLabel {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  line-height: 16px;
+}
+
+.snapChip {
+  padding: 1px 4px;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  font-family: var(--font-martian), monospace;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  line-height: 12px;
+}
+
+.transportSpacer {
+  flex: 1;
+}
+
+/* ---- timeline ---- */
+
+.timelineRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+}
+
+.timeClockNow,
+.timeClockTotal {
+  font-family: var(--font-martian), monospace;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 16px;
+}
+
+.timeClockTotal {
+  color: var(--ink-dim);
+}
+
+/* Three lanes and they never share a row: labels along the top, rounding ticks
+   through the middle, the raw strip along the floor. The mark is named here
+   because a slider is the one control on this page that is not a button or a
+   link, so the global rule never reaches it. */
+.track {
+  position: relative;
+  height: 40px;
+  background: rgba(164, 188, 203, 0.06);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  cursor: var(--house-cursor);
+  touch-action: none;
+}
+
+/* Bands separate by weight and by their own label, never by borrowing a colour
+   that already means something else on this page. */
+.band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: flex-start;
+  padding: 3px 0 0 6px;
+  border-right: 1px solid var(--rule);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.bandQuiet {
+  background: rgba(236, 245, 249, 0.03);
+}
+
+.bandMid {
+  background: rgba(236, 245, 249, 0.06);
+}
+
+.bandStrong {
+  background: rgba(236, 245, 249, 0.1);
+}
+
+.bandLabel {
+  color: var(--ink-dim);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  line-height: 12px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.tick {
+  position: absolute;
+  bottom: 13px;
+  width: 2px;
+  height: 9px;
+  margin-left: -1px;
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.flag {
+  position: absolute;
+  top: 2px;
+  width: 8px;
+  height: 11px;
+  margin-left: -0.5px;
+  color: var(--ink-dim);
+  pointer-events: none;
+}
+
+.playhead {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 1px;
+  margin-left: -0.5px;
+  background: var(--ink);
+  pointer-events: none;
+}
+
+.playheadGrip {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  width: 9px;
+  height: 9px;
+  background: var(--ink);
+  border-radius: 1px;
+}
+
+/* The lens, shown where the evidence is: one fix every 250 ms across the ten
+   seconds either side of the playhead. */
+.rawStrip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 9px;
+  pointer-events: none;
+}
+
+.rawWindow {
+  position: absolute;
+  bottom: 0;
+  height: 9px;
+  background: rgba(180, 140, 255, 0.12);
+  border-left: 1px solid rgba(180, 140, 255, 0.55);
+  border-right: 1px solid rgba(180, 140, 255, 0.55);
+}
+
+.rawTick {
+  position: absolute;
+  bottom: 0;
+  width: 1px;
+  height: 9px;
+  background: var(--raw);
+}
+
+/* ---- server-rendered console: the chart is the page without WebGL ---- */
+
+.fallbackLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: auto;
+  background: var(--page-ground);
+  padding: 56px 16px 16px;
+}
+
+/* The chart is real content, not a spinner, but on the desktop overlay a
+   machine that boots the renderer inside the grace window should never see it
+   paint: it holds hidden for 1.2s (visibility, so it neither shows nor
+   hit-tests; pure CSS, so the no-WebGL and no-JS paths still get it, a beat
+   later) and only then reveals. When the renderer lands first the layer
+   unmounts while still hidden and there is nothing to flash. Mobile stacks
+   the chart in flow instead of overlaying it, so the grace is desktop-only
+   and the stacked layout keeps its immediate chart. */
+@media (min-width: 901px) {
+  .fallbackLayer {
+    visibility: hidden;
+    animation: fallbackReveal 0s linear 1.2s forwards;
+  }
+
+  /* The renderer took over after the chart had already revealed: fade, then
+     the app unmounts it. */
+  .fallbackOut {
+    animation: none;
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      opacity 350ms var(--ease),
+      visibility 0s linear 350ms;
+  }
+
+  .canvasLayer {
+    opacity: 0;
+    transition: opacity 300ms var(--ease);
+  }
+
+  .canvasLive {
+    opacity: 1;
+  }
+}
+
+@keyframes fallbackReveal {
+  to {
+    visibility: visible;
+  }
+}
+
+.fallback {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 24px;
+  height: 100%;
+  min-height: 320px;
+}
+
+.chartFigure {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  min-height: 0;
+}
+
+/* The chart letterboxes into whatever the console leaves it rather than
+   setting the height itself: a course is a tall drawing and it must not push
+   the finish order off the panel. */
+.chart {
+  display: block;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+}
+
+.resultsPanel {
+  min-height: 0;
+  overflow: auto;
+}
+
+.chartTrack {
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.chartRule {
+  fill: none;
+  stroke: var(--ink-dim);
+  stroke-width: 1;
+}
+
+.chartZone {
+  fill: none;
+  stroke: var(--wind);
+  stroke-width: 0.8;
+  opacity: 0.5;
+}
+
+.chartMark {
+  fill: var(--wind);
+}
+
+.chartLabel {
+  fill: var(--ink-dim);
+  font-family: var(--font-archivo), sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.caption {
+  color: var(--ink-dim);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.panelHeading {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.results {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-martian), monospace;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.results caption {
+  margin-bottom: 8px;
+  color: var(--ink-dim);
+  font-family: var(--font-archivo), sans-serif;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: left;
+}
+
+.results th,
+.results td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--rule);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.results th {
+  color: var(--ink-dim);
+  font-family: var(--font-archivo), sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.results th:nth-child(2),
+.results td:nth-child(2),
+.results th:nth-child(3),
+.results td:nth-child(3) {
+  text-align: left;
+}
+
+.results td:nth-child(3) {
+  font-family: var(--font-archivo), sans-serif;
+  letter-spacing: 0.02em;
+}
+
+.hueChip {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 8px;
+  vertical-align: -1px;
+  border: 1px solid var(--rule);
+}
+
+/* ---- notes ---- */
+
+.notes {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 64px 16px 32px;
+}
+
+.notesHeading {
+  margin: 0 0 8px;
+  font-size: clamp(28px, 4vw, 40px);
+  font-variation-settings: "wdth" 108, "wght" 640;
+  letter-spacing: 0.01em;
+  line-height: 1.1;
+}
+
+.notesLead {
+  margin: 0 0 48px;
+  max-width: 62ch;
+  color: var(--ink-dim);
+  font-size: 16px;
+}
+
+.note {
+  display: grid;
+  grid-template-columns: minmax(0, 42ch) minmax(0, 1fr);
+  gap: 24px 32px;
+  align-items: start;
+  padding: 24px 0;
+  border-top: 1px solid var(--rule);
+}
+
+.noteHeading {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-variation-settings: "wdth" 100, "wght" 620;
+  letter-spacing: 0.01em;
+}
+
+.noteBody {
+  margin: 0 0 8px;
+  font-size: 15px;
+  line-height: 24px;
+}
+
+.noteBody:last-child {
+  margin-bottom: 0;
+}
+
+.diagramWrap {
+  margin: 0;
+  padding: 16px;
+  overflow-x: auto;
+  background: var(--hud-ground);
+  border: 1px solid var(--rule);
+}
+
+/* A floor under the drawing rather than a floor under the type: shrinking the
+   viewBox to fit a phone would take the labels below legible size, so the
+   panel scrolls instead. */
+.diagram {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-width: 400px;
+  color: var(--ink-dim);
+}
+
+/* A circle 300 units across stretched to panel width would set its labels at
+   twice the size of the ones beside it, so this drawing keeps its own size. */
+.diagramCompass {
+  min-width: 300px;
+  max-width: 360px;
+  margin: 0 auto;
+}
+
+.diagramCaption {
+  margin-top: 8px;
+  color: var(--ink-dim);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.diagramLabel {
+  fill: var(--ink-dim);
+  font-family: var(--font-archivo), sans-serif;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.diagramValue {
+  fill: var(--ink);
+  font-family: var(--font-martian), monospace;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.excerpt {
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 1px solid var(--rule);
+}
+
+.excerptTable {
+  width: 100%;
+  max-width: 640px;
+  border-collapse: collapse;
+  font-family: var(--font-martian), monospace;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.excerptTable caption {
+  margin-bottom: 8px;
+  color: var(--ink-dim);
+  font-family: var(--font-archivo), sans-serif;
+  font-size: 13px;
+  line-height: 20px;
+  text-align: left;
+}
+
+.excerptTable th,
+.excerptTable td {
+  padding: 6px 16px 6px 0;
+  border-bottom: 1px solid var(--rule);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.excerptTable th {
+  color: var(--ink-dim);
+  font-family: var(--font-archivo), sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.colophon {
+  padding: 24px 16px 32px;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-dim);
+  font-family: var(--font-martian), monospace;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-align: center;
+}
+
+/* ---- handsets and tablets: the docks come out of the overlay ----
+
+   A 264px dock either side leaves 100px of water on a 390px screen, so below
+   900px the console stops overlaying the stage and becomes a column instead:
+   bar, standings, water, instruments, transport. The docks keep their panel
+   treatment, their labels and their 8px grid; only where they sit changes. The
+   canvas keeps a floor of 300px and the only thing still allowed on top of it
+   is a boat label. */
+
+@media (max-width: 900px) {
+  .fallback {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(320px, 1fr) auto;
+    height: auto;
+  }
+
+  .note {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .console {
+    height: auto;
+    min-height: 0;
+  }
+
+  .stage {
+    display: flex;
+    flex-direction: column;
+    /* The water is inside the canvas now rather than behind everything, so the
+       panels stand on the page's own ground the way the notes below them do. */
+    background: var(--page-ground);
+  }
+
+  .dockTop {
+    position: static;
+    order: 1;
+    gap: 8px;
+    padding: 0 8px;
+  }
+
+  .dockLeft,
+  .dockRight,
+  .dockBottom {
+    position: static;
+    width: auto;
+  }
+
+  .dockLeft {
+    order: 2;
+    margin: 8px 8px 0;
+  }
+
+  .dockRight {
+    order: 4;
+    margin: 8px 8px 0;
+  }
+
+  .dockBottom {
+    order: 5;
+    margin: 8px;
+  }
+
+  /* A stated height, not a share of the column. A canvas sized from a column
+     that is sized from its children measures itself larger every pass, and the
+     water ends up eight hundred pixels tall with the transport pushed off the
+     document. 48vh keeps the water the tallest band in the column at every
+     handset size and the floor holds it above 300px on a short screen. */
+  .canvasLayer {
+    position: relative;
+    order: 3;
+    flex: none;
+    height: 48vh;
+    min-height: 300px;
+    margin: 8px 8px 0;
+    background: var(--water-deep);
+    border: 1px solid var(--rule);
+  }
+
+  /* The chart is a cover, not a section: while it is up it takes the column
+     and the canvas goes back under it at full stage size, which is what lets
+     the renderer raise a first frame and retire it. Hiding the canvas here
+     would stop that frame ever arriving. */
+  .fallbackLayer {
+    position: static;
+    order: 3;
+    overflow: visible;
+    padding: 8px;
+  }
+
+  .stage:has(> .fallbackLayer) > .canvasLayer {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    height: auto;
+    min-height: 0;
+    margin: 0;
+    border: 0;
+  }
+
+  /* ---- top bar ---- */
+
+  .wordmarkBlock {
+    gap: 8px;
+  }
+
+  .wordmark {
+    font-size: 16px;
+    letter-spacing: 0.12em;
+  }
+
+  .wordmarkMeta {
+    white-space: nowrap;
+  }
+
+  .clockBlock,
+  .windGroup {
+    gap: 8px;
+  }
+
+  .raceClock {
+    font-size: 16px;
+  }
+
+  .windDial {
+    width: 32px;
+    height: 32px;
+  }
+
+  /* The readout gives up its second line before the bar gives up the dial */
+  .windReadout {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 4px;
+  }
+
+  .windValue {
+    font-size: 13px;
+  }
+
+  /* ---- standings as a rail ---- */
+
+  .dockLeft .standingList {
+    flex-direction: row;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .dockLeft .standingList > li {
+    flex: none;
+  }
+
+  .standingRow {
+    grid-template-columns: auto 10px auto auto;
+    width: auto;
+    min-height: 40px;
+    padding: 8px;
+  }
+
+  /* ---- instruments in two rows of three ---- */
+
+  .instrGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .instrValue {
+    font-size: 18px;
+    line-height: 22px;
+  }
+
+  /* ---- transport wraps rather than clipping ---- */
+
+  .transportRow {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .transportSpacer {
+    display: none;
+  }
+
+  .playButton {
+    width: 40px;
+    height: 40px;
+  }
+
+  .segButton,
+  .snapButton {
+    padding: 12px 10px;
+  }
+
+  /* The scrub track takes the full width and the clocks read underneath it: at
+     this size the leg bands need every pixel to name themselves. */
+  .timelineRow {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 4px 8px;
+  }
+
+  .track {
+    grid-row: 1;
+    grid-column: 1 / -1;
+  }
+
+  .timeClockNow {
+    grid-row: 2;
+    grid-column: 1;
+  }
+
+  .timeClockTotal {
+    grid-row: 2;
+    grid-column: 2;
+    text-align: right;
+  }
+}
+
+/* The bar is down to the two things it cannot lose by here: the wordmark and
+   the clock. The place and the format are in the copy below the console. */
+@media (max-width: 560px) {
+  .wordmarkMeta {
+    display: none;
+  }
+
+  .bandLabel {
+    letter-spacing: 0.04em;
+  }
+
+  /* Ten seconds of prestart is 45px of track at this width and PRESTART needs
+     50px at the smallest size it can be read at. The band keeps its quiet
+     weight and the leg chip in the bar keeps naming the leg, so the word is
+     still on screen while the race is in it. Beat and Run both fit. */
+  .bandQuiet .bandLabel {
+    display: none;
+  }
+}
+
+/* Reduced motion collapses SETTLE to a cut. Nothing is hidden and nothing
+   stops: the replay still plays, scrubs and snaps when a hand asks it to. */
+@media (prefers-reduced-motion: reduce) {
+  .shell *,
+  .shell *::before,
+  .shell *::after {
+    animation-duration: 1ms;
+    animation-iteration-count: 1;
+    transition-duration: 1ms;
+    scroll-behavior: auto;
+  }
+
+  .skip {
+    transition: none;
+  }
+}
