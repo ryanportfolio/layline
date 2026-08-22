@@ -41,10 +41,11 @@ No API key either. The committed `.env` runs Debrief in mock mode, where the rou
 - A raw fixes lens that swaps interpolated motion for the actual 4 Hz readings, so you can see exactly what the engine is working from.
 - Frame stepping on the fix grid: the step buttons and the `,` `.` keys move one 250 ms reading at a time.
 - Click any standings row to follow that boat; gaps convert to finish times as boats cross.
-- Every tack and gybe is marked on the timeline with the speed it cost; clicking a marker seeks to it. Before the gun the dock reads the line instead: distance to it, time to burn, which end is favoured.
-- A 2D top down view on the same clock, drawn from the same evaluator, for when the question is geometry rather than pictures.
+- Every tack and gybe the followed boat made, marked on its own rail under the scrub track: one click seeks the replay to the turn, and the tooltip prices it as a drawdown from the boat's entry speed.
+- A speed made good strip that traces the followed boat toward its next mark against the best anyone in the fleet was making at the same instant.
+- A start line readout that counts the followed boat down to the gun: distance to the line, time left, closing speed.
 - Debrief under the console: ask about the start, a shift, a rounding, any boat, and click a moment in the answer to put the replay on it.
-- The server rendered chart is also the fallback: no WebGL, no blank frame, the same tracks arrive as SVG.
+- The course from above as a mode of its own: one button swaps the rendered scene for a 2D chart on the same clock, each track drawing itself as its boat sails it. The same chart stands in when WebGL is unavailable, sampled through the same evaluator.
 
 ## The problem underneath it
 
@@ -124,7 +125,7 @@ The analyst has 7 tools and no other source. Each one is a pure function over th
 npm test
 ```
 
-40 cases pin the parts that must never drift: the seed reproduces the race byte for byte, the evaluator returns every fix exactly at its own time, headings cross the 359/0 seam the short way, sampled turn rate never beats the cap, the kite channel stays inside 0..1, standings resolve the instant a boat's finish time passes, stepping lands on the fix grid, and the display edge never prints `-0.0` or a 360 degree bearing.
+49 cases pin the parts that must never drift: the seed reproduces the race byte for byte, the evaluator returns every fix exactly at its own time, headings cross the 359/0 seam the short way, sampled turn rate never beats the cap, the kite channel stays inside 0..1, standings resolve the instant a boat's finish time passes, stepping lands on the fix grid, and the display edge never prints `-0.0` or a 360 degree bearing.
 
 The analyst is tested the same way, no model required: its tools return identical numbers across two fresh races, maneuver detection is stable run to run, the chip grammar round trips, the glossary retrieves on the term asked for, the route answers 422 rather than 500 to an over long conversation, an over long message, a history that does not end with the viewer, and a garbage body, and mock mode streams a status frame, deltas, and a done.
 

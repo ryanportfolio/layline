@@ -74,10 +74,11 @@ No API key either. The committed \`.env\` runs Debrief in mock mode, where the r
 - A raw fixes lens that swaps interpolated motion for the actual ${facts.fixHz} Hz readings, so you can see exactly what the engine is working from.
 - Frame stepping on the fix grid: the step buttons and the \`,\` \`.\` keys move one 250 ms reading at a time.
 - Click any standings row to follow that boat; gaps convert to finish times as boats cross.
-- Every tack and gybe is marked on the timeline with the speed it cost; clicking a marker seeks to it. Before the gun the dock reads the line instead: distance to it, time to burn, which end is favoured.
-- A 2D top down view on the same clock, drawn from the same evaluator, for when the question is geometry rather than pictures.
+- Every tack and gybe the followed boat made, marked on its own rail under the scrub track: one click seeks the replay to the turn, and the tooltip prices it as a drawdown from the boat's entry speed.
+- A speed made good strip that traces the followed boat toward its next mark against the best anyone in the fleet was making at the same instant.
+- A start line readout that counts the followed boat down to the gun: distance to the line, time left, closing speed.
 - Debrief under the console: ask about the start, a shift, a rounding, any boat, and click a moment in the answer to put the replay on it.
-- The server rendered chart is also the fallback: no WebGL, no blank frame, the same tracks arrive as SVG.
+- The course from above as a mode of its own: one button swaps the rendered scene for a 2D chart on the same clock, each track drawing itself as its boat sails it. The same chart stands in when WebGL is unavailable, sampled through the same evaluator.
 
 ## The problem underneath it
 
