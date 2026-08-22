@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Color, DoubleSide, MeshStandardMaterial, type Group, type Mesh } from "three";
 import { hashString, mulberry32 } from "@/lib/prng";
-import type { Pose, RaceData } from "@/lib/layline/types";
+import type { RaceData } from "@/lib/layline/types";
 import { sampleLive } from "../hud/live";
 import { useReplay } from "../store";
 import {
@@ -157,10 +157,6 @@ function buildCourse(windX: number, windZ: number): CourseKit {
   };
 }
 
-function newPose(): Pose {
-  return { x: 0, y: 0, hdg: 0, heel: 0, twa: 0, sog: 0, cog: 0, kite: 0 };
-}
-
 function gunTime(race: RaceData): number {
   for (const event of race.events) if (event.kind === "gun") return event.t;
   return 0;
@@ -193,13 +189,13 @@ function surfaceAt(swell: Swell, x: number, z: number): number {
  * the ladder and the zone ring all take it and separate on alpha instead; ink is
  * the line once the gun has fired, and nothing else on the sea gets an accent.
  * Every one of them is built on the damped display wind, never on the raw value
- * the instruments read.
+ * the instruments read, and the laylines take the fleet's beating angle damped
+ * over the same window, because both halves of a layline's aim swing it.
  */
 export function CourseGraphics({ race }: { race: RaceData }) {
   const gl = useThree((state) => state.gl);
   const wind = useMemo(() => swellDirection(race), [race]);
   const kit = useMemo(() => buildCourse(wind[0], wind[1]), [wind]);
-  const spare = useMemo(newPose, []);
   const swell = useMemo(newSwell, []);
   const heading = useMemo<[number, number]>(() => [0, -1], []);
   const bearing = useMemo<[number, number]>(() => [0, -1], []);
@@ -216,7 +212,7 @@ export function CourseGraphics({ race }: { race: RaceData }) {
   useEffect(() => watchDockBand(gl.domElement), [gl]);
 
   useFrame((state) => {
-    const { t, mode, rig } = useReplay.getState();
+    const { t, rig } = useReplay.getState();
     const live = sampleLive(race);
     const camera = state.camera.position;
     const twd = displayTwd(race, t);
@@ -305,7 +301,7 @@ export function CourseGraphics({ race }: { race: RaceData }) {
      * other two only draw them while the boat the console is following still
      * has a windward mark to fetch. */
     if (rig === "tactical" || live.leg === "beat") {
-      const angle = tackingAngle(race, t, mode, spare);
+      const angle = tackingAngle(race, t);
       for (let s = 0; s < 2; s++) {
         const side = s === 0 ? 1 : -1;
         const approach = bearingVector(twd - angle * side, bearing);

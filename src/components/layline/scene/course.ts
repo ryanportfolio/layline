@@ -20,7 +20,7 @@
 import { shaderMaterial } from "@react-three/drei";
 import { BufferAttribute, BufferGeometry, Color, Vector2, Vector3 } from "three";
 import { legAt, poseAt, windAt } from "@/lib/layline/interpolate";
-import type { BoatMeta, Pose, RaceData, ReplayMode, WindSample } from "@/lib/layline/types";
+import type { BoatMeta, Pose, RaceData, WindSample } from "@/lib/layline/types";
 import { WAVE_GLSL } from "./waves";
 
 const DEG = Math.PI / 180;
@@ -439,22 +439,106 @@ const BEAT_MIN = 34;
 const BEAT_MAX = 56;
 const BEAT_OPTIMUM = 44;
 
-/**
- * The angle the fleet is actually beating at, averaged over the boats on the
- * beat right now. A pure function of the clock, so scrubbing to a time twice
- * draws the laylines in the same place twice.
- */
-export function tackingAngle(race: RaceData, t: number, mode: ReplayMode, spare: Pose): number {
+const beatProbe: Pose = { x: 0, y: 0, hdg: 0, heel: 0, twa: 0, sog: 0, cog: 0, kite: 0 };
+
+/* The fleet's beating angle at one instant, averaged over the boats on the beat
+ * that are inside the band. Membership is a step quantity twice over: leg comes
+ * off the 2 Hz progress series, which holds rather than interpolates, and the
+ * band is a hard in-or-out test on a twa that moves every frame. So a boat joins
+ * or leaves the average between one frame and the next, the mean jumps, and the
+ * last boat to leave hands the line the fallback in a single step. */
+function measuredBeatAngle(race: RaceData, t: number): number {
   let sum = 0;
   let count = 0;
   for (const boat of race.boats) {
     if (legAt(race, boat.id, t) !== "beat") continue;
-    const twa = Math.abs(poseAt(race, boat.id, t, mode, spare).twa);
+    /* Read off the interpolated pose in both lenses. At a fix time it is the
+     * fix itself, and between two of them a thirty second average of six boats
+     * cannot tell a held value from a curved one. */
+    const twa = Math.abs(poseAt(race, boat.id, t, "smooth", beatProbe).twa);
     if (twa < BEAT_MIN || twa > BEAT_MAX) continue;
     sum += twa;
     count++;
   }
   return count === 0 ? BEAT_OPTIMUM : sum / count;
+}
+
+/* Which is the drawn wind's problem twice over, and a layline is aimed at the
+ * sum of the two. Sampled across the replay at 0.025 s, the damped wind moves at
+ * most 0.026 deg between frames while this measured angle steps 11.8 deg, and
+ * 522 of the layline's steps are over 0.1 deg. At the far end of a 132 m line
+ * the worst of them throws the line 27 m sideways in one frame, which is the
+ * jag.
+ *
+ * So the drawn angle gets the treatment the drawn wind gets in the note below,
+ * over the same 4 s window and centred for the same reason. That leaves the
+ * worst step at 0.011 deg, 25 mm at the far end. What it drops is boats tacking:
+ * every one of them swings through head to wind and out of the band on every
+ * tack, which is why the measured angle covers 21.6 deg across the beat while
+ * the angle the fleet sustains between manoeuvres moves 45.4 to 46.7. The line
+ * still follows the wind, swinging 13.5 deg across the replay against the 18.2
+ * the measured wind does.
+ *
+ * A 33 s window is 129 evaluations of the fleet, which is not a per-frame cost,
+ * so the series is solved once per race on a quarter second grid and read back
+ * by interpolation: a frame costs one array lookup rather than six pose
+ * evaluations, and the value stays a pure function of the clock, so a scrub
+ * back to an instant draws the laylines where playback drew them. */
+const BEAT_TAU = 4;
+const BEAT_STEP = 0.25;
+const BEAT_REACH = Math.round((BEAT_TAU * 4) / BEAT_STEP);
+
+const beatKernel = new Float32Array(BEAT_REACH + 1);
+for (let k = 0; k <= BEAT_REACH; k++) beatKernel[k] = Math.exp((-k * BEAT_STEP) / BEAT_TAU);
+
+interface BeatSeries {
+  t0: number;
+  values: Float32Array;
+}
+
+const beatSeries = new WeakMap<RaceData, BeatSeries>();
+
+/* Over the replay clock, which is the range the transport clamps a seek into,
+ * rather than over whatever span the wind feed happens to carry. The ends extend
+ * rather than taper, the way the series lookups clamp at their own ends, so the
+ * average never dilutes toward zero at the edge of the race. */
+function buildBeatSeries(race: RaceData): BeatSeries {
+  const t0 = race.tMin;
+  const count = Math.max(1, Math.round((race.tMax - t0) / BEAT_STEP) + 1);
+  const measured = new Float32Array(count);
+  for (let i = 0; i < count; i++) measured[i] = measuredBeatAngle(race, t0 + i * BEAT_STEP);
+  const values = new Float32Array(count);
+  for (let i = 0; i < count; i++) {
+    let sum = 0;
+    let weight = 0;
+    for (let k = -BEAT_REACH; k <= BEAT_REACH; k++) {
+      const j = Math.min(count - 1, Math.max(0, i + k));
+      const w = beatKernel[k < 0 ? -k : k];
+      sum += measured[j] * w;
+      weight += w;
+    }
+    values[i] = sum / weight;
+  }
+  return { t0, values };
+}
+
+/**
+ * The angle the laylines are drawn at, which is the fleet's own beating angle
+ * damped over four seconds. Degrees off the wind, one side's worth.
+ */
+export function tackingAngle(race: RaceData, t: number): number {
+  let series = beatSeries.get(race);
+  if (series === undefined) {
+    series = buildBeatSeries(race);
+    beatSeries.set(race, series);
+  }
+  const values = series.values;
+  const last = values.length - 1;
+  const u = (t - series.t0) / BEAT_STEP;
+  if (!(u > 0)) return values[0];
+  if (u >= last) return values[last];
+  const i = Math.floor(u);
+  return values[i] + (values[i + 1] - values[i]) * (u - i);
 }
 
 /* The wind the instruments show is the wind at the instant they were asked,
