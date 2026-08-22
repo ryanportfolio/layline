@@ -28,12 +28,12 @@ No API key either. The committed `.env` runs Debrief in mock mode, where the rou
 
 ## What you are looking at
 
-<a href="https://fullbuild.ai/prototype/layline"><img alt="The chase camera at 0:25: four skiffs heeled on the beat with sail numbers readable, live standings on the left and the instrument dock on the right" src="assets/img/chase.png" width="100%"></a>
+<a href="https://fullbuild.ai/prototype/layline"><img alt="The chase camera at 0:25: the fleet close hauled on the beat with sail numbers readable, standings on the left, the instrument dock on the right, and the speed to mark trace running under the timeline" src="assets/img/chase.png" width="100%"></a>
 
 <table>
 <tr>
-<td width="62%"><a href="https://fullbuild.ai/prototype/layline"><img alt="The tactical camera with the raw fixes lens on at the mark rounding: each boat trails its actual 4 Hz fix dots, laylines meet at the zone" src="assets/img/raw-tactical.png" width="100%"></a></td>
-<td width="38%"><a href="https://fullbuild.ai/prototype/layline"><img alt="The same replay on a phone: chase camera close on one skiff with the HUD reflowed for 390 pixels" src="assets/img/mobile.png" width="100%"></a></td>
+<td width="62%"><a href="https://fullbuild.ai/prototype/layline"><img alt="The tactical camera at 0:33 with the raw fixes lens on: every boat trails its actual 4 Hz fix dots into the mark and the laylines meet at the zone circle" src="assets/img/raw-tactical.png" width="100%"></a></td>
+<td width="38%"><a href="https://fullbuild.ai/prototype/layline"><img alt="The same replay on a 390 pixel phone: the chase camera above a reflowed instrument dock, the transport, the speed to mark trace and the timeline with its turn markers" src="assets/img/mobile.png" width="100%"></a></td>
 </tr>
 </table>
 
@@ -103,8 +103,6 @@ The analyst has 7 tools and no other source. Each one is a pure function over th
 - The whole fleet draws through one vertex colored material; spray and fix dots are instanced.
 - A frame time governor watches the loop and steps the pixel ratio down one rung at a time on sustained misses, so a weak GPU degrades resolution instead of frame rate. It never oscillates back up.
 
-On the desktop GPU this was built against, the scene holds 100 frames per second with a worst frame of 10.2 ms and a clean console.
-
 ## Controls
 
 | Input | Action |
@@ -116,6 +114,8 @@ On the desktop GPU this was built against, the scene holds 100 frames per second
 | 1x / 2x / 4x | Playback rate |
 | Raw fixes | Hold each fix instead of interpolating, with the fix strip on the timeline |
 | Chase / TV / Tactical | Camera rig |
+| 2D | Top down chart on the replay clock |
+| Click a maneuver marker | Seek to that tack or gybe |
 | Click a standings row | Follow that boat and dock its instruments |
 | Click a moment in a Debrief answer | Seek there and follow the boat that answer names |
 
@@ -125,7 +125,7 @@ On the desktop GPU this was built against, the scene holds 100 frames per second
 npm test
 ```
 
-47 cases pin the parts that must never drift: the seed reproduces the race byte for byte, the evaluator returns every fix exactly at its own time, headings cross the 359/0 seam the short way, sampled turn rate never beats the cap, the kite channel stays inside 0..1, standings resolve the instant a boat's finish time passes, stepping lands on the fix grid, and the display edge never prints `-0.0` or a 360 degree bearing.
+49 cases pin the parts that must never drift: the seed reproduces the race byte for byte, the evaluator returns every fix exactly at its own time, headings cross the 359/0 seam the short way, sampled turn rate never beats the cap, the kite channel stays inside 0..1, standings resolve the instant a boat's finish time passes, stepping lands on the fix grid, and the display edge never prints `-0.0` or a 360 degree bearing.
 
 The analyst is tested the same way, no model required: its tools return identical numbers across two fresh races, maneuver detection is stable run to run, the chip grammar round trips, the glossary retrieves on the term asked for, the route answers 422 rather than 500 to an over long conversation, an over long message, a history that does not end with the viewer, and a garbage body, and mock mode streams a status frame, deltas, and a done.
 
