@@ -10,7 +10,24 @@ import type { Facts } from "./facts.mts";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 const esc = (s: string) =>
-  String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    /* alt text quotes the question; an unescaped quote ends the attribute. */
+    .replace(/"/g, "&quot;");
+
+/* GitHub renders a <video> in a README, but only from an absolute URL: a
+ * repo relative path resolves to the HTML blob page, not the file. The raw
+ * host serves the same bytes CI verifies. The poster is a real frame, so a
+ * client that drops the element still shows the moment it captures. */
+const RAW = "https://raw.githubusercontent.com/ryanportfolio/layline/main";
+
+function video(base: string, alt: string): string {
+  return `<video src="${RAW}/assets/video/${base}.webm" poster="assets/img/${base}-poster.jpg" width="100%" controls muted playsinline preload="metadata" title="${esc(alt)}">
+<a href="${RAW}/assets/video/${base}.webm"><img alt="${esc(alt)}" src="assets/img/${base}-poster.jpg" width="100%"></a>
+</video>`;
+}
 
 function pic(base: string, alt: string): string {
   return `<picture>
@@ -29,7 +46,7 @@ export function buildReadme(facts: Facts): string {
 
 ${pic("course", `The racecourse drawn from its own seed: six boat tracks beat to the windward mark inside its laylines. Finish order ${facts.order.map((b) => `${b.rank} ${b.sail} ${b.clock}`).join(", ")}.`)}
 
-A browser race replay engine. It takes ${facts.fixHz} position fixes a second per boat, the rate a sailing tracker actually reports, and turns them into continuous 3D motion at display rate: a six boat fleet race you can watch from three camera rigs, scrub, step fix by fix, and read through live instruments and standings.
+A browser race replay engine. It takes ${facts.fixHz} position fixes a second per boat, the rate a sailing tracker actually reports, and turns them into continuous 3D motion at display rate: a six boat fleet race you can watch from three camera rigs, scrub, step fix by fix, and read through live instruments and standings. Then Debrief, an analyst that answers questions about that race by calling ${facts.debrief.tools.length} tools over the same telemetry, and hands back every answer with the moments in it clickable.
 
 Everything above this sentence was computed, not illustrated. The tracks, the layline angle, the finish clocks and the fix counts are generated from the same \`generateRace(${facts.seed})\` the app runs, every time the README builds.
 
@@ -42,7 +59,9 @@ npm install
 npm run dev
 \`\`\`
 
-Open http://localhost:3000. Node 20 or newer. No API keys, no database, no assets to download: the race is generated from seed ${facts.seed} on first render, identically on the server and in your browser.
+Open http://localhost:3000. Node 20 or newer. No database, no assets to download: the race is generated from seed ${facts.seed} on first render, identically on the server and in your browser.
+
+No API key either. The committed \`.env\` runs Debrief in mock mode, where the route answers out of the same tools a model would call, off the same race, with no network. To point it at a real model instead, put \`OPENROUTER_API_KEY\` in \`.env.local\` and set \`LAYLINE_ANALYST_MOCK=0\` there; the mock flag wins whenever both are set.
 
 ## What you are looking at
 
@@ -59,6 +78,7 @@ Open http://localhost:3000. Node 20 or newer. No API keys, no database, no asset
 - A raw fixes lens that swaps interpolated motion for the actual ${facts.fixHz} Hz readings, so you can see exactly what the engine is working from.
 - Frame stepping on the fix grid: the step buttons and the \`,\` \`.\` keys move one 250 ms reading at a time.
 - Click any standings row to follow that boat; gaps convert to finish times as boats cross.
+- Debrief under the console: ask about the start, a shift, a rounding, any boat, and click a moment in the answer to put the replay on it.
 - A server rendered SVG chart stands in when WebGL is unavailable, sampled through the same evaluator.
 
 ## The problem underneath it
@@ -84,6 +104,22 @@ Race time is the only clock, advanced only inside a drawn frame. Every visual is
 
 The race itself is simulated at ${facts.simHz} Hz by [\`src/lib/layline/sim.ts\`](src/lib/layline/sim.ts), which never imports three.js: boats that duck and shadow each other, sail headers before tacking, overstand their laylines on purpose, and round wide in, tight out. The sim then throws away everything except what a tracker would have sent: ${facts.fixesTotal} fixes across ${facts.boats} boats and ${facts.feedSeconds} seconds of feed.
 
+## Debrief, the race analyst
+
+${video("debrief", "Debrief answering a question about the start, then the replay jumping to the moment in the answer")}
+
+One take on the live demo, real time, nothing cut: the question goes in, the status line names each tool as it runs, the answer types out with every moment it names sitting in a chip, and clicking one puts the replay on that second with that boat docked.
+
+${pic("debrief", `One Debrief tool call: the question "${facts.debrief.question}", the status line the stream prints while ${facts.debrief.tool} runs, and the ${facts.debrief.start.length} rows it returns. ${facts.debrief.start.map((r) => `${r.sail} crossed ${r.afterGun} seconds after the gun from ${r.shortText} m short of the line`).join(", ")}.`)}
+
+The analyst has ${facts.debrief.tools.length} tools and no other source. Each one is a pure function over the same \`RaceData\` the replay renders, so an answer can only carry numbers the race produced: standings at a time, one boat's telemetry, two boats compared across a window, every tack and gybe with the speed it cost (${facts.debrief.tacks} and ${facts.debrief.gybes} in this feed), the start boat by boat, the wind at a time, and a ${facts.debrief.glossaryTerms} entry glossary for the words telemetry cannot define. The panel above is one of those calls, printed from the rows it returned.
+
+- The wire is server sent events: a status frame per tool call, text deltas as the answer arrives, one done or error frame to close. Both sides import the same [\`protocol.ts\`](src/lib/layline/analyst/protocol.ts), so neither can drift.
+- \`[[t=32.9|nzl]]\` is the only markup an answer may contain. The client renders each one as a button that seeks the replay to that moment and follows that boat, and holds a half written chip back until it closes so no markup flashes on screen. Play state, rate and camera rig stay the viewer's.
+- Narration inside a tool round is buffered and dropped, so the reader gets the answer instead of the model's plan.
+- The public path is fenced: same origin only, ${facts.debrief.maxTurns} turns of history, ${facts.debrief.maxChars} characters an input, four tool rounds, a per instance rate limit, and a prepaid provider key as the real spend ceiling. With no key and no mock flag the route answers 503 and the page leaves the section out rather than rendering a dead one.
+- Live mode talks to OpenRouter over raw fetch with no SDK, and the model is an env var, swappable without a deploy.
+
 ## Performance
 
 - The frame path allocates nothing: poses write into caller owned objects, series lookups ride per buffer cursors with bisection only on scrub, the standings reuse one array, and HUD text writes skip the DOM when a reading has not changed.
@@ -105,6 +141,7 @@ On the desktop GPU this was built against, the scene holds 100 frames per second
 | Raw fixes | Hold each fix instead of interpolating, with the fix strip on the timeline |
 | Chase / TV / Tactical | Camera rig |
 | Click a standings row | Follow that boat and dock its instruments |
+| Click a moment in a Debrief answer | Seek there and follow the boat that answer names |
 
 ## Tests
 
@@ -113,6 +150,8 @@ npm test
 \`\`\`
 
 ${facts.testCount} cases pin the parts that must never drift: the seed reproduces the race byte for byte, the evaluator returns every fix exactly at its own time, headings cross the 359/0 seam the short way, sampled turn rate never beats the cap, the kite channel stays inside 0..1, standings resolve the instant a boat's finish time passes, stepping lands on the fix grid, and the display edge never prints \`-0.0\` or a 360 degree bearing.
+
+The analyst is tested the same way, no model required: its tools return identical numbers across two fresh races, maneuver detection is stable run to run, the chip grammar round trips, the glossary retrieves on the term asked for, the route answers 422 rather than 500 to an over long conversation, an over long message, a history that does not end with the viewer, and a garbage body, and mock mode streams a status frame, deltas, and a done.
 
 ## Provenance
 

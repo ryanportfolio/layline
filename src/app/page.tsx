@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { clock } from "@/lib/layline/format";
 import { generateRace } from "@/lib/layline/sim";
 import { RACE_SEED } from "@/lib/layline/types";
+import { AnalystSection } from "@/components/layline/analyst/AnalystSection";
 import { LaylineApp } from "@/components/layline/LaylineApp";
 import { NotesSection } from "@/components/layline/NotesSection";
 import { TrackChart } from "@/components/layline/svg/TrackChart";
@@ -33,8 +34,8 @@ export default function LaylinePage() {
       </div>
 
       <div className={styles.statusBanner} role="status">
-        <strong>Build in progress · replay running, analysis next</strong>
-        <span>still landing: start line, maneuver and fleet analytics</span>
+        <strong>Build in progress · replay and analysis both running</strong>
+        <span>still landing: heel and trim on the instrument dock, a broadcast opening shot</span>
       </div>
 
       <main className={styles.main}>
@@ -92,6 +93,10 @@ export default function LaylinePage() {
             </div>
           </LaylineApp>
         </section>
+
+        {process.env.OPENROUTER_API_KEY || process.env.LAYLINE_ANALYST_MOCK === "1" ? (
+          <AnalystSection />
+        ) : null}
 
         <NotesSection race={race} />
       </main>

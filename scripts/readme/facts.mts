@@ -7,6 +7,18 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { poseAt, windAt } from "../../src/lib/layline/interpolate";
+import { KNOWLEDGE } from "../../src/lib/layline/analyst/knowledge";
+import {
+  MAX_MESSAGE_CHARS,
+  MAX_TURNS,
+  SUGGESTED_QUESTIONS,
+} from "../../src/lib/layline/analyst/protocol";
+import {
+  ANALYST_TOOLS,
+  detectManeuvers,
+  startReport,
+  toolStatusLabel,
+} from "../../src/lib/layline/analyst/tools";
 import { generateRace } from "../../src/lib/layline/sim";
 import { FIX_HZ, RACE_SEED, SIM_HZ } from "../../src/lib/layline/types";
 import type { Pose, RaceData, WindSample } from "../../src/lib/layline/types";
@@ -29,6 +41,32 @@ export interface BoatFact {
   track: TrackPoint[]; // evaluator samples, 1 Hz, whole feed
 }
 
+export interface StartRowFact {
+  sail: string;
+  shortMeters: number;
+  sogKnots: string;
+  afterGun: number | null;
+  /* Column text: the tool rounds, so 1 and 0.3 come back beside 0.6 and 0.52
+   * and a mono column reads ragged. These pad the decimals, nothing else. */
+  shortText: string;
+  afterGunText: string;
+  end: string;
+}
+
+export interface DebriefFacts {
+  question: string;
+  tool: string;
+  status: string;
+  tools: string[];
+  glossaryTerms: number;
+  maxTurns: number;
+  maxChars: number;
+  tacks: number;
+  gybes: number;
+  lineLengthMeters: number;
+  start: StartRowFact[];
+}
+
 export interface Facts {
   seed: number;
   fixHz: number;
@@ -40,6 +78,7 @@ export interface Facts {
   tMax: number;
   tackDeg: number; // mean upwind angle off the wind, from the beat fixes
   testCount: number;
+  debrief: DebriefFacts;
   course: RaceData["course"];
   order: BoatFact[]; // finish order
   hermite: {
@@ -126,6 +165,32 @@ export function computeFacts(): Facts {
   }
   if (testCount === 0) throw new Error("no tests counted; the suite moved");
 
+  /* The Debrief panel draws one real tool call: the same start_report the
+   * analyst runs, the same status line the stream prints while it runs. */
+  const start = startReport(race);
+  const moves = detectManeuvers(race);
+  const debrief = {
+    question: SUGGESTED_QUESTIONS[0],
+    tool: "start_report",
+    status: toolStatusLabel(race, "start_report", {}),
+    tools: ANALYST_TOOLS.map((tool) => tool.name),
+    glossaryTerms: KNOWLEDGE.length,
+    maxTurns: MAX_TURNS,
+    maxChars: MAX_MESSAGE_CHARS,
+    tacks: moves.filter((move) => move.kind === "tack").length,
+    gybes: moves.filter((move) => move.kind === "gybe").length,
+    lineLengthMeters: start.lineLengthMeters,
+    start: start.rows.map((row) => ({
+      sail: row.sail,
+      shortMeters: row.distanceToLineMeters,
+      sogKnots: row.sogAtGunKnots,
+      afterGun: row.crossedAfterGunSeconds,
+      shortText: row.distanceToLineMeters.toFixed(1),
+      afterGunText: row.crossedAfterGunSeconds === null ? "-" : row.crossedAfterGunSeconds.toFixed(2),
+      end: row.nearerEnd === "pin" ? "PIN" : "BOAT",
+    })),
+  };
+
   return {
     seed: race.seed,
     fixHz: FIX_HZ,
@@ -137,6 +202,7 @@ export function computeFacts(): Facts {
     tMax: race.tMax,
     tackDeg,
     testCount,
+    debrief,
     course: race.course,
     order,
     hermite: { from, to, fixes: windowFixes, curve },

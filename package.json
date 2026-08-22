@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/layline-engine.test.ts tests/layline-console.test.ts",
+    "test": "tsx --test tests/layline-engine.test.ts tests/layline-console.test.ts tests/layline-analyst.test.ts",
     "readme": "tsx scripts/readme/build.mts"
   },
   "dependencies": {

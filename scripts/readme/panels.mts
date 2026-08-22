@@ -57,7 +57,13 @@ const THEMES: Record<"light" | "dark", Theme> = {
 };
 
 const esc = (s: string) =>
-  String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    /* Labels quote the question, and an unescaped quote closes the attribute
+     * it sits in, which turns the whole panel into a broken image. */
+    .replace(/"/g, "&quot;");
 
 const px = (v: number) => v.toFixed(1);
 
@@ -276,13 +282,92 @@ ${arrows}
   );
 }
 
-export function buildPanels(facts: Facts): void {
+/* The Debrief panel prints one real tool call. The status line is the string
+ * the stream sends while that tool runs, the rows are what the tool returns,
+ * and the analyst may only say numbers that came back in them. Rows arrive in
+ * crossing order on a 12 s loop; reduced motion shows the finished table. */
+const TRACE_CSS = `
+.row{opacity:0;animation:deal 12s linear infinite}
+.dot{animation:pulse 1.6s ease-in-out infinite}
+@keyframes deal{0%{opacity:0}6%{opacity:1}92%{opacity:1}100%{opacity:0}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.row{opacity:1}}`;
+
+function debriefPanel(facts: Facts, t: Theme, narrow: boolean): string {
+  const W = narrow ? 500 : 880;
+  const d = facts.debrief;
+  const rowH = narrow ? 34 : 30;
+  const top = narrow ? 250 : 240;
+  const H = top + rowH * (d.start.length + 1) + (narrow ? 66 : 58);
+  const left = narrow ? 30 : 40;
+  const cols = narrow
+    ? [
+        { x: left, label: "SAIL", get: (r: (typeof d.start)[number]) => r.sail },
+        { x: left + 150, label: "+GUN s", get: (r: (typeof d.start)[number]) => r.afterGunText },
+        { x: left + 290, label: "END", get: (r: (typeof d.start)[number]) => r.end },
+      ]
+    : [
+        { x: left, label: "SAIL", get: (r: (typeof d.start)[number]) => r.sail },
+        { x: left + 170, label: "SHORT m", get: (r: (typeof d.start)[number]) => r.shortText },
+        { x: left + 330, label: "SOG kn", get: (r: (typeof d.start)[number]) => r.sogKnots },
+        { x: left + 490, label: "+GUN s", get: (r: (typeof d.start)[number]) => r.afterGunText },
+        { x: left + 650, label: "NEARER END", get: (r: (typeof d.start)[number]) => r.end },
+      ];
+
+  const head = cols
+    .map((col) => `<text x="${col.x}" y="${top}" font-family="${MONO}" font-size="12" letter-spacing="2" fill="${t.mute}">${esc(col.label)}</text>`)
+    .join("\n");
+  const rows = d.start
+    .map((row, i) => {
+      const y = top + rowH * (i + 1);
+      const delay = (i * 0.35).toFixed(2);
+      const cells = cols
+        .map((col, c) => {
+          const fill = c === 0 ? t.ink : c === cols.length - 1 ? t.mute : t.ink;
+          const weight = c === 0 ? "600" : "400";
+          return `<text x="${col.x}" y="${y}" font-family="${MONO}" font-size="${narrow ? 15 : 16}" font-weight="${weight}" fill="${fill}">${esc(col.get(row))}</text>`;
+        })
+        .join("");
+      const win = i === 0 ? `<rect x="${left - 12}" y="${y - (narrow ? 19 : 18)}" width="${W - left * 2 + 24}" height="${rowH - 4}" rx="4" fill="${t.amber}" opacity="0.1"/>` : "";
+      return `<g class="row" style="animation-delay:${delay}s">${win}${cells}</g>`;
+    })
+    .join("\n");
+
+  const footer = `${d.tools.length} TOOLS · ${d.glossaryTerms} GLOSSARY ENTRIES · ${d.tacks} TACKS · ${d.gybes} GYBES IN THE FEED`;
+  const body = `
+<text x="${left}" y="40" font-family="${MONO}" font-size="13" letter-spacing="3" fill="${t.mute}">ASK THE RACE</text>
+<text x="${left}" y="${narrow ? 88 : 92}" font-family="${SANS}" font-size="${narrow ? 30 : 34}" font-weight="700" fill="${t.ink}">${esc(d.question)}</text>
+<line x1="${left}" y1="${narrow ? 122 : 126}" x2="${W - left}" y2="${narrow ? 122 : 126}" stroke="${t.rule}" stroke-width="1"/>
+<circle class="dot" cx="${left + 5}" cy="${narrow ? 162 : 160}" r="5" fill="${t.amber}"/>
+<text x="${left + 20}" y="${narrow ? 167 : 165}" font-family="${MONO}" font-size="${narrow ? 14 : 15}" fill="${t.mute}">${esc(d.status)}</text>
+<text x="${left}" y="${top - (narrow ? 40 : 36)}" font-family="${MONO}" font-size="${narrow ? 15 : 16}" fill="${t.ink}">${esc(d.tool)}() <tspan fill="${t.mute}">→ ${d.start.length} rows, line ${d.lineLengthMeters} m</tspan></text>
+${head}
+${rows}
+<text x="${left}" y="${H - (narrow ? 24 : 20)}" font-family="${MONO}" font-size="12" fill="${t.mute}">${esc(footer)}</text>`;
+  return svgDoc(
+    W,
+    H,
+    `One Debrief tool call: the question "${d.question}", the status line the stream prints while start_report runs, and the rows it returns. ${d.start.map((r) => `${r.sail} crossed ${r.afterGun} seconds after the gun from ${r.shortMeters} m short of the line, nearer the ${r.end.toLowerCase()} end`).join("; ")}.`,
+    TRACE_CSS,
+    body,
+  );
+}
+
+export function buildPanels(facts: Facts): string[] {
   fs.mkdirSync(OUT, { recursive: true });
+  const written: string[] = [];
+  const draw = (name: string, svg: string): void => {
+    fs.writeFileSync(path.join(OUT, `${name}.svg`), svg);
+    written.push(`${name}.svg`);
+  };
   for (const themeName of ["light", "dark"] as const) {
     const t = THEMES[themeName];
-    fs.writeFileSync(path.join(OUT, `course-${themeName}.svg`), courseWide(facts, t));
-    fs.writeFileSync(path.join(OUT, `course-narrow-${themeName}.svg`), courseNarrow(facts, t));
-    fs.writeFileSync(path.join(OUT, `hermite-${themeName}.svg`), hermitePanel(facts, t, false));
-    fs.writeFileSync(path.join(OUT, `hermite-narrow-${themeName}.svg`), hermitePanel(facts, t, true));
+    draw(`course-${themeName}`, courseWide(facts, t));
+    draw(`course-narrow-${themeName}`, courseNarrow(facts, t));
+    draw(`hermite-${themeName}`, hermitePanel(facts, t, false));
+    draw(`hermite-narrow-${themeName}`, hermitePanel(facts, t, true));
+    draw(`debrief-${themeName}`, debriefPanel(facts, t, false));
+    draw(`debrief-narrow-${themeName}`, debriefPanel(facts, t, true));
   }
+  return written;
 }
