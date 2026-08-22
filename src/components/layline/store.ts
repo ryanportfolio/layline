@@ -48,6 +48,10 @@ interface ReplayStore {
    * actual image to replace it with. */
   webglOk: boolean;
   hudReady: boolean;
+  /* True once the page-load intro has let go of the viewport. Autoplay waits
+   * on it: the prestart is five seconds long and spending it behind a cover
+   * would mean the gun goes off where nobody can see it. */
+  introDone: boolean;
   /* Capture hold. The frame loop stops advancing the clock and the canvas
    * drops to on-demand rendering, so a screenshot is taken of a stated time
    * rather than of whenever the shutter happened to fall. */
@@ -66,6 +70,7 @@ interface ReplayStore {
   setReducedMotion: (reduced: boolean) => void;
   setWebglOk: (ok: boolean) => void;
   setHudReady: (ready: boolean) => void;
+  setIntroDone: (done: boolean) => void;
   freeze: () => void;
   thaw: () => void;
 }
@@ -89,6 +94,7 @@ export const useReplay = create<ReplayStore>((set, get) => ({
   reducedMotion: false,
   webglOk: false,
   hudReady: false,
+  introDone: false,
   frozen: false,
 
   /* Play from the end means play it again: the replay never loops on its own,
@@ -138,6 +144,7 @@ export const useReplay = create<ReplayStore>((set, get) => ({
   setReducedMotion: (reduced) => set({ reducedMotion: reduced }),
   setWebglOk: (ok) => set({ webglOk: ok }),
   setHudReady: (ready) => set({ hudReady: ready }),
+  setIntroDone: (done) => set({ introDone: done }),
   freeze: () => set({ frozen: true, playing: false }),
   thaw: () => set({ frozen: false }),
 }));

@@ -1,0 +1,279 @@
+/* =========================================================================
+   PLOT TO WATER: the page-load intro
+
+   The overlay covers the whole viewport, prototype bar and status banner
+   included, on the same ground the page paints so there is no seam where it
+   ends. It sits under the skip link's z-index on purpose: a keyboard visitor
+   who tabs into the page during the intro must still see where focus went.
+
+   The rAF loop in IntroOverlay is the sequencer and writes one attribute,
+   data-state. Everything below is what each beat looks like; nothing here
+   holds a duration the loop does not also hold.
+   ========================================================================= */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 19;
+  overflow: hidden;
+  /* The morph is a plan being laid down onto water, so the tilt needs a real
+     vanishing point rather than a flat squash. */
+  perspective: 1400px;
+  perspective-origin: 50% 46%;
+
+  /* No-JS backstop, the same shape as the chart's own reveal delay: with
+     scripts off nothing ever sets data-state, so the cover expires on a
+     keyframe instead and the page underneath is reachable. */
+  animation: introExpire 0s linear 4s forwards;
+}
+
+.overlay[data-live="true"] {
+  animation: none;
+}
+
+@keyframes introExpire {
+  to {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+.overlay[data-state="morph"],
+.overlay[data-state="release"],
+.overlay[data-state="fade"] {
+  pointer-events: none;
+}
+
+.overlay[data-state="release"] {
+  opacity: 0;
+  transition: opacity 300ms var(--ease);
+}
+
+/* No renderer to hand over to, so there is no morph to hang the exit on: the
+   fleet keeps sailing and the whole cover fades off it. */
+.overlay[data-state="fade"] {
+  opacity: 0;
+  transition: opacity 400ms var(--ease);
+}
+
+/* ---- the ground ---- */
+
+.ground {
+  position: absolute;
+  inset: 0;
+  background: var(--page-ground);
+}
+
+/* Held for the first sixth of the morph, so the plan has visibly started to
+   lay over before the water comes up under it. */
+.overlay[data-state="morph"] .ground,
+.overlay[data-state="release"] .ground {
+  opacity: 0;
+  transition: opacity 560ms cubic-bezier(0.45, 0, 0.7, 0.4) 120ms;
+}
+
+/* ---- the plan ---- */
+
+.plane {
+  position: absolute;
+  inset: 0;
+  /* Tilting about a point below centre keeps the start line, which is the near
+     edge of the plan, roughly where the camera's own horizon puts it. */
+  transform-origin: 50% 62%;
+  opacity: 0;
+  transition: opacity 460ms var(--ease);
+}
+
+.overlay[data-state="b1"] .plane,
+.overlay[data-state="fade"] .plane {
+  opacity: 1;
+}
+
+/* The scene opens from [44, 34, 76] at 40 degrees, about 21 degrees above the
+   water. The plan lays down toward that attitude and scales past the frame as
+   it goes, so the drawing leaves through the camera rather than dimming out
+   where it stood. */
+.overlay[data-state="morph"] .plane,
+.overlay[data-state="release"] .plane {
+  opacity: 0;
+  transform: rotateX(56deg) scale(1.45) translateY(-4%);
+  /* The strokes hold at full while the tilt does most of its work and only go
+     over the last third of it. Fading them on the same curve as the transform
+     spent the morph on an empty screen. */
+  transition:
+    opacity 340ms linear 360ms,
+    transform 700ms var(--ease);
+}
+
+/* The fitted course is very nearly square, so it letterboxes hard on a laptop.
+   Scaling past the frame spends the open water the frame pads with and brings
+   the drawing out to the edges. The component reads this number back off the
+   element rather than holding a copy of it. */
+.plot {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: scale(1.35);
+}
+
+/* A phone column is far taller than the course is, so the square drawing can
+   only ever fill the width. */
+@media (max-width: 900px) {
+  .plot {
+    transform: scale(1.55);
+  }
+}
+
+.furniture {
+  opacity: 0.85;
+}
+
+/* Hue rides currentColor per boat group, the same way both chart views do, so
+   a livery change moves the drawing with it. Stroke width and hull size are
+   set in metres by the component, worked back from the fitted scale: the dash
+   that reveals a track is an arc length in metres, so the stroke it rides on
+   cannot be in screen units without the drawing and the fleet coming apart. */
+.track {
+  fill: none;
+  stroke: color-mix(in srgb, currentColor 78%, transparent);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The same light edge a near-black hull gets on the still chart and on its
+   standings chip, so NZL is a boat here too and not a hole in the water. */
+.trackEdge {
+  fill: none;
+  stroke: var(--ink-dim);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.5;
+}
+
+.hull {
+  fill: currentColor;
+  stroke: color-mix(in srgb, var(--ink) 60%, transparent);
+  stroke-width: 0.7;
+}
+
+/* ---- the title card ---- */
+
+.card {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  opacity: 1;
+  transition: opacity 380ms var(--ease);
+}
+
+.overlay:not([data-state="b0"]) .card {
+  opacity: 0;
+}
+
+.wordmark {
+  margin: 0;
+  font-family: var(--font-archivo), sans-serif;
+  font-size: clamp(38px, 7vw, 76px);
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  line-height: 1;
+  /* The wordmark is set in caps as a mark; the source stays sentence case. */
+  text-transform: uppercase;
+  /* Letter-spacing leaves a gap after the last letter, which pushes a centred
+     line off centre by half of it. */
+  margin-right: -0.24em;
+  color: var(--ink);
+}
+
+.rule {
+  width: min(360px, 46vw);
+  height: 1px;
+  background: var(--rule);
+  transform: scaleX(0);
+  transition: transform 420ms var(--ease);
+}
+
+.overlay[data-live="true"] .rule {
+  transform: scaleX(1);
+}
+
+.ident {
+  margin: 0;
+  font-family: var(--font-martian), monospace;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  line-height: 16px;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+/* ---- the clock the drawing is at ---- */
+
+/* The one reading that says the wait is a race running and not a loader: it
+   counts the same seconds the console will count when it takes over. */
+.readout {
+  position: absolute;
+  right: 28px;
+  bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 400ms var(--ease);
+}
+
+.overlay[data-state="b1"] .readout,
+.overlay[data-state="fade"] .readout {
+  opacity: 1;
+}
+
+.readoutLabel {
+  font-family: var(--font-martian), monospace;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  line-height: 14px;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.readoutValue {
+  margin: 0;
+  font-family: var(--font-martian), monospace;
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--ink);
+}
+
+@media (max-width: 900px) {
+  .readout {
+    right: 16px;
+    bottom: 16px;
+  }
+
+  .readoutValue {
+    font-size: 20px;
+  }
+}
+
+/* A visitor who has asked for less motion never gets here: the component
+   removes itself at mount and hands the page straight to the console. This is
+   the belt on that, for the frame between paint and hydration. */
+@media (prefers-reduced-motion: reduce) {
+  .overlay {
+    animation: introExpire 0s linear 0s forwards;
+  }
+
+  .card,
+  .plane,
+  .ground,
+  .readout,
+  .rule {
+    transition: none;
+  }
+}

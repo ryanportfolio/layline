@@ -125,7 +125,7 @@ On the desktop GPU this was built against, the scene holds 100 frames per second
 npm test
 ```
 
-28 cases pin the parts that must never drift: the seed reproduces the race byte for byte, the evaluator returns every fix exactly at its own time, headings cross the 359/0 seam the short way, sampled turn rate never beats the cap, the kite channel stays inside 0..1, standings resolve the instant a boat's finish time passes, stepping lands on the fix grid, and the display edge never prints `-0.0` or a 360 degree bearing.
+47 cases pin the parts that must never drift: the seed reproduces the race byte for byte, the evaluator returns every fix exactly at its own time, headings cross the 359/0 seam the short way, sampled turn rate never beats the cap, the kite channel stays inside 0..1, standings resolve the instant a boat's finish time passes, stepping lands on the fix grid, and the display edge never prints `-0.0` or a 360 degree bearing.
 
 The analyst is tested the same way, no model required: its tools return identical numbers across two fresh races, maneuver detection is stable run to run, the chip grammar round trips, the glossary retrieves on the term asked for, the route answers 422 rather than 500 to an over long conversation, an over long message, a history that does not end with the viewer, and a garbage body, and mock mode streams a status frame, deltas, and a done.
 

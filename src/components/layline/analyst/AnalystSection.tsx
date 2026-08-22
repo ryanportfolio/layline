@@ -18,7 +18,9 @@ import {
 import { raceData, useReplay } from "../store";
 import { CourseBackdrop } from "./CourseBackdrop";
 import { MomentStrip, type StripBuoy } from "./MomentStrip";
+import { SlateReplay } from "./SlateReplay";
 import { TrackGlyph } from "./TrackGlyph";
+import { useMounted } from "./useMounted";
 import styles from "./analyst.module.css";
 
 /* The route caps a message at MAX_MESSAGE_CHARS and a request at MAX_TURNS,
@@ -28,6 +30,76 @@ import styles from "./analyst.module.css";
  * by the route. Suggestion cards render SUGGESTED_QUESTIONS verbatim so the
  * mock route's prefix match always lands. */
 const DROPPED_LINE = "The analyst dropped the connection. Ask again.";
+
+/* ---- the composer's two states ------------------------------------------
+ *
+ * A text field on a dark panel with a rule-coloured border reads as a caption,
+ * not a control, so the box carries a visible edge at rest and the empty field
+ * types one of the suggested questions into itself: the same three strings the
+ * cards beside it use, already checked against the seeded race.
+ *
+ * Idle, the fleet leaves the line across the field every few seconds. Focused,
+ * the six hues run the perimeter, one lap every 4.4 seconds. The lap is drawn
+ * from the field's measured pixel size rather than a stretched viewBox, so the
+ * dashes hold their length and speed on every edge and through every corner.
+ * Neither runs for a viewer who asked for less motion. */
+const TYPE_MS = 46; // per character, about 22 a second
+const HOLD_MS = 2600; // the finished question sits long enough to read twice
+const FADE_MS = 420; // matches the CSS transition below
+const NEXT_MS = 260; // dark between one question and the next
+
+/**
+ * The suggested questions typing themselves into the empty field.
+ *
+ * Two things keep it smooth. The line fades out and the next one types in
+ * rather than backspacing: a 30 character rewind at any speed reads as a
+ * glitch, and the fade is the same 420ms the rest of the panel eases with.
+ * And the state lives here rather than in the section, so a character costs
+ * one paragraph re-render instead of re-rendering the whole Debrief panel,
+ * the course backdrop and the slate's drawing sixty times a question.
+ */
+function TypedHint({ active }: { active: boolean }) {
+  const [line, setLine] = useState<{ text: string; out: boolean }>({ text: "", out: false });
+  const at = useRef({ question: 0, char: 0 });
+
+  useEffect(() => {
+    if (!active) {
+      setLine({ text: "", out: false });
+      at.current = { question: 0, char: 0 };
+      return;
+    }
+    let timer = 0;
+    const type = () => {
+      const state = at.current;
+      const target = SUGGESTED_QUESTIONS[state.question];
+      state.char += 1;
+      setLine({ text: target.slice(0, state.char), out: false });
+      if (state.char < target.length) {
+        timer = window.setTimeout(type, TYPE_MS);
+        return;
+      }
+      timer = window.setTimeout(() => {
+        setLine((current) => ({ ...current, out: true }));
+        timer = window.setTimeout(() => {
+          state.question = (state.question + 1) % SUGGESTED_QUESTIONS.length;
+          state.char = 0;
+          setLine({ text: "", out: false });
+          timer = window.setTimeout(type, NEXT_MS);
+        }, FADE_MS);
+      }, HOLD_MS);
+    };
+    timer = window.setTimeout(type, 700);
+    return () => window.clearTimeout(timer);
+  }, [active]);
+
+  if (line.text === "") return null;
+  return (
+    <p className={styles.typedLine} data-out={line.out ? "true" : "false"} aria-hidden="true">
+      {line.text}
+      <span className={styles.typedCaret} />
+    </p>
+  );
+}
 
 interface Turn {
   role: "user" | "analyst";
@@ -136,6 +208,7 @@ export function AnalystSection() {
   /* Latches on the first ask and never resets: the backdrop's after-the-gun
    * tracks wipe in once and stay, whatever later answers hold. */
   const [raced, setRaced] = useState(false);
+  const [composerFocused, setComposerFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const threadRef = useRef<HTMLOListElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -147,6 +220,32 @@ export function AnalystSection() {
     () => new Map<string, BoatMeta>(raceData().boats.map((boat) => [boat.id, boat])),
     [],
   );
+
+  /* The composer's two idle layers. Both are client-only: the typed line and
+   * the measured lap would not survive a hydration diff, and neither has
+   * anything to say to a viewer who asked for less motion. */
+  const mounted = useMounted();
+  const reducedMotion = useReplay((state) => state.reducedMotion);
+  const idleComposer = mounted && !reducedMotion && !composerFocused && input === "";
+  /* The relay reads the fleet's own liveries, so a livery change moves the
+     baton with it. Six stops, entry order, straight into the conic gradient
+     the stylesheet spins. */
+  const relayHues = useMemo(
+    () =>
+      Object.fromEntries(
+        raceData().boats.map((boat, index) => [`--relay-${index + 1}`, boat.hue]),
+      ) as CSSProperties,
+    [],
+  );
+  /* Five lanes, the front of the fleet in finish order, so the sweep is the
+     boats that led crossing the field rather than a decorative gradient. */
+  const lanes = useMemo(() => {
+    const race = raceData();
+    const byRank = [...race.results].sort((a, b) => a.rank - b.rank).slice(0, 5);
+    return byRank
+      .map((result) => race.boats.find((boat) => boat.id === result.boatId))
+      .filter((boat): boat is BoatMeta => boat !== undefined);
+  }, []);
 
   /* The event times the card glyphs draw between: USA 4's beat runs from the
    * gun to its rounding, JPN 18's run from its rounding to its finish. Read
@@ -341,7 +440,7 @@ export function AnalystSection() {
   }, []);
 
   return (
-    <section className={styles.debrief} aria-labelledby="debrief-heading">
+    <section className={styles.debrief} aria-labelledby="debrief-heading" data-leg="Debrief">
       <div className={styles.head}>
         <div className={styles.headText}>
           <p className={styles.kicker}>Race analyst</p>
@@ -438,34 +537,44 @@ export function AnalystSection() {
                 {/* The loaded-race slate. Numbers repeat what the console and
                     the notes already publish, so the board is decorative; the
                     one sentence that instructs stays in the tree. */}
+                {/* The race sailing itself, from above, beside the readings it
+                    is drawn from. The course is about as tall as it is wide, so
+                    the drawing takes the square half and the numbers stack in
+                    the column next to it. */}
                 <div className={styles.slateBoard} aria-hidden="true">
-                  <p className={styles.slateEyebrow}>Race loaded</p>
-                  <p className={styles.slateClock}>{clock(slate.end)}</p>
-                  <div className={styles.slateStats}>
-                    <div className={styles.slateStat}>
-                      <span className={styles.slateStatLabel}>Boats</span>
-                      <span className={styles.slateStatValue}>{slate.boats}</span>
+                  {mounted ? (
+                    <SlateReplay reduced={reducedMotion} />
+                  ) : (
+                    <div className={styles.slateChart} />
+                  )}
+                  <div className={styles.slateReadings}>
+                    <p className={styles.slateEyebrow}>Race loaded</p>
+                    <div className={styles.slateStats}>
+                      <div className={styles.slateStat}>
+                        <span className={styles.slateStatLabel}>Boats</span>
+                        <span className={styles.slateStatValue}>{slate.boats}</span>
+                      </div>
+                      <div className={styles.slateStat}>
+                        <span className={styles.slateStatLabel}>Fix rate Hz</span>
+                        <span className={styles.slateStatValue}>{FIX_HZ}</span>
+                      </div>
+                      <div className={styles.slateStat}>
+                        <span className={styles.slateStatLabel}>Fixes</span>
+                        <span className={styles.slateStatValue}>{slate.fixes}</span>
+                      </div>
                     </div>
-                    <div className={styles.slateStat}>
-                      <span className={styles.slateStatLabel}>Fix rate Hz</span>
-                      <span className={styles.slateStatValue}>{FIX_HZ}</span>
+                    <div className={styles.fleetBar}>
+                      {slate.finishOrder.map((boat) => (
+                        <span
+                          key={boat.id}
+                          className={clsx(
+                            styles.fleetBlock,
+                            boat.dark === true && styles.fleetBlockOutlined,
+                          )}
+                          style={{ background: boat.hue }}
+                        />
+                      ))}
                     </div>
-                    <div className={styles.slateStat}>
-                      <span className={styles.slateStatLabel}>Fixes</span>
-                      <span className={styles.slateStatValue}>{slate.fixes}</span>
-                    </div>
-                  </div>
-                  <div className={styles.fleetBar}>
-                    {slate.finishOrder.map((boat) => (
-                      <span
-                        key={boat.id}
-                        className={clsx(
-                          styles.fleetBlock,
-                          boat.dark === true && styles.fleetBlockOutlined,
-                        )}
-                        style={{ background: boat.hue }}
-                      />
-                    ))}
                   </div>
                 </div>
                 <p className={styles.emptyLine}>
@@ -521,17 +630,52 @@ export function AnalystSection() {
                 ask(input);
               }}
             >
-              <input
-                ref={inputRef}
-                className={styles.input}
-                type="text"
-                value={input}
-                maxLength={MAX_MESSAGE_CHARS}
-                placeholder="Ask about any moment"
-                aria-label="Ask the analyst"
-                autoComplete="off"
-                onChange={(event) => setInput(event.target.value.slice(0, MAX_MESSAGE_CHARS))}
-              />
+              <div
+                className={styles.field}
+                data-focused={composerFocused ? "true" : "false"}
+                data-idle={idleComposer ? "true" : "false"}
+                data-hint={idleComposer && !streaming ? "true" : "false"}
+                style={relayHues}
+              >
+                {/* Under the text, not across it: the field's ground moved out
+                    to the box so the lanes can pass behind the words the way
+                    water passes behind a hull. */}
+                {idleComposer ? (
+                  <div className={styles.wakeLanes} aria-hidden="true">
+                    {lanes.map((boat, index) => (
+                      <span
+                        key={boat.id}
+                        className={styles.wakeLane}
+                        style={
+                          {
+                            top: `calc(100% - ${13 - index * 3}px)`,
+                            background: `linear-gradient(90deg, transparent, ${boat.hue})`,
+                            animationDelay: `${index * 190}ms`,
+                          } as CSSProperties
+                        }
+                      />
+                    ))}
+                  </div>
+                ) : null}
+                <input
+                  ref={inputRef}
+                  className={styles.input}
+                  type="text"
+                  value={input}
+                  maxLength={MAX_MESSAGE_CHARS}
+                  placeholder="Ask about any moment"
+                  aria-label="Ask the analyst"
+                  autoComplete="off"
+                  onChange={(event) => setInput(event.target.value.slice(0, MAX_MESSAGE_CHARS))}
+                  onFocus={() => setComposerFocused(true)}
+                  onBlur={() => setComposerFocused(false)}
+                />
+                {/* The question typing itself into the empty field. Decoration
+                    over a real placeholder that stays in the markup, so the
+                    hint survives with JavaScript off and in the tree. */}
+                <TypedHint active={idleComposer && !streaming} />
+                {/* The fleet sailing a lap of your question, focused. */}
+              </div>
               {/* Never `disabled`: a disabled button drops out of the tab order,
                   and keyboard position on this page is never ambiguous. Empty or
                   mid-stream sends are no-ops in ask() instead. */}

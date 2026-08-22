@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import styles from "@/app/layline.module.css";
 import { CaptureBridge } from "./CaptureBridge";
 import { Instruments } from "./hud/Instruments";
@@ -49,20 +49,63 @@ export function LaylineApp({ children }: { children: ReactNode }) {
 
   /* Read once at mount. A visitor who has asked for less motion gets the
    * replay paused at a mid-beat moment with everything reachable by hand,
-   * never a still frame of an empty start line and never an autoplay. */
+   * never a still frame of an empty start line and never an autoplay.
+   *
+   * Everyone else gets the autoplay, but not yet: the intro is covering the
+   * viewport and the prestart is five seconds long, so playing here would run
+   * the gun off behind the cover. The intro says when it has let go. */
   useEffect(() => {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const replay = useReplay.getState();
     replay.setReducedMotion(reduced);
     replay.setHudReady(true);
-    if (reduced) return;
-    replay.seek(AUTOPLAY_FROM);
-    replay.play();
+    if (reduced) {
+      replay.setIntroDone(true);
+      return;
+    }
+    const start = () => {
+      const state = useReplay.getState();
+      state.seek(AUTOPLAY_FROM);
+      state.play();
+    };
+    if (replay.introDone) {
+      start();
+      return;
+    }
+    const stop = useReplay.subscribe((state) => {
+      if (!state.introDone) return;
+      stop();
+      start();
+    });
+    return stop;
   }, []);
+
+  /* The water is the biggest play/pause target on the page, video-player
+   * style. A press only counts as a click if the pointer barely moved; a drag
+   * or a touch scroll travels past the threshold (or ends in pointercancel)
+   * and leaves playback alone. The docks and top bar sit above this layer, so
+   * their controls never fall through to it. */
+  const press = useRef<{ x: number; y: number; id: number } | null>(null);
 
   return (
     <div className={styles.stage}>
-      <div className={live ? `${styles.canvasLayer} ${styles.canvasLive}` : styles.canvasLayer}>
+      <div
+        className={live ? `${styles.canvasLayer} ${styles.canvasLive}` : styles.canvasLayer}
+        onPointerDown={(event) => {
+          if (!live || event.button !== 0) return;
+          press.current = { x: event.clientX, y: event.clientY, id: event.pointerId };
+        }}
+        onPointerUp={(event) => {
+          const start = press.current;
+          press.current = null;
+          if (!start || start.id !== event.pointerId) return;
+          if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 8) return;
+          useReplay.getState().toggle();
+        }}
+        onPointerCancel={() => {
+          press.current = null;
+        }}
+      >
         {/* 2D mode hides the renderer, it does not unmount it: the replay clock
             runs inside the render loop, and the boat plates the scene owns hang
             off the same element. Hidden, both stop being seen and neither stops
