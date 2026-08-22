@@ -20,7 +20,7 @@ const esc = (s: string) =>
 /* GitHub strips <video> from a README, and its raw host labels a .webm
  * audio/webm, so an embedded player is not available here. The capture ships
  * twice instead: an animated WebP that plays inline in any markdown viewer,
- * linked to the webm itself, which GitHub previews on its blob page. */
+ * linked to the webm itself, which GitHub serves but will not play. */
 function clip(base: string, alt: string): string {
   return `<a href="assets/video/${base}.webm"><img alt="${esc(alt)}" src="assets/img/${base}-loop.webp" width="100%"></a>`;
 }
@@ -104,7 +104,7 @@ The race itself is simulated at ${facts.simHz} Hz by [\`src/lib/layline/sim.ts\`
 
 ${clip("debrief", "Debrief answering a question about the start, then the replay jumping to the moment in the answer")}
 
-One take on the live demo, real time, nothing cut: the question goes in, the status line names each tool as it runs, the answer types out with every moment it names sitting in a chip, and clicking one puts the replay on that second with that boat docked. Click the loop above for the [full clip](assets/video/debrief.webm), which starts on the race itself.
+One take on the live demo, real time, nothing cut: the question goes in, the status line names each tool as it runs, the answer types out with every moment it names sitting in a chip, and clicking one puts the replay on that second with that boat docked. The loop is the middle of that take; the whole thirty seconds, starting on the race, is the [webm in the repo](assets/video/debrief.webm).
 
 ${pic("debrief", `One Debrief tool call: the question "${facts.debrief.question}", the status line the stream prints while ${facts.debrief.tool} runs, and the ${facts.debrief.start.length} rows it returns. ${facts.debrief.start.map((r) => `${r.sail} crossed ${r.afterGun} seconds after the gun from ${r.shortText} m short of the line`).join(", ")}.`)}
 
