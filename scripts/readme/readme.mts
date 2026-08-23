@@ -103,8 +103,6 @@ The simulator runs at ${facts.simHz} Hz, then keeps only the data a ${facts.fixH
 
 ${clip("debrief", "Debrief answering a question while the course and evidence update")}
 
-The loop shows the first answer. The linked [22-second recording](assets/video/debrief.webm) shows two suggested questions answered in full.
-
 Debrief reads the same \`RaceData\` as the replay. Its ${facts.debrief.tools.length} tools cover standings, boat state, boat comparisons, maneuvers, starts, wind, and sailing terms. Each cited moment becomes a button that seeks the replay and follows the named boat.
 
 ${pic("debrief", `The ${facts.debrief.tool} tool returning line position and start time for ${facts.debrief.start.length} boats`)}
@@ -152,7 +150,7 @@ Debrief tests cover tool output, maneuver detection, moment markers, glossary lo
 
 ## Data and license
 
-The race is fictional. It depicts no real boats, teams, or venues.
+Fictional demo data.
 
 [\`scripts/readme/build.mts\`](scripts/readme/build.mts) generates this README. It recomputes race numbers from the simulator and fails if they no longer match.
 
