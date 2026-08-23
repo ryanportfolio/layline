@@ -188,8 +188,8 @@
 /* ---- under the three-column threshold ---- */
 
 @media (max-width: 1199px) {
-  /* The bar is fixed over the page, so the page ends above it: the colophon is
-     the last thing down here and it is not going under a composer. */
+  /* The bar is fixed over the page, so the page ends above it: whatever the
+     workspace ends on is not going under a composer. */
   .page {
     padding-bottom: calc(var(--composer-bar) + env(safe-area-inset-bottom));
   }
@@ -239,10 +239,20 @@
 /* ---- laptop: three columns, one viewport ---- */
 
 @media (min-width: 1200px) {
+  /* The page owns the viewport and hands the workspace whatever the bar above
+     it did not take. This used to be calc(100vh - 33px) on the workspace with
+     the bar's height written into the sum, which held right up until the bar
+     gained a 20px house mark and outgrew its line of text by 4px, and the
+     whole library picked up a scrollbar. Nothing here counts the bar. */
+  .page {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
   .workspace {
-    /* The prototype bar is 33px: 16px of line inside 8px of padding either
-       side, over a 1px rule. */
-    height: calc(100vh - 33px);
+    flex: 1;
+    min-height: 0;
     grid-template-columns: 220px minmax(0, 1fr) 340px;
   }
 }

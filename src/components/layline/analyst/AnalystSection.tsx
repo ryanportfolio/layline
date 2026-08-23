@@ -376,6 +376,8 @@ export function AnalystSection({ variant = "story" }: { variant?: "story" | "rai
           t: part.t,
           hue: boat === undefined ? "var(--wind)" : boat.hue,
           dark: boat?.dark === true,
+          boatId: boat?.id,
+          sail: boat?.sail,
         });
       }
       break;
@@ -575,10 +577,6 @@ export function AnalystSection({ variant = "story" }: { variant?: "story" | "rai
           <h2 id="analyst-dock-heading" className={styles.dockHeading}>
             Debrief
           </h2>
-          <p className={styles.dockNote}>
-            Ask about the race in the viewer. Answers cite its telemetry and jump the replay to the
-            moment
-          </p>
         </div>
       ) : (
       <div className={styles.head}>
@@ -787,7 +785,9 @@ export function AnalystSection({ variant = "story" }: { variant?: "story" | "rai
               </div>
             ) : null}
 
-            <MomentStrip buoys={buoys} />
+            {/* jumpTo is the chip's own handler: a buoy is the same citation
+                seen on the clock, so it makes the same jump. */}
+            <MomentStrip buoys={buoys} onBuoy={jumpTo} />
 
             <form
               className={styles.inputRow}

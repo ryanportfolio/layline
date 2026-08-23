@@ -716,7 +716,7 @@ export function crewGeometry(livery: Livery): BufferGeometry {
   return finish(s);
 }
 
-interface SailSpec {
+export interface SailSpec {
   tack: readonly [number, number, number];
   head: readonly [number, number, number];
   chord: readonly number[];
@@ -733,11 +733,11 @@ interface SailSpec {
 /* Foot chord to head chord, up the luff. The main is a square top: the head is
  * a third of the foot rather than a point, which is what gives a skiff its
  * silhouette. */
-const MAIN_CHORD = [2.6, 2.58, 2.5, 2.38, 2.22, 2.02, 1.76, 1.42, 0.88];
+export const MAIN_CHORD = [2.6, 2.58, 2.5, 2.38, 2.22, 2.02, 1.76, 1.42, 0.88];
 const JIB_CHORD = [1.86, 1.8, 1.7, 1.56, 1.38, 1.16, 0.9, 0.6, 0.1];
 const KITE_CHORD = [4.1, 4.4, 4.5, 4.4, 4.15, 3.75, 3.15, 2.25, 0.42];
 
-const MAIN_SPEC: SailSpec = {
+export const MAIN_SPEC: SailSpec = {
   tack: [0, 1.06, 0.026],
   head: [0, 7.62, 0.285],
   chord: MAIN_CHORD,
@@ -771,7 +771,7 @@ const JIB_SPEC: SailSpec = {
  * its luff is pinned at both ends, between the sprit and the masthead, so only
  * the clew swings and rotating the whole sail would drag the head off the
  * mast. */
-const KITE_SPEC: SailSpec = {
+export const KITE_SPEC: SailSpec = {
   tack: [0, 0, 0],
   /* Measured off the sprit tip the sail is tacked to, so the head lands on the
    * masthead. Move the sprit and this number moves with it. */
@@ -782,7 +782,13 @@ const KITE_SPEC: SailSpec = {
   trim: 58,
   luffBow: 0.55,
   rise: 0.05,
-  spans: 11,
+  /* Fifteen rather than the eleven every other sail carries. The drape can
+   * only bend the cloth where there is cloth to bend, and at eleven spans a
+   * single panel is half a metre of flat sheet that cuts the mainsail between
+   * its own corners whatever the drape does to those corners. Fifteen takes
+   * the pair from crossing in all fifty wind and sheet combinations to nine.
+   * Past this the panels stop being the limit and it buys nothing. */
+  spans: 15,
   chords: 9,
   uSpan: 1,
 };
