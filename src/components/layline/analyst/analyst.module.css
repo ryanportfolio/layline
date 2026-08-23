@@ -446,11 +446,13 @@
 }
 
 /* The rail and the conversation are two instruments in one panel, separated
-   by hairline the way the console docks are. */
+   by hairline the way the console docks are. The taller floor holds a full
+   lead-plus-evidence answer beside the rail without an inner scrollbar. */
 @media (min-width: 901px) {
   .conversation {
     border-left: 1px solid var(--rule);
     padding-left: 32px;
+    min-height: 420px;
   }
 }
 
@@ -542,7 +544,9 @@
   gap: 16px;
   margin: 0;
   padding: 0 4px 0 0;
-  max-height: 420px;
+  /* Room for a question plus a full lead-and-evidence answer; the viewport
+     term keeps the composer on screen on short phones. */
+  max-height: min(560px, 62vh);
   overflow-y: auto;
   list-style: none;
   scrollbar-width: thin;
@@ -660,10 +664,36 @@
   overflow-wrap: anywhere;
 }
 
+/* The analyst's answer, one sentence per line. The lead line answers the
+   question; the evidence lines under it each hold one fact, ruled apart the
+   way the dock separates its readings, with the line's chip at its end. */
+.turnBody {
+  display: flex;
+  flex-direction: column;
+}
+
+.turnLead {
+  margin: 0;
+  font-size: 15px;
+  line-height: 24px;
+  overflow-wrap: anywhere;
+}
+
+.turnEvidence {
+  margin: 7px 0 0;
+  padding-top: 7px;
+  border-top: 1px solid var(--rule);
+  font-size: 14px;
+  line-height: 22px;
+  overflow-wrap: anywhere;
+}
+
 /* Streaming caret: exists only while the turn is live, a working-state
-   indicator like the status dot, not decoration. The base style is ungated
-   so reduced-motion viewers get a steady caret; only the blink is gated. */
-.analystTurn[aria-live="polite"] .turnText::after {
+   indicator like the status dot, not decoration. It rides the last line so
+   the type-ahead point is always where the caret sits. The base style is
+   ungated so reduced-motion viewers get a steady caret; only the blink is
+   gated. */
+.analystTurn[aria-live="polite"] .turnBody > p:last-child::after {
   content: "";
   display: inline-block;
   width: 8px;
@@ -674,7 +704,7 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .analystTurn[aria-live="polite"] .turnText::after {
+  .analystTurn[aria-live="polite"] .turnBody > p:last-child::after {
     animation: caretBlink 1s step-end infinite;
   }
 }

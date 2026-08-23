@@ -157,10 +157,10 @@ function mockStart(race: RaceData): MockStep[] {
   steps.push({
     kind: "text",
     value:
-      `${first.sail} won the start ${firstChip}. At the gun it sat ${first.distanceToLineMeters} meters short of the line with ` +
-      `${first.sogAtGunKnots} knots on, off the ${endWord(first.nearerEnd)} end, and it crossed ${first.crossedAfterGunSeconds} seconds ` +
-      `after the gun, first in the fleet. ${second.sail} was next across at ${second.crossedAfterGunSeconds} seconds, ` +
-      `from the ${endWord(second.nearerEnd)} end ${secondChip}.`,
+      `${first.sail} won the start.\n` +
+      `At the gun it sat ${first.distanceToLineMeters} meters short of the line with ${first.sogAtGunKnots} knots on, off the ${endWord(first.nearerEnd)} end.\n` +
+      `It crossed ${first.crossedAfterGunSeconds} seconds after the gun, first in the fleet. ${firstChip}\n` +
+      `${second.sail} was next across at ${second.crossedAfterGunSeconds} seconds, from the ${endWord(second.nearerEnd)} end. ${secondChip}`,
   });
   return steps;
 }
@@ -187,16 +187,17 @@ function mockLeadChange(race: RaceData): MockStep[] {
   const markGap = rowFor(afterMark, earlyLeader.boatId)?.gapSeconds ?? 0;
   const markLine =
     markLeader.boatId === laterLeader.boatId && markLeader.leg !== "beat"
-      ? `The pass stuck at the windward mark: ${laterLeader.sail} reached it first and settled onto the run ` +
-        `${gapWords(markGap)} clear of ${earlyLeader.sail} ${serializeChip(35, laterLeader.boatId)}, and it led the rest of the way.`
-      : `At 0:35 the lead read ${markLeader.sail} ${serializeChip(35, markLeader.boatId)}.`;
+      ? `The pass stuck at the windward mark: ${laterLeader.sail} reached it first, settled onto the run ` +
+        `${gapWords(markGap)} clear of ${earlyLeader.sail}, and led the rest of the way. ${serializeChip(35, laterLeader.boatId)}`
+      : `At 0:35 the lead read ${markLeader.sail}. ${serializeChip(35, markLeader.boatId)}`;
   steps.push({
     kind: "text",
     value:
-      `At ${early.raceClock} ${earlyLeader.sail} led the beat with ${laterLeader.sail} ${gapWords(wasBehindBy)} back ` +
-      `${serializeChip(20, earlyLeader.boatId)}. By ${later.raceClock} ${laterLeader.sail} had its bow in front ` +
-      `${serializeChip(30, laterLeader.boatId)}, after averaging ${cmp.a.avgSogKnots} knots over the ground to ` +
-      `${cmp.b.avgSogKnots} for ${earlyLeader.sail} through that stretch. ${markLine}`,
+      `${laterLeader.sail} took the lead from ${earlyLeader.sail} midway up the beat.\n` +
+      `At ${early.raceClock} ${earlyLeader.sail} led with ${laterLeader.sail} ${gapWords(wasBehindBy)} back. ${serializeChip(20, earlyLeader.boatId)}\n` +
+      `By ${later.raceClock} ${laterLeader.sail} had its bow in front, after averaging ${cmp.a.avgSogKnots} knots over the ground to ` +
+      `${cmp.b.avgSogKnots} for ${earlyLeader.sail} through that stretch. ${serializeChip(30, laterLeader.boatId)}\n` +
+      markLine,
   });
   return steps;
 }
@@ -249,8 +250,10 @@ function mockDownwind(race: RaceData): MockStep[] {
   steps.push({
     kind: "text",
     value:
-      `${top.sail} was the fastest boat downwind, averaging ${top.toMarkKnots} knots toward the mark between ${clock(from)} and ${clock(to)}, ` +
-      `when the whole fleet was on the run ${serializeChip(mid, top.boatId)}. ${next.sail} was next at ${next.toMarkKnots}. ${finish}`,
+      `${top.sail} was the fastest boat downwind.\n` +
+      `It averaged ${top.toMarkKnots} knots toward the mark between ${clock(from)} and ${clock(to)}, when the whole fleet was on the run. ${serializeChip(mid, top.boatId)}\n` +
+      `${next.sail} was next at ${next.toMarkKnots}.\n` +
+      finish,
   });
   return steps;
 }
@@ -270,11 +273,12 @@ function mockStandings(race: RaceData): MockStep[] {
   steps.push({
     kind: "text",
     value:
-      `No model is answering right now, so this reply is a stand-in: the three suggested questions are scripted and ` +
-      `everything else gets the standings. Set OPENROUTER_API_KEY to have a model read your question and call the tools itself. ` +
-      `Meanwhile, at ${mid.raceClock} ${lead.sail} led on the ${lead.leg} ${serializeChip(45, lead.boatId)}, ` +
-      `with ${second.sail} ${gapWords(second.gapSeconds)} back and ${third.sail} third at ${gapWords(third.gapSeconds)}. ` +
-      `By ${final.raceClock} the race was done: ${w1.sail} first, ${w2.sail} second, ${w3.sail} third ${serializeChip(60)}.`,
+      `No model is answering right now, so this reply is a stand-in.\n` +
+      `The three suggested questions are scripted and everything else gets the standings.\n` +
+      `Set OPENROUTER_API_KEY to have a model read your question and call the tools itself.\n` +
+      `At ${mid.raceClock} ${lead.sail} led on the ${lead.leg}, with ${second.sail} ${gapWords(second.gapSeconds)} back ` +
+      `and ${third.sail} third at ${gapWords(third.gapSeconds)}. ${serializeChip(45, lead.boatId)}\n` +
+      `By ${final.raceClock} the race was done: ${w1.sail} first, ${w2.sail} second, ${w3.sail} third. ${serializeChip(60)}`,
   });
   return steps;
 }
@@ -400,17 +404,24 @@ class UpstreamError extends Error {
 }
 
 /* Small models open their final answer with plan talk ("Let me check the
- * downwind legs.") despite the prompt. Leading paragraphs that read as
- * planning are dropped, but only while a real paragraph remains after them,
- * so an answer can never strip to nothing. */
+ * downwind legs.") despite the prompt. The answer shape is one sentence per
+ * line, so plan talk arrives as leading lines, not leading paragraphs.
+ * Leading lines that read as planning are dropped, but only while a real
+ * line remains after them, so an answer can never strip to nothing. */
 const PLAN_TALK = /^(let me|i'll|i will|i am going to|i'm going to|first,? let me|now let me|okay,? let|i need to)/i;
 
 function stripPlanTalk(text: string): string {
-  const paragraphs = text.split(/\n\s*\n/);
-  while (paragraphs.length > 1 && PLAN_TALK.test(paragraphs[0].trim())) {
-    paragraphs.shift();
+  const lines = text.split("\n");
+  while (lines.length > 1) {
+    const first = lines[0].trim();
+    const restHasWords = lines.slice(1).some((line) => line.trim() !== "");
+    if (first === "" || (PLAN_TALK.test(first) && restHasWords)) {
+      lines.shift();
+      continue;
+    }
+    break;
   }
-  return paragraphs.join("\n\n");
+  return lines.join("\n");
 }
 
 function liveResponse(

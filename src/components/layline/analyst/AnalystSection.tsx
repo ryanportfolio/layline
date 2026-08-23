@@ -173,7 +173,10 @@ function ChipButton({
 }
 
 /* Analyst prose with the chips swapped in as pills. Chips are the only markup
- * the protocol allows, so everything between them renders as plain text. */
+ * the protocol allows; the shape is carried by newlines. The first line
+ * answers, each line under it is one evidence sentence with its chip at the
+ * end, so every line renders as its own block. An answer with no newlines,
+ * which a live model can still produce, falls back to one plain block. */
 function AnalystBody({
   text,
   live,
@@ -186,16 +189,28 @@ function AnalystBody({
   onChip: (t: number, boatId?: string) => void;
 }) {
   const display = live ? trimOpenChip(text) : text;
+  const lines = display.split("\n").filter((line) => line.trim() !== "");
+  if (lines.length === 0) lines.push("");
   return (
-    <p className={styles.turnText}>
-      {parseChips(display).map((part, index) =>
-        part.kind === "chip" ? (
-          <ChipButton key={index} t={part.t} boatId={part.boatId} fleet={fleet} onChip={onChip} />
-        ) : (
-          <span key={index}>{part.text}</span>
-        ),
-      )}
-    </p>
+    <div className={styles.turnBody}>
+      {lines.map((line, lineIndex) => (
+        <p key={lineIndex} className={lineIndex === 0 ? styles.turnLead : styles.turnEvidence}>
+          {parseChips(line).map((part, index) =>
+            part.kind === "chip" ? (
+              <ChipButton
+                key={index}
+                t={part.t}
+                boatId={part.boatId}
+                fleet={fleet}
+                onChip={onChip}
+              />
+            ) : (
+              <span key={index}>{part.text}</span>
+            ),
+          )}
+        </p>
+      ))}
+    </div>
   );
 }
 
