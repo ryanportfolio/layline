@@ -29,7 +29,7 @@ export function NotesSection({ race }: { race: RaceData }) {
         <p className={notes.kicker}>Project</p>
         <h2 className={notes.heading}>What I built</h2>
         <p className={notes.lead}>
-          A browser race player that turns 4 GPS points per second
+          A browser race player that turns 4 GPS points per second,
           <br />
           into smooth scrubbable fleet motion
         </p>
@@ -109,7 +109,7 @@ export function NotesSection({ race }: { race: RaceData }) {
         </div>
         <div className={notes.engineProof}>
           <p className={notes.kicker}>Interactive</p>
-          <h3 className={notes.labHeading}>Interpolation lab</h3>
+          <h3 className={notes.labHeading}>Interpolation</h3>
           <p className={notes.labLead}>
             1 telemetry window, 12 seconds long, across 3 synchronized views
           </p>

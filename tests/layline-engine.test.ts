@@ -10,6 +10,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { clock, deg, gap, knots, MISSING } from "../src/lib/layline/format";
+import { boomAngle } from "../src/components/layline/scene/skiff";
+import { clothCamber, clothSide } from "../src/components/layline/scene/trim";
 import { poseAt, standingsAt } from "../src/lib/layline/interpolate";
 import { generateRace } from "../src/lib/layline/sim";
 import { FIX_HZ, RACE_SEED } from "../src/lib/layline/types";
@@ -147,4 +149,86 @@ test("display edge: the prestart clock counts down, the gap column stays honest"
   assert.equal(gap({ rank: 6, leg: "run", gapSeconds: 9.94 }), "+9.9 s");
   assert.equal(gap({ rank: 6, leg: "run", gapSeconds: 9.97 }), "+10 s");
   assert.equal(gap({ rank: 6, leg: "run", gapSeconds: 42.4 }), "+42 s");
+});
+
+/* The rig. Which side the cloth is on is a decision the scene makes, not a
+ * channel in the feed, and it is the one place a continuous replay used to
+ * teleport: the leeward side is the sign of the wind angle and a sign changes
+ * on one frame. */
+
+function leeSign(twa: number): number {
+  return twa >= 0 ? -1 : 1;
+}
+
+test("the cloth changes sides once per manoeuvre and nowhere else", () => {
+  let swings = 0;
+  for (const id of Object.keys(race.fixes)) {
+    let prev = Math.sign(clothSide(race, id, race.tMin));
+    for (let t = race.tMin; t <= race.tMax; t += 0.025) {
+      const here = Math.sign(clothSide(race, id, t));
+      if (here !== 0 && here !== prev) swings++;
+      if (here !== 0) prev = here;
+    }
+  }
+  /* Six gybes on the run and two tacks up each beat, which is every sign
+   * change in the fleet's wind angle and no others. */
+  assert.equal(swings, 18);
+});
+
+test("the rig swings across a manoeuvre instead of teleporting", () => {
+  /* Sheeted on the centreline the boom sits 5 deg off, squared off on a run it
+   * sits at 85, so the old sign flip moved it 170 deg between two frames. */
+  const out = blankPose();
+  let worst = 0;
+  for (const id of Object.keys(race.fixes)) {
+    let prev: number | null = null;
+    for (let t = race.tMin; t <= race.tMax; t += 0.025) {
+      poseAt(race, id, t, "smooth", out);
+      const boom = clothSide(race, id, t) * boomAngle(out.twa);
+      if (prev !== null) worst = Math.max(worst, Math.abs(boom - prev));
+      prev = boom;
+    }
+  }
+  assert.ok(worst < 10, `boom moved ${worst.toFixed(2)} deg between two frames`);
+});
+
+test("outside a manoeuvre the rig is exactly where the sign test put it", () => {
+  /* The swing is the only thing that changed, so every frame that is not
+   * inside one has to draw what it drew before: the cloth hard on one side
+   * with all of its draft in it. */
+  const out = blankPose();
+  let checked = 0;
+  for (const id of Object.keys(race.fixes)) {
+    for (let t = race.tMin; t <= race.tMax; t += 0.05) {
+      const side = clothSide(race, id, t);
+      if (Math.abs(side) !== 1) continue;
+      poseAt(race, id, t, "smooth", out);
+      assert.equal(side, leeSign(out.twa), `${id} at t=${t.toFixed(2)}`);
+      assert.equal(clothCamber(side), 1);
+      checked++;
+    }
+  }
+  assert.ok(checked > 7000, `only ${checked} frames sat outside a manoeuvre`);
+});
+
+test("the two cut sides of a sail meet with no draft in either", () => {
+  /* The mirrored shape is a second geometry, and the swap between them is only
+   * free where both are flat. Camber has to reach zero at the crossing and the
+   * side has to pass through it, or the pop comes back at half the size. */
+  assert.equal(clothCamber(0), 0);
+  assert.equal(clothCamber(1), 1);
+  assert.equal(clothCamber(-1), 1);
+  let crossings = 0;
+  for (const id of Object.keys(race.fixes)) {
+    let prev = clothSide(race, id, race.tMin);
+    for (let t = race.tMin; t <= race.tMax; t += 0.001) {
+      const side = clothSide(race, id, t);
+      if (prev < 0 !== side < 0) {
+        assert.ok(Math.abs(side) < 0.02, `${id} jumped to ${side} at t=${t.toFixed(3)}`);
+        crossings++;
+      }
+      prev = side;
+    }
+  }
+  assert.equal(crossings, 18);
 });

@@ -3,6 +3,7 @@
 import { useEffect, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import { FrontSide, MeshLambertMaterial, MeshStandardMaterial } from "three";
+import type { BufferGeometry, Mesh } from "three";
 import { poseAt } from "@/lib/layline/interpolate";
 import type { Pose, RaceData } from "@/lib/layline/types";
 import { sampleLive } from "../hud/live";
@@ -24,6 +25,7 @@ import {
   matteGeometry,
   sailTexture,
 } from "./skiff";
+import { clothCamber, clothSide } from "./trim";
 import { sampleWave, swellDirection, type WaveSample } from "./waves";
 
 const DEG = Math.PI / 180;
@@ -46,6 +48,23 @@ function newPose(): Pose {
 
 function clamp(value: number, low: number, high: number): number {
   return value < low ? low : value > high ? high : value;
+}
+
+/**
+ * Puts a sail on the side it is cut for and blends its draft in or out. The
+ * mirrored shape is a second geometry rather than a second influence, because
+ * the sail number has to keep reading forwards; the swap happens at zero draft,
+ * where the two are the same shape, so it is a change of vertices and not a
+ * change of picture.
+ */
+function setSail(mesh: Mesh | null, geometry: BufferGeometry, luff: number): void {
+  if (mesh === null) return;
+  if (mesh.geometry !== geometry) mesh.geometry = geometry;
+  /* The renderer builds the influence list when a mesh is constructed with its
+   * geometry, and this one is handed its geometry afterwards. */
+  if (mesh.morphTargetInfluences === undefined) mesh.updateMorphTargets();
+  const influences = mesh.morphTargetInfluences;
+  if (influences !== undefined) influences[0] = luff;
 }
 
 /* Radius in drawn pixels the standing rigging is never allowed to fall under.
@@ -265,28 +284,28 @@ export function Fleet({ race }: { race: RaceData }) {
       inner.updateMatrix();
 
       /* Leeward is where the cloth goes: to port with the wind over starboard,
-       * and the whole rig follows that one sign. */
-      const lee = pose.twa >= 0 ? -1 : 1;
+       * and the whole rig follows that one number. It is a number rather than a
+       * sign because a boom takes about a second to cross and the sails go soft
+       * on the way; at zero the rig is on the centreline halfway through a
+       * manoeuvre, which is also where the two cut sides of a sail meet. */
+      const side = clothSide(race, id, t);
+      const luff = 1 - clothCamber(side);
       const boom = boomAngle(pose.twa) * DEG;
       const boomNode = node.boom;
       if (boomNode !== null) {
-        boomNode.rotation.y = lee * boom;
+        boomNode.rotation.y = side * boom;
         boomNode.updateMatrix();
       }
-      if (node.mainMesh !== null) {
-        node.mainMesh.geometry = lee < 0 ? kit.mains.starboard : kit.mains.port;
-      }
+      setSail(node.mainMesh, side < 0 ? kit.mains.starboard : kit.mains.port, luff);
       const jibNode = node.jib;
       if (jibNode !== null) {
         /* A jib sheets a lot closer than a main and comes off the same lead all
          * the way round the course, so it tracks the boom rather than matching
          * it. */
-        jibNode.rotation.y = lee * boom * 0.42;
+        jibNode.rotation.y = side * boom * 0.42;
         jibNode.updateMatrix();
       }
-      if (node.jibMesh !== null) {
-        node.jibMesh.geometry = lee < 0 ? kit.jibs.starboard : kit.jibs.port;
-      }
+      setSail(node.jibMesh, side < 0 ? kit.jibs.starboard : kit.jibs.port, luff);
 
       const kiteNode = node.kite;
       if (kiteNode !== null) {
@@ -297,9 +316,7 @@ export function Fleet({ race }: { race: RaceData }) {
         kiteNode.visible = hoist > 0.02;
         kit.kite.opacity = Math.min(1, hoist * 1.8);
       }
-      if (node.kiteMesh !== null) {
-        node.kiteMesh.geometry = lee < 0 ? kit.kites.starboard : kit.kites.port;
-      }
+      setSail(node.kiteMesh, side < 0 ? kit.kites.starboard : kit.kites.port, luff);
 
       const crewNode = node.crew;
       if (crewNode !== null) {

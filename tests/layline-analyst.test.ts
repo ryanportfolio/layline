@@ -228,6 +228,12 @@ test("mock mode says so when a question is outside its script", async () => {
     .join("");
   assert.match(answer, /stand-in/, `expected the stand-in disclosure in: ${answer}`);
   assert.match(answer, /OPENROUTER_API_KEY/);
+  /* One sentence per line holds in the fallback too: the key instruction
+   * opens its own line rather than trailing the scripted-questions sentence. */
+  assert.ok(
+    answer.split("\n").some((line) => line.startsWith("Set OPENROUTER_API_KEY")),
+    `expected the key instruction on its own line in: ${answer}`,
+  );
 });
 
 test("mock mode streams status and deltas and ends with done", async () => {
@@ -260,4 +266,76 @@ test("mock mode streams status and deltas and ends with done", async () => {
     .join("");
   const chips = parseChips(answer).filter((segment) => segment.kind === "chip");
   assert.ok(chips.length >= 1, `expected a chip in: ${answer}`);
+});
+
+/* ------------------------------------------------------------------ */
+/* Answer shape: a lead line, then evidence lines with chips at line ends */
+
+async function mockDeltas(question: string): Promise<string[]> {
+  process.env.LAYLINE_ANALYST_MOCK = "1";
+  const res = await post({ messages: [{ role: "user", content: question }] });
+  assert.equal(res.status, 200);
+  return (await res.text())
+    .split("\n")
+    .filter((line) => line.startsWith("data: ") && line.includes('"text"'))
+    .map((line) => (JSON.parse(line.slice(6)) as { text: string }).text);
+}
+
+test("every scripted answer is a lead line plus evidence lines, chips at line ends", async () => {
+  /* The stand-in reply for an unscripted question follows the same shape. */
+  for (const question of [...SUGGESTED_QUESTIONS, "When did NZL 7 tack?"]) {
+    const answer = (await mockDeltas(question)).join("");
+    const lines = answer.split("\n").filter((line) => line.trim() !== "");
+    assert.ok(lines.length >= 3, `expected a lead and evidence lines in: ${answer}`);
+
+    /* The lead answers in one plain sentence and carries no chip. */
+    const leadParts = parseChips(lines[0]);
+    assert.equal(leadParts.length, 1, `expected a chipless lead line in: ${lines[0]}`);
+    assert.equal(leadParts[0].kind, "text");
+
+    /* A chip only ever ends its line; the wall-of-text shape had them
+     * mid-sentence, wrapping into orphaned punctuation. */
+    let chips = 0;
+    for (const line of lines) {
+      const parts = parseChips(line.trim());
+      parts.forEach((part, index) => {
+        if (part.kind !== "chip") return;
+        chips += 1;
+        assert.equal(index, parts.length - 1, `chip sits mid line in: ${line}`);
+      });
+    }
+    assert.ok(chips >= 1, `expected a chip in: ${answer}`);
+  }
+});
+
+test("a half-streamed answer never shows markup and never rewrites a finished line", async () => {
+  const deltas = await mockDeltas(SUGGESTED_QUESTIONS[2]);
+  assert.ok(deltas.length > 4, "expected the answer to arrive in many deltas");
+
+  /* The client's hold-back: the tail past an unclosed "[[" stays hidden. */
+  const trimOpenChip = (text: string): string => {
+    const open = text.lastIndexOf("[[");
+    if (open === -1) return text;
+    if (text.indexOf("]]", open) !== -1) return text;
+    return text.slice(0, open);
+  };
+
+  let streamed = "";
+  let previous: string[] = [];
+  for (const delta of deltas) {
+    streamed += delta;
+    const display = trimOpenChip(streamed);
+    for (const part of parseChips(display)) {
+      if (part.kind === "text") {
+        assert.ok(!part.text.includes("[["), `markup visible mid-stream: ${part.text}`);
+      }
+    }
+    /* Once a later line starts, every earlier line is finished and frozen;
+     * anything else would rewrap text the reader already read. */
+    const lines = display.split("\n").filter((line) => line.trim() !== "");
+    for (let index = 0; index + 1 < previous.length; index += 1) {
+      assert.equal(lines[index], previous[index], `finished line ${index} changed mid-stream`);
+    }
+    previous = lines;
+  }
 });

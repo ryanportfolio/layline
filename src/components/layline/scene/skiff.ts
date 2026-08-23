@@ -23,6 +23,7 @@ import {
   CanvasTexture,
   Color,
   Float32BufferAttribute,
+  type BufferAttribute,
   LinearMipmapLinearFilter,
   SRGBColorSpace,
   Vector3,
@@ -791,8 +792,13 @@ const KITE_SPEC: SailSpec = {
  * its own reading of the sheet. One double sided surface would show the sail
  * number backwards from the other side; real cloth carries it twice and so does
  * this.
+ *
+ * Spread is how much of the sheet has been let out to leeward: 1 for a sail
+ * drawing and 0 for one shaken onto the centreline. Only the sideways half of
+ * the cloth answers to it, so a sail at spread 0 is the same shape whichever
+ * side it was cut for, and the swap between the two costs no movement.
  */
-function sailShell(s: Shell, spec: SailSpec, lee: number, cloth: Color): void {
+function sailShell(s: Shell, spec: SailSpec, lee: number, cloth: Color, spread: number): void {
   const spans = spec.spans;
   const chords = spec.chords;
   for (let skin = 0; skin < 2; skin++) {
@@ -802,14 +808,14 @@ function sailShell(s: Shell, spec: SailSpec, lee: number, cloth: Color): void {
       const v = j / spans;
       const c = curveAt(spec.chord, v);
       const theta = (spec.trim + spec.twist * Math.pow(v, 1.3)) * DEG;
-      const dirX = lee * Math.sin(theta);
+      const dirX = lee * spread * Math.sin(theta);
       const dirZ = Math.cos(theta);
       const nX = lee * Math.cos(theta);
       const nZ = -Math.sin(theta);
       const lx =
         spec.tack[0] +
         (spec.head[0] - spec.tack[0]) * v +
-        lee * spec.luffBow * Math.pow(Math.sin(Math.PI * v), 0.8);
+        lee * spread * spec.luffBow * Math.pow(Math.sin(Math.PI * v), 0.8);
       const ly = spec.tack[1] + (spec.head[1] - spec.tack[1]) * v;
       const lz = spec.tack[2] + (spec.head[2] - spec.tack[2]) * v;
       /* Which way the sheet has to run so the number reads the right way round
@@ -819,7 +825,11 @@ function sailShell(s: Shell, spec: SailSpec, lee: number, cloth: Color): void {
       const mirrored = skin === 0 ? lee > 0 : lee < 0;
       for (let i = 0; i <= chords; i++) {
         const w = i / chords;
-        const camber = spec.draft * c * Math.sin(Math.PI * Math.pow(w, 0.82)) + face * 0.011;
+        /* Draft answers to the sheet. The centimetre that holds the two skins
+         * apart does not, or a sail shaken flat would fold its faces together
+         * and fight itself for the pixel. */
+        const camber =
+          spread * spec.draft * c * Math.sin(Math.PI * Math.pow(w, 0.82)) + face * 0.011;
         put(
           s,
           lx + dirX * w * c + nX * camber,
@@ -889,25 +899,48 @@ function mainOutline(): number[] {
 
 export const MAIN_CORNERS = mainOutline();
 
+/**
+ * A sail, and the same sail shaken flat hung off it as a morph target. Every
+ * sail on the boat changes sides at some point in a race, and swapping the
+ * drawn shape for its mirror is a manoeuvre that takes one frame; blending the
+ * draft out and back in instead lets the cloth go soft across the crossing,
+ * which is both what cloth does and the only way the two cut sides can meet
+ * without a step.
+ *
+ * Position and normal only. The flat build is the same vertices in the same
+ * order carrying the same sheet, so nothing else has to travel with it.
+ */
+function luffing(build: (s: Shell, spread: number) => void): BufferGeometry {
+  const full = shell();
+  build(full, 1);
+  const flat = shell();
+  build(flat, 0);
+  const drawing = finish(full);
+  const shaken = finish(flat);
+  drawing.morphAttributes.position = [shaken.getAttribute("position") as BufferAttribute];
+  drawing.morphAttributes.normal = [shaken.getAttribute("normal") as BufferAttribute];
+  /* Again, now that the targets are on: culling reads one sphere per mesh, and
+   * the one finish left covers the drawn shape alone. A sail that leaves its own
+   * bounds mid gybe is culled at the moment it is being watched. */
+  drawing.computeBoundingSphere();
+  return drawing;
+}
+
 /** Mainsail and boom, in a frame whose origin is the mast at the waterline. */
 export function mainGeometry(lee: number): BufferGeometry {
-  const s = shell();
-  sailShell(s, MAIN_SPEC, lee, new Color(CLOTH));
-  const spar = new Color(SPAR);
-  tube(s, 0, 1.0, 0.06, 0, 1.05, 2.64, 0.055, 0.045, 6, spar, 0.98, 0.017);
-  return finish(s);
+  return luffing((s, spread) => {
+    sailShell(s, MAIN_SPEC, lee, new Color(CLOTH), spread);
+    const spar = new Color(SPAR);
+    tube(s, 0, 1.0, 0.06, 0, 1.05, 2.64, 0.055, 0.045, 6, spar, 0.98, 0.017);
+  });
 }
 
 export function jibGeometry(lee: number): BufferGeometry {
-  const s = shell();
-  sailShell(s, JIB_SPEC, lee, new Color(CLOTH));
-  return finish(s);
+  return luffing((s, spread) => sailShell(s, JIB_SPEC, lee, new Color(CLOTH), spread));
 }
 
 export function kiteGeometry(lee: number): BufferGeometry {
-  const s = shell();
-  sailShell(s, KITE_SPEC, lee, new Color("#ffffff"));
-  return finish(s);
+  return luffing((s, spread) => sailShell(s, KITE_SPEC, lee, new Color("#ffffff"), spread));
 }
 
 /* How far the boom carries off the centreline for a given true wind angle.

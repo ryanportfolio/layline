@@ -99,7 +99,7 @@
 .labHeading {
   margin: 0 0 8px;
   font-family: var(--font-pangram);
-  font-size: clamp(36px, 4.5vw, 51px);
+  font-size: clamp(48px, 7.5vw, 78px);
   font-weight: 400;
   font-variation-settings: "wdth" 108, "wght" 660;
   letter-spacing: 0.01em;
