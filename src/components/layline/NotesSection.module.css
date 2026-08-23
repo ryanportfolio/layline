@@ -161,44 +161,17 @@
   border-bottom: 0;
 }
 
+/* The drawing itself lives in BoatMark; this is only the box it fills and the
+   colour it takes here. */
 .boatBullet {
   width: 42px;
   height: 24px;
-  overflow: visible;
   color: var(--wind);
   transition: transform 180ms ease;
 }
 
-.boatWake,
-.boatMast {
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-width: 1.35;
-}
-
-.boatWake {
-  opacity: 0.45;
-  stroke-dasharray: 4 3;
-  animation: wakeFlow 1.6s linear infinite;
-}
-
-.boatHull {
-  fill: var(--ink);
-}
-
-.boatSail {
-  fill: currentColor;
-}
-
 .productionList li:hover .boatBullet {
   transform: translateX(4px) rotate(-1deg);
-}
-
-@keyframes wakeFlow {
-  to {
-    stroke-dashoffset: -14;
-  }
 }
 
 @media (max-width: 1000px) {
@@ -229,12 +202,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .boatWake {
-    animation-duration: 0.001ms;
-    animation-iteration-count: 1;
-    stroke-dashoffset: -14;
-  }
-
   .boatBullet {
     transition-duration: 0.001ms;
   }

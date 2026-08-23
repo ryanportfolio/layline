@@ -1,0 +1,48 @@
+.mark {
+  overflow: visible;
+}
+
+.wake,
+.mast {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.35;
+}
+
+.wake {
+  opacity: 0.45;
+  stroke-dasharray: 4 3;
+  animation: wakeFlow 1.6s linear infinite;
+}
+
+.hull {
+  fill: var(--ink);
+}
+
+.sail {
+  fill: currentColor;
+}
+
+/* Painted under the fill so the edge reads as a rule around the shape rather
+   than eating a pixel of it. */
+.outlined .hull {
+  stroke: var(--water-deep);
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
+}
+
+@keyframes wakeFlow {
+  to {
+    stroke-dashoffset: -14;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wake {
+    animation-duration: 0.001ms;
+    animation-iteration-count: 1;
+    stroke-dashoffset: -14;
+  }
+}

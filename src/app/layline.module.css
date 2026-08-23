@@ -242,6 +242,14 @@
   display: block;
 }
 
+/* The boat pointer only takes over once a mouse has actually moved over the
+   water, and it puts the attribute up itself; until then the water keeps the
+   house pointer it inherits. */
+.canvasLayer[data-boat-cursor="on"],
+.canvasLayer[data-boat-cursor="on"] * {
+  cursor: none;
+}
+
 /* ---- 2D mode ---- */
 
 /* The renderer is held, not unmounted: the replay clock runs inside its frame
@@ -992,7 +1000,9 @@
 
 /* Drawn without an aspect ratio so it takes whatever width the dock leaves it;
    every stroke below is non-scaling, so the lines stay one pixel through the
-   stretch instead of smearing into ribbons. */
+   stretch instead of smearing into ribbons. Scrubbable, on the same column and
+   the same span as the track below it, so the two rows answer a click at the
+   same x with the same race time. */
 .vmgPlot {
   display: block;
   width: 100%;
@@ -1000,6 +1010,8 @@
   background: rgba(164, 188, 203, 0.06);
   border: 1px solid var(--rule);
   border-radius: 2px;
+  cursor: var(--house-cursor);
+  touch-action: none;
 }
 
 .vmgBestLine {

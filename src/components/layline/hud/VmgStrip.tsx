@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from "react";
 import styles from "@/app/layline.module.css";
 import { VMG_STEP, vmgSeries, vmgToMark } from "@/lib/layline/analytics";
 import { MISSING, knots } from "@/lib/layline/format";
@@ -97,6 +97,8 @@ export function VmgStrip({ race }: { race: RaceData }) {
     [series, boat.id, ceiling, race.tMin, span],
   );
 
+  const plot = useRef<SVGSVGElement>(null);
+  const scrubbing = useRef(false);
   const clip = useRef<SVGRectElement>(null);
   const head = useRef<SVGLineElement>(null);
   const now = useRef<HTMLSpanElement>(null);
@@ -143,6 +145,18 @@ export function VmgStrip({ race }: { race: RaceData }) {
     });
   }, [race, series, span]);
 
+  /* The strip and the scrub track under it are the same 1fr column of the same
+   * grid, so a pixel on one is the same race time as the pixel below it. That
+   * is the whole reason this row can be scrubbed: a viewer who reads the dip
+   * in the trace aims at the dip, not at the track under it. Pointer only; the
+   * track below is the focusable slider and owns the keyboard. */
+  const seekFromPointer = (event: ReactPointerEvent<SVGSVGElement>) => {
+    const box = plot.current?.getBoundingClientRect();
+    if (box === undefined || box.width <= 0) return;
+    const fraction = Math.min(1, Math.max(0, (event.clientX - box.left) / box.width));
+    useReplay.getState().seek(race.tMin + fraction * span);
+  };
+
   const seedRacing = sample.leg === "beat" || sample.leg === "run";
 
   return (
@@ -159,11 +173,30 @@ export function VmgStrip({ race }: { race: RaceData }) {
       </span>
 
       <svg
+        ref={plot}
         className={styles.vmgPlot}
         viewBox={`0 0 ${W} ${H}`}
         preserveAspectRatio="none"
         aria-hidden="true"
         data-view="vmg"
+        onPointerDown={(event) => {
+          if (event.button !== 0) return;
+          scrubbing.current = true;
+          useReplay.getState().pause();
+          event.currentTarget.setPointerCapture(event.pointerId);
+          seekFromPointer(event);
+        }}
+        onPointerMove={(event) => {
+          if (!scrubbing.current) return;
+          seekFromPointer(event);
+        }}
+        onPointerUp={(event) => {
+          scrubbing.current = false;
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }}
+        onPointerCancel={() => {
+          scrubbing.current = false;
+        }}
       >
         <defs>
           <clipPath id="laylineVmgSoFar">
