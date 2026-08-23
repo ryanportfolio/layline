@@ -60,7 +60,7 @@ export function buildBoard(race: RaceData): Board {
           state: "running",
         },
         {
-          label: "Fixes the sim wrote",
+          label: "Samples generated",
           value: String(totalFixes(race)),
           state: "running",
         },
@@ -99,7 +99,7 @@ export function buildBoard(race: RaceData): Board {
           state: "running",
         },
         {
-          label: "Speed made good, one reading every",
+          label: "Speed made good, 1 sample every",
           value: fmt2(VMG_STEP),
           unit: "s",
           state: "running",
@@ -122,7 +122,7 @@ export function buildBoard(race: RaceData): Board {
           state: "running",
         },
         {
-          label: "Turns one thread runs to",
+          label: "Turns allowed per thread",
           value: String(MAX_TURNS),
           state: "running",
         },

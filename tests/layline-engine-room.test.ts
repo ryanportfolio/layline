@@ -179,7 +179,7 @@ test("the build board renders these rows, in this order, in these states", () =>
     [
       [
         "Boats in the seeded fleet|6||running",
-        "Fixes the sim wrote|1711||running",
+        "Samples generated|1711||running",
         "Wind readings under the laylines|75||running",
         "Gun, roundings and finishes|13||running",
         "Hulls, wake, spray, water and sky|||running",
@@ -189,14 +189,14 @@ test("the build board renders these rows, in this order, in these states", () =>
         "Race clock the transport scrubs|73.25|s|running",
         "Start line counts down from|10.00|s|running",
         "Turns marked under the scrub track|3||running",
-        "Speed made good, one reading every|0.50|s|running",
+        "Speed made good, 1 sample every|0.50|s|running",
         "Chart mode on the same clock|||running",
         "Heel and trim on the instrument dock|||landing",
       ],
       [
         "Tools the analyst can call|7||running",
         "Questions on the opening cards|3||running",
-        "Turns one thread runs to|8||running",
+        "Turns allowed per thread|8||running",
         "Characters a question can carry|400||running",
         "Moment chips put the replay on the answer|||running",
       ],
@@ -235,7 +235,7 @@ test("every board numeral is its source's own count", () => {
   };
 
   assert.equal(value("Boats in the seeded fleet"), String(race.boats.length));
-  assert.equal(value("Fixes the sim wrote"), String(totalFixes(race)));
+  assert.equal(value("Samples generated"), String(totalFixes(race)));
   assert.equal(value("Wind readings under the laylines"), String(race.wind.length));
   assert.equal(value("Gun, roundings and finishes"), String(race.events.length));
   /* Gun, six roundings, six finishes: the whole event list, nothing else. */
@@ -250,7 +250,7 @@ test("every board numeral is its source's own count", () => {
   assert.equal(value("Race clock the transport scrubs"), (race.tMax - race.tMin).toFixed(2));
   assert.equal(value("Start line counts down from"), (-race.tMin).toFixed(2));
   assert.equal(value("Turns marked under the scrub track"), String(maneuversOf(race, CONSOLE_BOAT).length));
-  assert.equal(value("Speed made good, one reading every"), VMG_STEP.toFixed(2));
+  assert.equal(value("Speed made good, 1 sample every"), VMG_STEP.toFixed(2));
   /* The turns row counts the boat the console is already following when the
      page opens. If the store's opening pick moves, the row is about a
      different boat and the label stops being true. */
@@ -258,6 +258,6 @@ test("every board numeral is its source's own count", () => {
 
   assert.equal(value("Tools the analyst can call"), String(ANALYST_TOOLS.length));
   assert.equal(value("Questions on the opening cards"), String(SUGGESTED_QUESTIONS.length));
-  assert.equal(value("Turns one thread runs to"), String(MAX_TURNS));
+  assert.equal(value("Turns allowed per thread"), String(MAX_TURNS));
   assert.equal(value("Characters a question can carry"), String(MAX_MESSAGE_CHARS));
 });

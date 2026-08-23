@@ -66,7 +66,7 @@ export function Transport() {
       <button
         type="button"
         className={styles.playButton}
-        aria-label="Step back one fix"
+        aria-label="Step back 1 sample"
         data-control="step-back"
         onClick={() => step(-1)}
       >
@@ -86,7 +86,7 @@ export function Transport() {
       <button
         type="button"
         className={styles.playButton}
-        aria-label="Step forward one fix"
+        aria-label="Step forward 1 sample"
         data-control="step-forward"
         onClick={() => step(1)}
       >
@@ -113,12 +113,12 @@ export function Transport() {
       <button
         type="button"
         className={clsx(styles.snapButton, raw && styles.snapButtonOn)}
-        aria-label="Raw fixes at 4 Hz"
+        aria-label="Raw samples at 4 Hz"
         aria-pressed={raw}
         data-control="snap"
         onClick={() => setMode(raw ? "smooth" : "raw")}
       >
-        <span className={styles.snapLabel}>Raw fixes</span>
+        <span className={styles.snapLabel}>Raw samples</span>
         <span className={styles.snapChip}>4 Hz</span>
       </button>
 

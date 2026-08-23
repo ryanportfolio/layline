@@ -45,7 +45,7 @@ export function buildReadme(facts: Facts): string {
 
 Layline replays a six-boat sailing race in the browser. A tracker reports each boat's position ${facts.fixHz} times per second. Layline fills the 250 ms gaps and draws the race at display rate.
 
-You can follow any boat, change cameras, scrub the race, inspect the raw fixes, and step through each reading. Debrief answers questions using ${facts.debrief.tools.length} tools that read the same race data.
+You can follow any boat, change cameras, scrub the race, inspect the raw GPS samples, and step through each sample. Debrief answers questions using ${facts.debrief.tools.length} tools that read the same race data.
 
 ${pic("course", "Six boat tracks on the generated course with laylines and finish times")}
 
@@ -68,7 +68,7 @@ Recommended to view on https://fullbuild.ai/prototype/layline
 
 <table>
 <tr>
-<td width="62%"><a href="https://fullbuild.ai/prototype/layline"><img alt="The tactical camera showing the raw four hertz position fixes" src="assets/img/raw-tactical.png" width="100%"></a></td>
+<td width="62%"><a href="https://fullbuild.ai/prototype/layline"><img alt="The tactical camera showing raw GPS samples at 4 Hz" src="assets/img/raw-tactical.png" width="100%"></a></td>
 <td width="38%"><a href="https://fullbuild.ai/prototype/layline"><img alt="The replay on a 390 pixel phone" src="assets/img/mobile.png" width="100%"></a></td>
 </tr>
 </table>
@@ -76,7 +76,7 @@ Recommended to view on https://fullbuild.ai/prototype/layline
 - Chase, TV, tactical, and 2D course views.
 - Playback at 1x, 2x, or 4x.
 - Scrubbing and 250 ms frame stepping.
-- Raw fixes mode shows the tracker input without interpolation.
+- Raw samples mode shows the tracker input without interpolation.
 - Clicking a standings row follows that boat and opens its instruments.
 - Tack and gybe markers seek to each turn and show the speed lost.
 - Start data shows time to the gun, distance to the line, and closing speed.
@@ -84,9 +84,9 @@ Recommended to view on https://fullbuild.ai/prototype/layline
 
 ## How the motion works
 
-A tracker sends one fix every 250 ms. A 60 Hz screen draws 15 frames during that gap. Holding each fix for all 15 frames makes the boat jump.
+A tracker sends 1 GPS point every 250 ms. A 60 Hz screen draws 15 frames during that gap. Holding each sample for all 15 frames makes the boat jump.
 
-${pic("hermite", "Raw fixes from a tack with the curve and reported velocity used between them")}
+${pic("hermite", "Raw GPS samples from a tack with the curve and reported velocity used between them")}
 
 **<ins>[interpolate.ts](src/lib/layline/interpolate.ts)</ins>** fills each gap with a cubic Hermite curve. The boat's reported speed and course set the direction at both ends. The curve passes through every recorded fix while keeping the shape of tacks and roundings.
 
@@ -97,7 +97,7 @@ ${pic("hermite", "Raw fixes from a tack with the curve and reported velocity use
 
 The same evaluator supplies the 3D scene, instruments, standings, and 2D course. Every view gets the same result for the same race time.
 
-The simulator runs at ${facts.simHz} Hz, then keeps only the data a ${facts.fixHz} Hz tracker would send. The current seed produces ${facts.fixesTotal} fixes across ${facts.boats} boats and ${facts.feedSeconds} seconds.
+The simulator runs at ${facts.simHz} Hz, then keeps only the data a ${facts.fixHz} Hz tracker would send. The current seed produces ${facts.fixesTotal.toLocaleString("en-US")} telemetry samples across ${facts.boats} boats and ${facts.feedSeconds} seconds.
 
 ## Debrief
 
@@ -120,20 +120,20 @@ The route limits requests to the same origin, ${facts.debrief.maxTurns} turns of
 - Per-frame code reuses pose objects, search cursors, and the standings array.
 - Instrument text updates only when a value changes.
 - The water uses 27,009 vertices. A uniform grid at the same detail would use 1,640,961.
-- The fleet shares two hull materials. Spray and raw fix dots use instancing.
+- The fleet shares 2 hull materials. Spray and raw telemetry dots use instancing.
 - Sustained frame misses lower the pixel ratio one step at a time.
 
 ## Controls
 
 | Input | Action |
 | --- | --- |
-| Play and step buttons | Play, pause, or move one fix |
+| Play and step buttons | Play, pause, or move 1 sample |
 | \`ArrowLeft\` / \`ArrowRight\` | Move one second |
 | \`Shift\` with arrow keys | Move ten seconds |
 | \`,\` / \`.\` | Move one 250 ms fix |
 | \`Home\` / \`End\` | Jump to the start or end |
 | 1x / 2x / 4x | Set playback speed |
-| Raw fixes | Show recorded fixes without interpolation |
+| Raw samples | Show recorded GPS points without interpolation |
 | Chase / TV / Tactical | Change camera |
 | 2D | Open the course view |
 | Maneuver marker | Seek to a tack or gybe |
@@ -146,7 +146,7 @@ The route limits requests to the same origin, ${facts.debrief.maxTurns} turns of
 npm test
 \`\`\`
 
-The ${facts.testCount} tests cover seeded race output, exact fixes, interpolation, compass wrapping, turn-rate limits, sail bounds, standings, frame stepping, and display formatting.
+The ${facts.testCount} tests cover seeded race output, exact samples, interpolation, compass wrapping, turn-rate limits, sail bounds, standings, frame stepping, and display formatting.
 
 Debrief tests cover tool output, maneuver detection, moment markers, glossary lookup, request validation, and mock streaming.
 
@@ -172,7 +172,11 @@ export function verifyReadme(md: string, facts: Facts): string[] {
   const head = md.split("\n").slice(0, 40).join("\n");
   if (!head.includes("npm install")) problems.push("quick start fell below the fold");
   if (!md.includes("https://fullbuild.ai/prototype/layline")) problems.push("live demo link missing");
-  for (const value of [String(facts.seed), String(facts.fixesTotal), String(facts.testCount)]) {
+  for (const value of [
+    String(facts.seed),
+    facts.fixesTotal.toLocaleString("en-US"),
+    String(facts.testCount),
+  ]) {
     if (!md.includes(value)) problems.push(`fact ${value} missing from prose`);
   }
   return problems;

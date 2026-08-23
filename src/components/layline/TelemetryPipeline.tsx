@@ -7,8 +7,8 @@ export function TelemetryPipeline() {
     <figure className={styles.figure}>
       <figcaption className={styles.caption}>
         <span className={styles.kicker}>Data flow</span>
-        <strong>From fixes to frames</strong>
-        <span>One race clock drives playback, overlays, standings, and debrief</span>
+        <strong>From samples to frames</strong>
+        <span>1 race clock drives playback, overlays, standings, and debrief</span>
       </figcaption>
 
       <div className={styles.canvas} aria-hidden="true">
@@ -50,7 +50,7 @@ export function TelemetryPipeline() {
 
           <g className={styles.station} transform="translate(560 58)">
             <rect width="160" height="112" />
-            <text className={styles.stationIndex} x="16" y="24">03 / ONE CLOCK</text>
+            <text className={styles.stationIndex} x="16" y="24">03 / 1 CLOCK</text>
             <text className={styles.stationName} x="16" y="92">RACE MODEL</text>
             <circle className={styles.clockRing} cx="80" cy="52" r="22" />
             <path className={styles.clockHand} d="M80 52 V36 M80 52 L92 58" />
@@ -76,7 +76,7 @@ export function TelemetryPipeline() {
         <li>
           <span>01 / 4 HZ</span>
           <strong>Telemetry</strong>
-          <small>Raw fixes from every boat</small>
+          <small>Raw GPS points from every boat</small>
         </li>
         <li>
           <span>02 / SMOOTH</span>
@@ -84,9 +84,9 @@ export function TelemetryPipeline() {
           <small>A stable pose for every frame</small>
         </li>
         <li>
-          <span>03 / ONE CLOCK</span>
+          <span>03 / 1 CLOCK</span>
           <strong>Race model</strong>
-          <small>One source for fleet state</small>
+          <small>1 source for fleet state</small>
         </li>
         <li>
           <span>04 / EVERY FRAME</span>

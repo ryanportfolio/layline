@@ -234,7 +234,7 @@ function EngineHeader() {
           How the replay works
         </h2>
         <p className={styles.explainer}>
-          Twelve seconds of {bench.boat.sail} through one tack, on one shared clock
+          12 seconds of {bench.boat.sail} through 1 tack, on 1 shared clock
         </p>
       </div>
       {/* The broadcast ident: what the feed is, how much of this section reads
@@ -245,7 +245,7 @@ function EngineHeader() {
       <div className={styles.ident} aria-hidden="true">
         <p className={styles.identLine}>Telemetry · {FIX_HZ} Hz per boat</p>
         <p className={styles.identValue}>{bench.window.fixes.length}</p>
-        <p className={styles.identSub}>Fixes on the bench</p>
+        <p className={styles.identSub}>Samples on the bench</p>
         <div className={styles.fleetBar}>
           {race.boats.map((boat) => (
             <span

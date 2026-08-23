@@ -4,6 +4,17 @@ import notes from "./NotesSection.module.css";
 import { EngineRoom } from "./engine/EngineRoom";
 import { TelemetryPipeline } from "./TelemetryPipeline";
 
+function BoatBullet() {
+  return (
+    <svg className={notes.boatBullet} viewBox="0 0 42 24" aria-hidden="true">
+      <path className={notes.boatWake} d="M1 17h13M5 21h8" />
+      <path className={notes.boatHull} d="M12 15h27l-5 6H18z" />
+      <path className={notes.boatMast} d="M24 15V2" />
+      <path className={notes.boatSail} d="M22 4v10H13zM26 3v11h10z" />
+    </svg>
+  );
+}
+
 export function NotesSection({ race }: { race: RaceData }) {
   const fixCount = race.boats.reduce((total, boat) => total + race.fixes[boat.id].length, 0);
   const duration = Math.round(race.tMax - race.tMin);
@@ -18,22 +29,23 @@ export function NotesSection({ race }: { race: RaceData }) {
         <p className={notes.kicker}>Project</p>
         <h2 className={notes.heading}>What I built</h2>
         <p className={notes.lead}>
-          A browser race player that turns four telemetry fixes per second into smooth,
-          scrubbable fleet motion
+          A browser race player that turns 4 GPS points per second
+          <br />
+          into smooth scrubbable fleet motion
         </p>
         <div className={notes.gridThree}>
           <article className={notes.card}>
             <h3>Replay</h3>
             <p>
-              Six boats share one clock across 2D and 3D views, camera changes, raw fixes,
-              smooth playback, and frame-by-frame scrubbing
+              6 boats share 1 clock across 2D and 3D views, camera changes, raw samples, smooth
+              playback, and frame by frame scrubbing
             </p>
           </article>
           <article className={notes.card}>
             <h3>Race model</h3>
             <p>
-              Wind, marks, laylines, rankings, maneuvers, VMG, speed, heading, and heel come
-              from one typed model
+              Wind, marks, laylines, rankings, maneuvers, VMG, speed, heading, and heel all come
+              from the same race data
             </p>
           </article>
           <article className={notes.card}>
@@ -51,8 +63,10 @@ export function NotesSection({ race }: { race: RaceData }) {
         <p className={notes.kicker}>Under the hood</p>
         <h2 className={notes.heading}>Performance</h2>
         <p className={notes.lead}>
-          Current demo scope is {race.boats.length} boats, {fixCount.toLocaleString("en-US")} fixes,
-          and {duration} seconds. Tens of boats and multi-hour recordings are the next benchmark
+          Current demo scope is {race.boats.length} boats, {fixCount.toLocaleString("en-US")} telemetry
+          samples, and {duration} seconds
+          <br />
+          Tens of boats and multi-hour recordings are the next benchmark
         </p>
         <div className={notes.gridTwo}>
           <article className={notes.card}>
@@ -66,8 +80,8 @@ export function NotesSection({ race }: { race: RaceData }) {
           <article className={notes.card}>
             <h3>GPU work</h3>
             <p>
-              Hull colours live in the geometry, so the fleet shares two hull materials. Spray
-              and raw fix dots use instancing, sending each type to the GPU in one batch.
+              Hull colours live in the geometry, so the fleet shares 2 hull materials. Spray and
+              raw telemetry dots use instancing, sending each type to the GPU in 1 batch.
             </p>
           </article>
           <article className={notes.card}>
@@ -81,7 +95,7 @@ export function NotesSection({ race }: { race: RaceData }) {
             <h3>Laptop and phone</h3>
             <p>
               A frame-time governor watches sustained slow frames and lowers pixel ratio through
-              three steps: 1.5, 1.25, and 1. Instrument values touch the DOM only when the shown
+              3 steps: 1.5, 1.25, and 1. Instrument values touch the DOM only when the shown
               number changes.
             </p>
           </article>
@@ -90,7 +104,7 @@ export function NotesSection({ race }: { race: RaceData }) {
           <p className={notes.kicker}>Interactive proof</p>
           <h3 className={notes.labHeading}>Interpolation lab</h3>
           <p className={notes.labLead}>
-            One 12-second telemetry window, slowed down across three synchronized views
+            1 telemetry window, 12 seconds long, across 3 synchronized views
           </p>
           <EngineRoom embedded />
         </div>
@@ -99,11 +113,28 @@ export function NotesSection({ race }: { race: RaceData }) {
       <div className={`${notes.sectionBlock} ${notes.production}`}>
         <p className={notes.kicker}>Next</p>
         <h2 className={notes.heading}>Production path</h2>
-        <p className={notes.productionCopy}>
-          The prototype uses seeded data so every replay is repeatable. Next: map actual telemetry
-          into the race model, test larger fleets and multi-hour recordings, profile target laptops
-          and phones, then connect live and stored races to production services.
-        </p>
+        <ul className={notes.productionList}>
+          <li>
+            <BoatBullet />
+            <span>The prototype uses seeded data so every replay is repeatable</span>
+          </li>
+          <li>
+            <BoatBullet />
+            <span>Next: map actual telemetry into the race model</span>
+          </li>
+          <li>
+            <BoatBullet />
+            <span>Test larger fleets and multi-hour recordings</span>
+          </li>
+          <li>
+            <BoatBullet />
+            <span>Profile low end laptops and phones</span>
+          </li>
+          <li>
+            <BoatBullet />
+            <span>Connect live and stored races to production services</span>
+          </li>
+        </ul>
       </div>
     </section>
   );

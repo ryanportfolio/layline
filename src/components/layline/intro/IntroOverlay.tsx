@@ -380,7 +380,7 @@ export function IntroOverlay() {
         <p className={styles.wordmark}>Layline</p>
         <span className={styles.rule} />
         <p className={styles.ident}>
-          {race.boats.length} boats at {FIX_HZ} fixes a second
+          {race.boats.length} boats at {FIX_HZ} GPS points a second
         </p>
       </div>
 

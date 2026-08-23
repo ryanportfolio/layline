@@ -163,7 +163,7 @@ const TRACK_CSS = `
 @keyframes sail{0%{stroke-dashoffset:1000}72%{stroke-dashoffset:0}100%{stroke-dashoffset:0}}`;
 
 function statsLine(facts: Facts): string {
-  return `SEED ${facts.seed} · ${facts.boats} BOATS · ${facts.fixHz} HZ · ${facts.fixesTotal} FIXES · ${facts.feedSeconds} S`;
+  return `SEED ${facts.seed} · ${facts.boats} BOATS · ${facts.fixHz} HZ · ${facts.fixesTotal} SAMPLES · ${facts.feedSeconds} S`;
 }
 
 function courseWide(facts: Facts, t: Theme): string {
@@ -179,7 +179,7 @@ function courseWide(facts: Facts, t: Theme): string {
 <text x="24" y="86" font-family="${SANS}" font-size="46" font-weight="700" letter-spacing="10" fill="${t.ink}">LAYLINE</text>
 <text x="26" y="116" font-family="${SANS}" font-size="15" fill="${t.mute}">A race replay engine, drawn here</text>
 <text x="26" y="136" font-family="${SANS}" font-size="15" fill="${t.mute}">from its own telemetry.</text>
-<text x="26" y="188" font-family="${MONO}" font-size="12" fill="${t.mute}">4 Hz fixes in,</text>
+<text x="26" y="188" font-family="${MONO}" font-size="12" fill="${t.mute}">4 Hz GPS points in,</text>
 <text x="26" y="206" font-family="${MONO}" font-size="12" fill="${t.mute}">60 fps motion out.</text>
 ${courseFurniture(facts, frame, t)}
 ${tracks(facts, frame, t, true)}
@@ -204,7 +204,7 @@ function courseNarrow(facts: Facts, t: Theme): string {
 ${courseFurniture(facts, frame, t)}
 ${tracks(facts, frame, t, true)}
 <text x="250" y="584" text-anchor="middle" font-family="${MONO}" font-size="12" fill="${t.mute}">SEED ${facts.seed} · ${facts.boats} BOATS · ${facts.fixHz} HZ</text>
-<text x="250" y="604" text-anchor="middle" font-family="${MONO}" font-size="12" fill="${t.mute}">${facts.fixesTotal} FIXES · ${facts.feedSeconds} S</text>`;
+<text x="250" y="604" text-anchor="middle" font-family="${MONO}" font-size="12" fill="${t.mute}">${facts.fixesTotal} SAMPLES · ${facts.feedSeconds} S</text>`;
   return svgDoc(
     W,
     H,
@@ -266,9 +266,9 @@ function hermitePanel(facts: Facts, t: Theme, narrow: boolean): string {
   const dots = fixes
     .map((f) => `<circle cx="${px(toX(f))}" cy="${px(toY(f))}" r="3.2" fill="${t.violet}"/>`)
     .join("\n");
-  const caption = `${fixes.length} FIXES · ${to - from} S · TANGENTS = REPORTED SOG/COG`;
+  const caption = `${fixes.length} SAMPLES · ${to - from} S · TANGENTS = REPORTED SOG/COG`;
   const body = `
-<text x="${narrow ? 30 : 40}" y="34" font-family="${MONO}" font-size="13" letter-spacing="3" fill="${t.mute}">BETWEEN THE FIXES</text>
+<text x="${narrow ? 30 : 40}" y="34" font-family="${MONO}" font-size="13" letter-spacing="3" fill="${t.mute}">BETWEEN SAMPLES</text>
 <path d="${curvePath}" fill="none" stroke="${t.ink}" stroke-width="2" class="track" pathLength="1000"/>
 ${dots}
 ${arrows}
@@ -276,7 +276,7 @@ ${arrows}
   return svgDoc(
     W,
     H,
-    `A real tack from the feed: ${fixes.length} raw fixes over ${to - from} seconds as dots, with the cubic Hermite the replay draws through them. Each amber arrow is half a second of the speed and course that fix reported, the tangents the curve leaves on.`,
+    `A real tack from the feed: ${fixes.length} raw samples over ${to - from} seconds as dots, with the cubic Hermite curve the replay draws through them. Each amber arrow shows half a second of reported speed and course.`,
     TRACK_CSS,
     body,
   );
