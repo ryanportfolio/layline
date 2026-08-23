@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { clock } from "@/lib/layline/format";
 import { poseAt } from "@/lib/layline/interpolate";
 import { FIX_HZ } from "@/lib/layline/types";
@@ -26,21 +26,40 @@ import styles from "./intro.module.css";
  * callback timestamp: no wall clock anywhere in this tree.
  */
 
-/* Beats, ms from the loop's first frame. */
-const B0_MS = 250; // wordmark alone on the ground
-const B1_END = 2300; // the course has drawn itself and the renderer is due
+/* Beats, ms from the loop's first frame.
+ *
+ * The card's beat is measured from the moment the wordmark can paint, not from
+ * the loop's first frame. Pangram Display is font-display: block, so on a cold
+ * cache the card's own opening is held blank while the woff2 lands; a fixed
+ * beat spends that hold and then fades a wordmark that was on screen for a
+ * fraction of it. B0_HOLD is what the card gets once it is readable, and
+ * FONT_CAP is how long that wait is allowed to push the whole sequence out. */
+const B0_HOLD = 640;
+const FONT_CAP = 600;
 const CAP_MS = 8000; // no renderer by here and the overlay gets out of the way
 const MORPH_MS = 700; // the plan lays down onto the water
 const RELEASE_MS = 300; // and the last of the cover goes
 const FADE_MS = 400; // the no-renderer exit, no morph to hang it on
 
-/* The draw. Tracks start after the furniture has settled, run a smoothstep to
- * most of the race by B1_END, then sail the last stretch slowly out to the cap
- * so a machine that is still booting its renderer watches boats finishing
- * rather than a held frame. */
-const DRAW_IN = 680;
+/* The plan comes up under the card rather than after it: it starts rising
+ * while the card is still leaving, and the first metres go down just after it
+ * does. The two beats overlap, so nothing on screen is ever a straight swap of
+ * one layer for another. */
+const OVERLAP = 260;
+const DRAW_LEAD = 120;
+
+/* The draw runs a smoothstep to most of the race by the end of the beat, then
+ * sails the last stretch slowly out to the cap so a machine that is still
+ * booting its renderer watches boats finishing rather than a held frame. */
+const DRAW_SPAN = 1500;
 const B1_THROUGH = 0.88;
 const SAIL_END = CAP_MS;
+
+/* The plan is in motion for the whole of its beat, from the frame it starts
+ * rising to the frame the morph takes over, so the tilt is a move already
+ * running rather than one starting from rest. The stylesheet needs the number
+ * and this is where it is held. */
+const RISE_MS = DRAW_LEAD + DRAW_SPAN;
 
 const GAP = 100000; // one dash gap that outruns the longest track
 
@@ -62,13 +81,13 @@ const HULL = "M0 -4.6 L2.6 3.4 L0 1.9 L-2.6 3.4 Z";
 
 type Beat = "b0" | "b1" | "morph" | "release" | "fade";
 
-function through(ms: number): number {
-  if (ms <= DRAW_IN) return 0;
-  if (ms < B1_END) {
-    const u = (ms - DRAW_IN) / (B1_END - DRAW_IN);
+function through(ms: number, from: number, end: number): number {
+  if (from === 0 || ms <= from) return 0;
+  if (ms < end) {
+    const u = (ms - from) / (end - from);
     return B1_THROUGH * u * u * (3 - 2 * u);
   }
-  const u = (ms - B1_END) / (SAIL_END - B1_END);
+  const u = (ms - end) / (SAIL_END - end);
   return u >= 1 ? 1 : B1_THROUGH + (1 - B1_THROUGH) * u;
 }
 
@@ -77,6 +96,7 @@ export function IntroOverlay() {
   const frame = useMemo(() => chartFrame(race), [race]);
 
   const [beat, setBeat] = useState<Beat>("b0");
+  const [rise, setRise] = useState(false);
   const [live, setLive] = useState(false);
   const [gone, setGone] = useState(false);
   /* Read after hydration, so the first client render still matches the server
@@ -85,6 +105,11 @@ export function IntroOverlay() {
 
   const beatRef = useRef<Beat>("b0");
   const skipRef = useRef(false);
+  /* True once the wordmark's face can paint. A flag rather than the time it
+   * happened: nothing in this tree is allowed to read a wall clock, so the
+   * loop stamps it with its own callback timestamp on the next frame, which
+   * is the frame the card could first have been seen in anyway. */
+  const faceReady = useRef(false);
   const lines = useRef(new Map<string, SVGPathElement | null>());
   const edges = useRef(new Map<string, SVGPathElement | null>());
   const hulls = useRef(new Map<string, SVGGElement | null>());
@@ -126,6 +151,25 @@ export function IntroOverlay() {
     }
     setPortrait(window.innerHeight > window.innerWidth);
     setLive(true);
+  }, []);
+
+  /* When the wordmark's own face lands. Asked for by name rather than through
+   * document.fonts.ready, which also waits on the three faces the console
+   * below is loading and would hold the card open behind type nobody is
+   * looking at. A face that never arrives never resolves this and the loop's
+   * own cap takes over. */
+  useEffect(() => {
+    if (document.fonts === undefined) return;
+    let held = false;
+    document.fonts
+      .load('400 1em "Pangram Display"')
+      .catch(() => undefined)
+      .then(() => {
+        if (!held) faceReady.current = true;
+      });
+    return () => {
+      held = true;
+    };
   }, []);
 
   /* The page renders this component for the life of the document, so letting
@@ -192,6 +236,20 @@ export function IntroOverlay() {
     let started = 0;
     let last = 0; // the previous frame's timestamp, for the freeze hold
     let leftAt = 0; // when the morph or the plain fade began
+    /* Settled on the first frame that knows whether the wordmark's face has
+     * landed. Zero until then, which is the whole of the card's opening and
+     * none of the drawing. */
+    let b0End = 0;
+    /* The frame the plan actually started coming up on, and the two boundaries
+     * measured off it. Booting the renderer blocks the main thread for around
+     * half a second on this page, and a beat that is only a number of
+     * milliseconds gets crossed and left behind inside one of those frames:
+     * the overlap collapses and the handover is the straight swap it was
+     * built to stop being. So the beats after this one are measured from when
+     * the previous one was painted, not from when it was due. */
+    let roseAt = 0;
+    let drawFrom = 0;
+    let b1End = 0;
     /* Gun to finish. The feed opens ten seconds before the gun and those ten
      * seconds are boats milling behind a line, which is the whole of the
      * beat's opening spent on nothing moving. */
@@ -212,20 +270,39 @@ export function IntroOverlay() {
         return;
       }
       const ms = now - started;
-
-      draw(GUN + through(ms) * span);
-
       const skip = skipRef.current;
+
+      if (b0End === 0) {
+        /* The face was in the cache and landed before this loop had a frame,
+         * so ms is 0 here and the card simply gets its hold from the first
+         * frame. Capped either way: a face that is still coming is not allowed
+         * to push the whole sequence out behind it. */
+        const known = faceReady.current;
+        if (known || ms >= FONT_CAP || skip) {
+          b0End = Math.min(known ? ms : FONT_CAP, FONT_CAP) + B0_HOLD;
+        }
+      }
+
+      draw(GUN + through(ms, drawFrom, b1End) * span);
+
+      if (roseAt === 0 && (skip || (b0End !== 0 && ms >= b0End - OVERLAP))) {
+        roseAt = ms;
+        drawFrom = ms + DRAW_LEAD;
+        b1End = drawFrom + DRAW_SPAN;
+        setRise(true);
+      }
       /* One transition a frame, so a state the CSS has to transition out of is
        * always a state it has been in for at least one paint. */
       switch (beatRef.current) {
         case "b0":
-          if (ms >= B0_MS || skip) to("b1");
+          /* Never in the same frame the plan came up in: the card leaves into
+           * a plan that is already on screen, or it does not leave yet. */
+          if ((roseAt !== 0 && ms >= b0End && ms >= roseAt + OVERLAP) || skip) to("b1");
           return;
         case "b1": {
           const replay = useReplay.getState();
           const ready = replay.webglOk;
-          if (ready && (ms >= B1_END || skip)) {
+          if (ready && (ms >= b1End || skip)) {
             leftAt = ms;
             /* Released at the top of the morph, not the bottom of it. The
              * scene under the plan has been sitting on the opening frame all
@@ -316,6 +393,8 @@ export function IntroOverlay() {
       className={styles.overlay}
       data-state={beat}
       data-live={live ? "true" : undefined}
+      data-rise={rise ? "true" : undefined}
+      style={{ "--rise": `${RISE_MS}ms` } as CSSProperties}
       aria-hidden="true"
       onPointerUp={() => {
         skipRef.current = true;

@@ -35,7 +35,21 @@
    BANNED HERE: post-processing and bloom, orbit controls, caustic stripe and
    tiled water textures, invented numerals, decorative status lights, drop
    shadows on panels (a 1px dim rule does that job), and gradients inside any
-   panel. The sky and the water are the only gradient surfaces on the page.
+   panel.
+
+   THREE GRADIENT SURFACES, amended 2026-08-23 from two. The sky, the water,
+   and now the page ground, which carries two radial falls in sky-horizon and
+   water-mid under the whole document (see PageGround). Everything else the
+   ground draws is linework: the seeded race plotted at a scale nobody reads
+   it at, revealed by scroll, in the boat hues and the same three furniture
+   colours the chart views use.
+     The reason the page ground earned it: the console is near full-bleed, so
+   above the fold this surface is barely seen, and below the fold it was four
+   thousand pixels of one flat fill behind the sections that explain how the
+   race was built. A fall of light is what gives that field a near and a far.
+     The ban that did NOT move: no gradient inside a panel, no bloom, no post,
+   no drop shadow. The falls are large, slow and under everything; a gradient
+   is not now a way to make a panel look raised.
 
    THE ONE BOLD IDEA is the raw lens, and the whole rest of the console stays
    quiet so it lands: one toggle swaps 60fps interpolated motion for the 4 Hz
@@ -90,6 +104,9 @@
   --gutter-left: 82px;
   --gutter-right: 68px;
 
+  /* Positioned so the page ground has something to hang off when a visitor
+     has asked for less motion and it drops out of fixed positioning. */
+  position: relative;
   min-height: 100vh;
   background: var(--page-ground);
   color: var(--ink);
@@ -1895,4 +1912,18 @@
   .skip {
     transition: none;
   }
+}
+
+/* ---- above the page ground ----
+
+   PageGround paints at z-index 0 inside this shell, so the four things the
+   document is actually made of are lifted a layer over it. All four are in
+   flow and none of them was positioned before, so this is the whole cost of
+   putting a drawing underneath them. */
+.prototypeBar,
+.statusBanner,
+.main,
+.colophon {
+  position: relative;
+  z-index: 1;
 }
