@@ -72,7 +72,8 @@ export function RaceWorkspace({
   }, [initialRaceId]);
 
   const raceId = mounted ? storeRaceId : initialRaceId;
-  const venue = raceMeta(raceId)?.venue;
+  const meta = raceMeta(raceId);
+  const venue = meta?.venue;
 
   /* The URL moves and the store follows it through the effect above, when the
    * navigation hands back the new prop with the new server children. One
@@ -129,7 +130,13 @@ export function RaceWorkspace({
         aria-label="Race replay console"
         tabIndex={-1}
       >
-        <LaylineApp key={raceId} venue={venue} autoplay="immediate" boot="sea">
+        <LaylineApp
+          key={raceId}
+          venue={venue}
+          autoplay="immediate"
+          boot="sea"
+          bootLabel={meta?.name}
+        >
           {children}
         </LaylineApp>
       </section>
