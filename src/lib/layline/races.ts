@@ -42,7 +42,7 @@ export interface RaceMeta {
 }
 
 /* The shipped race is first and stays first: it is the default everywhere,
- * and the story page at /prototype/layline renders it and nothing else. */
+ * and the story page at / renders it and nothing else. */
 export const RACES: readonly RaceMeta[] = [
   {
     /* Seed 20280726. USA 4 wins in 51.53 s over a 5.97 s spread, five lead

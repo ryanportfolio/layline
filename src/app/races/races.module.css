@@ -7,7 +7,10 @@
    governs, so no gradients and no drop shadows; selection is stated the way the
    standings dock states a followed row, an ink wash behind a 2px ink edge.
 
-   Three widths, and only the middle pane is the same shape in all of them:
+   Three widths, and only the middle pane is the same shape in all of them.
+   Desktop figures are defaults. The rail runs 220 to 400px, the analyst 320
+   to 520px, and the viewer keeps at least 560px. A dragged separator previews
+   its destination, then commits once on release so the canvas resizes once.
 
    1600 and up   280 / flex / 380, one viewport tall, nothing on the page
                  scrolls but the rail, the thread and the finish table.
@@ -18,6 +21,10 @@
                  the viewer takes a stated slice of the viewport and the analyst
                  runs full width under it. Below 901 the console's own stacked
                  rules take the viewer apart into its docks.
+
+   Under 1200 the separators and move controls disappear. Stored order and
+   collapse state wait for desktop, while the full race list remains in the
+   stacked flow and the viewport-foot composer keeps its reserved clearance.
    ========================================================================= */
 
 /* The height of the composer bar the analyst pins to the foot of the viewport
@@ -28,7 +35,133 @@
   --composer-bar: 59px;
 }
 
+/* Five drawn readings, not five bare colour wells. The little ground inside
+   each drawing belongs to the theme it names; the linework always takes the
+   chrome's current ink, so every icon survives all five grounds. */
+.themePicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.themeLabel {
+  color: var(--ink-dim);
+  font-family: var(--font-martian), monospace;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  line-height: 12px;
+  text-transform: uppercase;
+}
+
+.themeButton {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 2px;
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  color: var(--ink-dim);
+  cursor: var(--house-cursor);
+  transition:
+    background-color 120ms var(--ease),
+    border-color 120ms var(--ease),
+    color 120ms var(--ease);
+}
+
+.themeButton:hover {
+  background: color-mix(in srgb, var(--ink) 18%, transparent);
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.themeButton {
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.themeIconStack {
+  display: grid;
+}
+
+.themeIconSlot {
+  display: none;
+  grid-area: 1 / 1;
+}
+
+.page[data-layline-theme="console"] .themeIconSlot[data-theme-icon="console"],
+.page[data-layline-theme="sailcloth"] .themeIconSlot[data-theme-icon="sailcloth"],
+.page[data-layline-theme="marine"] .themeIconSlot[data-theme-icon="marine"],
+.page[data-layline-theme="chart"] .themeIconSlot[data-theme-icon="chart"],
+.page[data-layline-theme="ice"] .themeIconSlot[data-theme-icon="ice"] {
+  display: block;
+}
+
+.themeIcon {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+.themeIconGround {
+  fill: var(--theme-icon-ground);
+  stroke: currentColor;
+  stroke-width: 1;
+}
+
+.themeIconLine,
+.themeIconGrid {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.15;
+}
+
+.themeIconGrid {
+  stroke-width: 0.55;
+}
+
+.themeIconNode {
+  fill: var(--theme-icon-ground);
+  stroke: currentColor;
+  stroke-width: 1;
+}
+
+.panelToggleIcon {
+  display: block;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.15;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .workspace {
+  --rail-width: 220px;
+  --analyst-width: 340px;
+  --rail-render-width: var(--rail-width);
+  --analyst-render-width: var(--analyst-width);
+  --rail-active-width: var(--rail-render-width);
+
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 12px;
@@ -45,6 +178,40 @@
   min-height: 0;
 }
 
+.paneHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.railHeader {
+  padding-left: 32px;
+}
+
+.movePaneButton {
+  display: none;
+  flex: none;
+  padding: 3px 5px;
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  color: var(--ink-dim);
+  font-family: var(--font-martian), monospace;
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  line-height: 12px;
+  text-transform: uppercase;
+  cursor: var(--house-cursor);
+}
+
+.movePaneButton:hover,
+.movePaneButton:focus-visible {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
 .libraryHeading {
   margin: 0;
   color: var(--ink-dim);
@@ -55,17 +222,118 @@
   text-transform: uppercase;
 }
 
+.searchBox {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.searchLabel,
+.groupLabel {
+  margin: 0;
+  color: var(--ink-dim);
+  font-family: var(--font-martian), monospace;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  line-height: 13px;
+  text-transform: uppercase;
+}
+
+.searchFieldWrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.searchField {
+  min-width: 0;
+  height: 30px;
+  padding: 6px 8px;
+  background: var(--hud-ground);
+  border: 1px solid var(--rule);
+  border-radius: 2px 0 0 2px;
+  color: var(--ink);
+  font-family: var(--font-archivo), sans-serif;
+  font-size: 12px;
+  line-height: 16px;
+  cursor: text;
+}
+
+.searchField::placeholder {
+  color: var(--ink-dim);
+}
+
+.searchField::-webkit-search-cancel-button {
+  display: none;
+}
+
+.searchClear {
+  padding: 0 8px;
+  background: color-mix(in srgb, var(--ink) 8%, var(--hud-ground));
+  border: 1px solid var(--rule);
+  border-left: 0;
+  border-radius: 0 2px 2px 0;
+  color: var(--ink);
+  font-family: var(--font-martian), monospace;
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: var(--house-cursor);
+}
+
+.searchCount,
+.loadedNotice,
+.emptyRows,
+.archiveEmpty {
+  margin: 0;
+  color: var(--ink-dim);
+  font-family: var(--font-martian), monospace;
+  font-size: 9px;
+  line-height: 14px;
+}
+
+.loadedNotice {
+  padding: 6px 8px;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  border-left: 2px solid var(--ink);
+  color: var(--ink);
+}
+
+.rowScroller {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule) transparent;
+}
+
+.rowGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
 .rows {
   display: flex;
   flex-direction: column;
   gap: 6px;
   margin: 0;
   padding: 0;
-  min-height: 0;
-  overflow-y: auto;
   list-style: none;
-  scrollbar-width: thin;
-  scrollbar-color: var(--rule) transparent;
+}
+
+.rowShell {
+  min-width: 0;
+  overflow: hidden;
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-left: 2px solid var(--rule);
+  border-radius: 2px;
+  transition:
+    background-color 120ms var(--ease),
+    border-color 120ms var(--ease);
 }
 
 .row {
@@ -73,11 +341,9 @@
   flex-direction: column;
   gap: 4px;
   width: 100%;
-  padding: 10px 12px;
+  padding: 10px 12px 8px;
   background: transparent;
-  border: 1px solid var(--rule);
-  border-left: 2px solid var(--rule);
-  border-radius: 2px;
+  border: 0;
   color: var(--ink);
   font-family: var(--font-archivo), sans-serif;
   text-align: left;
@@ -87,15 +353,15 @@
     border-color 120ms var(--ease);
 }
 
-.row:hover {
-  background: rgba(236, 245, 249, 0.06);
+.rowShell:hover {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
   border-color: var(--ink-dim);
 }
 
 /* The followed-row grammar the standings dock uses, borrowed whole: the race
    you are watching is the row the page is following. */
-.row[aria-current="true"] {
-  background: rgba(236, 245, 249, 0.1);
+.rowShell[data-current="true"] {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
   border-color: var(--ink-dim);
   border-left-color: var(--ink);
 }
@@ -135,6 +401,93 @@
   font-weight: 400;
 }
 
+.archive {
+  flex: none;
+  min-width: 0;
+  border-top: 1px solid var(--rule);
+}
+
+.archiveSummary {
+  padding: 7px 0 0;
+  color: var(--ink);
+  font-family: var(--font-martian), monospace;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  line-height: 16px;
+  text-transform: uppercase;
+  cursor: var(--house-cursor);
+}
+
+.archiveEmpty {
+  padding: 6px 0 0;
+}
+
+.archiveRows {
+  max-height: min(36vh, 300px);
+  margin-top: 6px;
+  padding-right: 3px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule) transparent;
+}
+
+/* The pointer previews only the boundary. Pane width commits on release, so
+   the WebGL canvas sees one ResizeObserver delivery instead of one per move. */
+.separator {
+  position: relative;
+  z-index: 8;
+  display: none;
+  align-self: stretch;
+  min-width: 0;
+  touch-action: none;
+  cursor: col-resize;
+}
+
+.separatorLine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--rule);
+  transform: translateX(-50%);
+}
+
+.separator:hover .separatorLine,
+.separator:focus-visible .separatorLine,
+.workspace[data-resizing] .separatorLine {
+  width: 2px;
+  background: var(--focus-ring);
+}
+
+.panelToggle {
+  position: absolute;
+  z-index: 9;
+  top: 16px;
+  left: 16px;
+  display: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 2px;
+  background: var(--hud-ground);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  color: var(--ink);
+  cursor: var(--house-cursor);
+}
+
+.workspace[data-rail-side="right"] .panelToggle {
+  right: calc(16px + var(--rail-render-width) - 24px);
+  left: auto;
+}
+
+.panelToggle:hover,
+.panelToggle:focus-visible {
+  background: color-mix(in srgb, var(--ink) 12%, var(--hud-ground));
+  border-color: var(--ink);
+}
+
 /* ---- the viewer ---- */
 
 /* The console's stage is flex: 1 inside whatever holds it, and takes its
@@ -165,13 +518,16 @@
    place and says why it is quiet, instead of taking questions the route would
    answer with a 503. */
 .analystOffline {
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  gap: 8px;
   padding: 18px 16px;
   border: 1px solid var(--rule);
 }
 
 .offlineHeading {
-  margin: 0 0 10px;
+  margin: 0;
   color: var(--ink);
   font-family: var(--font-archivo), sans-serif;
   font-size: 18px;
@@ -207,9 +563,24 @@
   /* Stated rather than content sized, and narrow enough that 366px of handset
      holds two chips and the front edge of the third: a row that ends flush
      with the viewport reads as all there is, and nobody scrolls it. */
-  .row {
+  .rowShell {
     flex: none;
     width: 168px;
+  }
+
+  .row {
+    width: 100%;
+  }
+
+  .rowScroller {
+    flex: none;
+    overflow: visible;
+  }
+
+  .archiveRows {
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
   }
 
   /* Stacked at this width. The two readings sit on one line in a 194px row and
@@ -253,7 +624,93 @@
   .workspace {
     flex: 1;
     min-height: 0;
-    grid-template-columns: 220px minmax(0, 1fr) 340px;
+    grid-template-columns:
+      var(--left-pane-width)
+      12px
+      minmax(560px, 1fr)
+      12px
+      var(--right-pane-width);
+    gap: 0;
+  }
+
+  .workspace[data-rail-side="left"] .library,
+  .workspace[data-rail-side="right"] .analyst {
+    grid-column: 1;
+  }
+
+  .console {
+    grid-column: 3;
+  }
+
+  .workspace[data-rail-side="left"] .analyst,
+  .workspace[data-rail-side="right"] .library {
+    grid-column: 5;
+  }
+
+  .library,
+  .console,
+  .analyst,
+  .separator {
+    grid-row: 1;
+  }
+
+  .separator {
+    display: block;
+  }
+
+  .separator[data-boundary="left"] {
+    grid-column: 2;
+  }
+
+  .separator[data-boundary="right"] {
+    grid-column: 4;
+  }
+
+  .movePaneButton {
+    display: block;
+  }
+
+  .panelToggle {
+    display: grid;
+  }
+
+  .workspace :global([data-pane-drag-handle]) {
+    cursor: grab;
+  }
+
+  .workspace :global([data-pane-drag-handle]):active {
+    cursor: grabbing;
+  }
+
+  .workspace[data-rail-collapsed="true"] .library {
+    visibility: hidden;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .workspace[data-resizing] {
+    user-select: none;
+  }
+
+  .workspace[data-resizing] .console {
+    pointer-events: none;
+  }
+}
+
+/* Stored desktop widths stay valid on a smaller laptop without taking the
+   viewer below 560px. The full 400 / 520 limits arrive by 1600px. */
+@media (min-width: 1200px) and (max-width: 1599px) {
+  .workspace {
+    --rail-render-width: clamp(
+      220px,
+      var(--rail-width),
+      calc(45vw - 320px)
+    );
+    --analyst-render-width: clamp(
+      320px,
+      var(--analyst-width),
+      calc(45vw - 200px)
+    );
   }
 }
 
@@ -271,9 +728,10 @@
 
 @media (min-width: 1600px) {
   .workspace {
-    gap: 16px;
+    --rail-width: 280px;
+    --analyst-width: 380px;
+
     padding: 16px;
-    grid-template-columns: 280px minmax(0, 1fr) 380px;
   }
 }
 
@@ -281,7 +739,53 @@
    query is stated so the sheet says so rather than leaving it to be read off
    the absence of a transform. */
 @media (prefers-reduced-motion: reduce) {
-  .row {
+  .row,
+  .rowShell,
+  .themeButton {
     transition: none;
   }
+}
+
+.rowActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-top: 1px solid var(--rule);
+}
+
+.rowAction {
+  padding: 4px 8px;
+  background: transparent;
+  border: 0;
+  color: var(--ink-dim);
+  font-family: var(--font-martian), monospace;
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  line-height: 13px;
+  text-transform: uppercase;
+  cursor: var(--house-cursor);
+}
+
+.rowAction + .rowAction {
+  border-left: 1px solid var(--rule);
+}
+
+.rowAction:hover,
+.rowAction:focus-visible,
+.rowAction[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink);
+}
+
+.workspace[data-rail-collapsed="true"] {
+  --rail-active-width: 0px;
+}
+
+.workspace[data-rail-side="left"] {
+  --left-pane-width: var(--rail-active-width);
+  --right-pane-width: var(--analyst-render-width);
+}
+
+.workspace[data-rail-side="right"] {
+  --left-pane-width: var(--analyst-render-width);
+  --right-pane-width: var(--rail-active-width);
 }
