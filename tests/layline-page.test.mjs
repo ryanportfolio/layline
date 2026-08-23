@@ -243,3 +243,26 @@ test('every page section the rail marks is a section the page actually renders',
      is what says the document has ended. */
   assert.doesNotMatch(page, /colophon} data-leg/);
 });
+
+test('the 2D view replaces camera choices with one clear return to 3D', async () => {
+  const [transport, styles] = await Promise.all([
+    read('src/components/layline/hud/Transport.tsx'),
+    read('src/app/layline.module.css'),
+  ]);
+
+  assert.match(
+    transport,
+    /\{chart2d \? \([\s\S]*?data-control="return-3d"[\s\S]*?Switch to 3D[\s\S]*?\) : \([\s\S]*?aria-label="Camera rig"/,
+  );
+  assert.match(transport, /data-control="return-3d"[\s\S]*?onClick=\{\(\) => setChart2d\(false\)\}/);
+  assert.equal((transport.match(/styles\.viewGroup/g) ?? []).length, 2);
+
+  const returnRule = styles.match(/\.return3dButton \{([\s\S]*?)\n\}/)?.[1] ?? '';
+  assert.match(returnRule, /min-width: 204px/);
+  assert.match(returnRule, /background: var\(--ink\)/);
+  assert.match(returnRule, /font-weight: 800/);
+
+  const viewRule = styles.match(/\.viewGroup \{([\s\S]*?)\n\}/)?.[1] ?? '';
+  assert.match(viewRule, /background: rgba\(164, 188, 203, 0\.08\)/);
+  assert.match(viewRule, /border-color: var\(--ink-dim\)/);
+});
