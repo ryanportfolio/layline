@@ -16,8 +16,16 @@
  */
 export const sceneGate = {
   /* The canvas intersects the viewport. Starts true so the first frames are
-   * drawn before the observer has said anything. */
+   * drawn before the observer has said anything. Read with a margin, because a
+   * canvas about to be scrolled into view needs a frame ready before it
+   * arrives. */
   onScreen: true,
+  /* The canvas is actually in the viewport, measured with no margin at all.
+   * The margin above is right for deciding whether to draw and wrong for
+   * deciding who owns a key: the space bar belongs to the replay only while the
+   * replay is genuinely being looked at, and belongs to the page's own scroll
+   * the moment it is not. */
+  inView: true,
   /* The document is visible. A hidden tab is not given frames by the platform
    * at all; this is what makes the state explicit and gives the return path
    * something to test. */
@@ -90,6 +98,7 @@ export function requestSceneFrame(): void {
 
 export function resetSceneGate(): void {
   sceneGate.onScreen = true;
+  sceneGate.inView = true;
   sceneGate.pageVisible = typeof document === "undefined" || !document.hidden;
   sceneGate.contextLost = false;
   sceneGate.dirty = true;

@@ -8,7 +8,16 @@ import { poseAt } from "@/lib/layline/interpolate";
 import { FIX_HZ } from "@/lib/layline/types";
 import type { Pose, RaceData, ReplayMode, RigName } from "@/lib/layline/types";
 import { useReplay } from "../store";
-import { requestSceneFrame } from "./gate";
+import { requestSceneFrame, sceneGate } from "./gate";
+import {
+  distanceFor,
+  freeform,
+  newStand,
+  seedFreeformFromShot,
+  standOf,
+  type FrameTarget,
+  type Stand,
+} from "./interaction";
 import { SKIFF } from "./skiff";
 
 const DEG = Math.PI / 180;
@@ -398,6 +407,17 @@ interface Plan {
    * these, so a scrubbed second composes what a played second composed. */
   blendT: number;
   introT: number;
+  /* Seconds of the hand-over still owed when the replay is stopped. The clock
+   * blend above cannot pay for one: a held clock never spends the 1.2 s, which
+   * is why a rig change on a paused replay used to cut. A visitor who has just
+   * been steering the camera by hand is very often paused, and a jump there
+   * reads as a bug rather than as an edit, so a stopped replay spends the same
+   * curve out of frame time instead. A capture still cuts, because the hold
+   * zeroes this. */
+  wall: number;
+  /* The freeform camera has to be handed the shot on screen before it composes
+   * its first frame. Stamped by the store subscription, spent by the frame. */
+  seed: boolean;
   /* True while the hand-over leaves from a snapshot rather than from a rig: a
    * second rig change inside the window has to start where the picture is, and
    * the picture is a mix of two shots that no single rig composes. */
@@ -1015,6 +1035,126 @@ function shootTactical(display: Display, out: Shot): void {
   out.roll = 0;
 }
 
+/* Where the freeform camera's orbit centre is this frame. Following a boat it
+ * is that boat's waterline plus the offset the visitor panned to, so the centre
+ * travels with the hull without inheriting its heading; framed on the course it
+ * is the fixed point the framing left it on. */
+function freeformCentre(display: Display, out: Stand): void {
+  if (freeform.follow) {
+    standOf(
+      freeform,
+      display.x + freeform.ox,
+      freeform.oy,
+      -display.y + freeform.oz,
+      out,
+    );
+    return;
+  }
+  standOf(freeform, freeform.tx, freeform.ty, freeform.tz, out);
+}
+
+function shootFreeform(display: Display, stand: Stand, out: Shot): void {
+  freeformCentre(display, stand);
+  out.ex = stand.ex;
+  out.ey = stand.ey;
+  out.ez = stand.ez;
+  out.ax = stand.ax;
+  out.ay = stand.ay;
+  out.az = stand.az;
+  out.fov = freeform.fov;
+  out.roll = 0;
+}
+
+/* What the mast of a boat this camera is framing needs above the waterline, and
+ * the water a mark needs around it. Both are the subject's own size rather than
+ * a distance, so the framing reads the same from any range the visitor asks
+ * for it at. */
+const FRAME_BOAT = 11;
+const FRAME_FLEET_AIR = 18;
+const FRAME_MARK_AIR = 26;
+const FRAME_LIFT = 3;
+
+/**
+ * Point the freeform camera at something and set the range that fits it. The
+ * eye keeps its bearing and its height above the target: a visitor asking to
+ * see the start line is asking where to look, not to be turned around.
+ */
+function resolveFrame(
+  race: RaceData,
+  display: Display[],
+  count: number,
+  followIndex: number,
+  kind: FrameTarget,
+  aspect: number,
+  stand: Stand,
+  cut: boolean,
+): void {
+  /* Where the camera is standing right now, which is what the move eases out
+   * of even when the centre it was on is a boat still sailing. */
+  freeformCentre(display[followIndex], stand);
+  const fromX = stand.ax;
+  const fromY = stand.ay;
+  const fromZ = stand.az;
+  const fromDist = stand.dist;
+
+  let centreX = 0;
+  const centreY = FRAME_LIFT;
+  let centreZ = 0;
+  let radius = FRAME_BOAT;
+  let follow = false;
+
+  if (kind === "selected") {
+    centreX = display[followIndex].x;
+    centreZ = -display[followIndex].y;
+    radius = FRAME_BOAT;
+    follow = true;
+  } else if (kind === "fleet") {
+    for (let i = 0; i < count; i++) {
+      centreX += display[i].x;
+      centreZ += -display[i].y;
+    }
+    centreX /= count;
+    centreZ /= count;
+    let span = 0;
+    for (let i = 0; i < count; i++) {
+      const reach = Math.hypot(display[i].x - centreX, -display[i].y - centreZ);
+      if (reach > span) span = reach;
+    }
+    radius = span + FRAME_FLEET_AIR;
+  } else if (kind === "start") {
+    centreX = (race.course.startPin.x + race.course.startBoat.x) * 0.5;
+    centreZ = -(race.course.startPin.y + race.course.startBoat.y) * 0.5;
+    radius =
+      Math.hypot(
+        race.course.startBoat.x - race.course.startPin.x,
+        race.course.startBoat.y - race.course.startPin.y,
+      ) *
+        0.5 +
+      FRAME_MARK_AIR;
+  } else {
+    centreX = race.course.windward.x;
+    centreZ = -race.course.windward.y;
+    radius = race.course.zoneRadius + FRAME_MARK_AIR;
+  }
+
+  freeform.follow = follow;
+  if (follow) {
+    freeform.ox = 0;
+    freeform.oy = centreY;
+    freeform.oz = 0;
+  } else {
+    freeform.tx = centreX;
+    freeform.ty = centreY;
+    freeform.tz = centreZ;
+  }
+  freeform.fromX = fromX;
+  freeform.fromY = fromY;
+  freeform.fromZ = fromZ;
+  freeform.fromDist = fromDist;
+  freeform.dist = distanceFor(radius, freeform.fov, aspect);
+  freeform.left = cut ? 0 : freeform.span;
+}
+
 function copyShot(from: Shot, out: Shot): void {
   out.ex = from.ex;
   out.ey = from.ey;
@@ -1068,10 +1208,13 @@ export function CameraRigs({ race }: { race: RaceData }) {
       lastT: Number.NaN,
       blendT: Number.NEGATIVE_INFINITY,
       introT: Number.NaN,
+      wall: 0,
+      seed: false,
       held: false,
     }),
     [],
   );
+  const stand = useMemo(newStand, []);
   const gl = useThree((state) => state.gl);
 
   /* Where the visible canvas starts, for the rig that has to keep a horizon
@@ -1102,48 +1245,115 @@ export function CameraRigs({ race }: { race: RaceData }) {
         if (state.frozen && !previous.frozen) {
           move.blendT = Number.NEGATIVE_INFINITY;
           move.introT = Number.NEGATIVE_INFINITY;
+          move.wall = 0;
           move.held = false;
           move.from = move.to;
           move.cut = true;
+          /* The framing ease is spent out of frame time, and a held page has
+           * none of that either: left standing it would park the camera at
+           * whatever fraction of the move the shutter happened to fall on, and
+           * two captures of the same second would differ by when the freeze
+           * landed. A hold lands the move, exactly as it lands a hand-over. */
+          freeform.left = 0;
           return;
         }
-        if (state.followId !== previous.followId) move.cut = true;
+
+        /* Which clock the hand-over is spending has to follow the replay, not
+         * just the rig. A race-time blend stops dead when the clock does, and a
+         * frame-time blend would go on spending wall seconds once the clock is
+         * running again. Progress is linear in both, so it converts exactly and
+         * the picture does not move on the swap. */
+        if (state.playing !== previous.playing && !state.frozen && !state.reducedMotion) {
+          if (state.playing) {
+            if (move.wall > 0) {
+              move.blendT = state.t - (BLEND_SECONDS - move.wall);
+              move.wall = 0;
+            }
+          } else {
+            const done = (state.t - move.blendT) / BLEND_SECONDS;
+            if (done > 0 && done < 1) {
+              move.wall = (1 - done) * BLEND_SECONDS;
+              move.blendT = Number.NEGATIVE_INFINITY;
+            }
+          }
+        }
+        /* A boat change cuts the automatic rigs, which recompose around the new
+         * boat. The freeform camera is not recomposed by anything: it keeps the
+         * bearing and the range the visitor set and walks its centre across. */
+        if (state.followId !== previous.followId) {
+          if (state.rig === "freeform") {
+            if (freeform.follow) freeform.retarget = true;
+          } else {
+            move.cut = true;
+          }
+        }
         if (state.rig === previous.rig) return;
         /* A hand-over still in flight leaves from the shot on screen. Restarting
          * from the rig it was flying toward is a jump of everything the mix had
          * not travelled yet, and no rig composes that mix, so it is kept. */
-        move.held = easeInOut((state.t - move.blendT) / BLEND_SECONDS) < 1;
+        move.held =
+          move.wall > 0 || easeInOut((state.t - move.blendT) / BLEND_SECONDS) < 1;
         if (move.held) copyShot(shot, parting);
         move.from = move.to;
         move.to = state.rig;
-        /* Reduced motion cuts, a held page cuts, and so does a replay that is
-         * not running: the hand-over is 1.2 s of race time and a stopped clock
-         * never spends them, so the rig asked for is the rig shown. */
-        if (state.reducedMotion || state.frozen || !state.playing) {
+        /* Taking the camera by hand is a cut by construction: the freeform rig
+         * is seeded from the shot on screen, so there is nothing to travel. */
+        if (state.rig === "freeform") {
+          move.seed = true;
           move.blendT = Number.NEGATIVE_INFINITY;
+          move.wall = 0;
           move.held = false;
           move.cut = true;
           return;
         }
+        /* Reduced motion cuts, and so does a held page: both eases below are
+         * spent out of a clock those two states do not run. */
+        if (state.reducedMotion || state.frozen) {
+          move.blendT = Number.NEGATIVE_INFINITY;
+          move.wall = 0;
+          move.held = false;
+          move.cut = true;
+          return;
+        }
+        /* A running replay spends the hand-over out of race time, so a scrub
+         * and a playback land on the same picture. A stopped one has no race
+         * time to spend and pays out of frame time instead, which is the only
+         * clock left when the visitor has paused to work the camera. */
+        if (!state.playing) {
+          move.blendT = Number.NEGATIVE_INFINITY;
+          move.wall = BLEND_SECONDS;
+          return;
+        }
+        move.wall = 0;
         move.blendT = state.t;
       }),
     [move, parting, shot],
   );
 
-  useFrame((state) => {
+  useFrame((state, delta) => {
     const replay = useReplay.getState();
     const camera = state.camera as PerspectiveCamera;
     const t = replay.t;
     const count = race.boats.length;
+    /* Frame time, not race time, and only ever spent on the two moves a hand
+     * asked for. Clamped the same way the clock clamps its own step, so a tab
+     * coming back from the background does not deliver a whole minute of ease
+     * in one frame. */
+    const spend = replay.frozen ? 0 : Math.min(delta, 0.25);
 
     /* A jump this large is a scrub, not a frame: the hand-over in flight ends
      * on the shot it was travelling toward rather than flying there. Anything
      * shorter stays on the clock and lands where playback would have. */
     if (!Number.isFinite(move.lastT) || Math.abs(t - move.lastT) > 1.5) move.cut = true;
     move.lastT = t;
-    let mix = easeInOut((t - move.blendT) / BLEND_SECONDS);
+    if (move.wall > 0) move.wall = Math.max(0, move.wall - spend);
+    let mix =
+      move.wall > 0
+        ? easeInOut(1 - move.wall / BLEND_SECONDS)
+        : easeInOut((t - move.blendT) / BLEND_SECONDS);
     if ((replay.frozen || move.cut) && mix < 1) {
       move.blendT = Number.NEGATIVE_INFINITY;
+      move.wall = 0;
       move.held = false;
       move.from = move.to;
       mix = 1;
@@ -1173,11 +1383,63 @@ export function CameraRigs({ race }: { race: RaceData }) {
      * reading the interpolated track, so the stutter belongs to the hull in
      * frame and never to the frame itself. Only the wide shot needs the other
      * five: a boat nobody is framing costs fifty evaluations to place. */
-    if (wideWanted) {
+    const framing = freeform.pending;
+    if (wideWanted || framing === "fleet") {
       for (let i = 0; i < count; i++) displayPose(race, race.boats[i].id, t, display[i]);
     } else {
       displayPose(race, race.boats[followIndex].id, t, display[followIndex]);
     }
+
+    /* Everything the freeform camera was handed since the last frame, spent in
+     * the order it has to be: the seed puts it where the picture already is, a
+     * framing move then travels out of that, and the ease pays for whichever of
+     * the two is still running. */
+    if (move.seed) {
+      move.seed = false;
+      seedFreeformFromShot(
+        freeform,
+        shot.ex,
+        shot.ey,
+        shot.ez,
+        shot.ax,
+        shot.ay,
+        shot.az,
+        shot.fov,
+        display[followIndex].x,
+        0,
+        -display[followIndex].y,
+      );
+    }
+    if (freeform.retarget) {
+      freeform.retarget = false;
+      /* From the aim the last frame composed. Nothing else knows where the
+       * picture was pointing once the boat under it has changed. */
+      freeform.fromX = shot.ax;
+      freeform.fromY = shot.ay;
+      freeform.fromZ = shot.az;
+      freeform.fromDist = freeform.dist;
+      freeform.left = replay.reducedMotion || replay.frozen ? 0 : freeform.span;
+    }
+    if (framing !== null) {
+      freeform.pending = null;
+      resolveFrame(
+        race,
+        display,
+        count,
+        followIndex,
+        framing,
+        aspect,
+        stand,
+        replay.reducedMotion || replay.frozen,
+      );
+    }
+    if (freeform.left > 0) freeform.left = Math.max(0, freeform.left - spend);
+
+    /* A page that has stopped drawing has to be woken for its own camera. The
+     * gate only draws a paused replay when something says the picture moved,
+     * and a hand on the mouse is exactly that. */
+    if (freeform.busy || freeform.left > 0 || move.wall > 0) sceneGate.dirty = true;
+
     let held = TV.floor;
     let centreX = 0;
     let centreZ = 0;
@@ -1244,6 +1506,7 @@ export function CameraRigs({ race }: { race: RaceData }) {
     if (move.to === "chase")
       chaseStand(display[followIndex], quarter, clear.back, clear.rise, arriving);
     else if (move.to === "tactical") shootTactical(display[followIndex], arriving);
+    else if (move.to === "freeform") shootFreeform(display[followIndex], stand, arriving);
     else standToShot(station, arriving);
 
     if (mix >= 1 || (move.from === move.to && !move.held)) {
@@ -1253,6 +1516,7 @@ export function CameraRigs({ race }: { race: RaceData }) {
       else if (move.from === "chase")
         chaseStand(display[followIndex], quarter, clear.back, clear.rise, leaving);
       else if (move.from === "tactical") shootTactical(display[followIndex], leaving);
+      else if (move.from === "freeform") shootFreeform(display[followIndex], stand, leaving);
       else standToShot(station, leaving);
       mixShot(leaving, arriving, mix, shot);
     }

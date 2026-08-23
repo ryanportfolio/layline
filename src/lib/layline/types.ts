@@ -118,7 +118,7 @@ export interface Pose {
 
 export type ReplayMode = "smooth" | "raw";
 
-export type RigName = "chase" | "tv" | "tactical";
+export type RigName = "chase" | "tv" | "tactical" | "freeform";
 
 export interface StandingsRow {
   boatId: string;

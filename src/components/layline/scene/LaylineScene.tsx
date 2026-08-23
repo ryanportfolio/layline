@@ -12,6 +12,7 @@ import {
   setFrozenFrameRequest,
 } from "./gate";
 import { BoatLabels } from "./BoatLabels";
+import { BoatPicker } from "./BoatPicker";
 import { BoatTracks } from "./BoatTracks";
 import { CameraRigs } from "./CameraRigs";
 import { CourseGraphics } from "./CourseGraphics";
@@ -238,9 +239,17 @@ function RenderGate() {
       { rootMargin: PREWARM },
     );
     observer.observe(canvas);
+    /* The same question without the margin, for the one caller that has to know
+     * whether the replay is really on screen rather than nearly on it. */
+    const inView = new IntersectionObserver((entries) => {
+      sceneGate.inView = entries[0]?.isIntersecting === true;
+    });
+    inView.observe(canvas);
     return () => {
       observer.disconnect();
+      inView.disconnect();
       sceneGate.onScreen = true;
+      sceneGate.inView = true;
     };
   }, [gl]);
 
@@ -403,6 +412,7 @@ export function LaylineScene({ race }: { race: RaceData }) {
       <BoatTracks race={race} />
       <CameraRigs race={race} />
       <BoatLabels race={race} />
+      <BoatPicker race={race} />
       <Clock />
       <QualityGovernor />
       <DemandBridge />

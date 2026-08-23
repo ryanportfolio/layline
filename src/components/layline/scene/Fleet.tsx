@@ -2,13 +2,20 @@
 
 import { useEffect, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
-import { FrontSide, MeshLambertMaterial, MeshStandardMaterial } from "three";
+import { BoxGeometry, FrontSide, MeshBasicMaterial, MeshLambertMaterial, MeshStandardMaterial } from "three";
 import type { BufferGeometry, Mesh } from "three";
 import { poseAt } from "@/lib/layline/interpolate";
 import type { Pose, RaceData } from "@/lib/layline/types";
 import { sampleLive } from "../hud/live";
 import { useReplay } from "../store";
-import { BoatRig, newBoatNodes, type BoatKit, type BoatNodes, type SailPair } from "./Boat";
+import {
+  BoatRig,
+  newBoatNodes,
+  type BoatKit,
+  type BoatNodes,
+  type PickKit,
+  type SailPair,
+} from "./Boat";
 import { applyDrape, drapeUniforms, type DrapeUniforms } from "./drape";
 import { fleetFrame, sizeFleetFrame } from "./frame";
 import {
@@ -75,10 +82,21 @@ const WIRE_PIXELS = 0.85;
 
 interface FleetKit {
   kits: BoatKit[];
+  pick: PickKit;
   drapes: DrapeUniforms[];
   wireHeight: { value: number };
   dispose: () => void;
 }
+
+/* The pick box, in metres of hull. Beam and length come off the drawn skiff;
+ * the height carries the whole rig, because at a hundred metres the mast is
+ * most of what a pointer can actually land on. The slack is a third of a beam
+ * either side, which is about a fingertip at the ranges the chase rig works
+ * at and still leaves two boats overlapping only when their hulls do. */
+const PICK_SLACK = 0.45;
+const PICK_WIDTH = (SKIFF.rack + PICK_SLACK) * 2;
+const PICK_LENGTH = SKIFF.transom - SKIFF.bow + PICK_SLACK * 2;
+const PICK_HEIGHT = SKIFF.mastTop + 1;
 
 function buildFleet(race: RaceData): FleetKit {
   const mains: SailPair = { starboard: mainGeometry(-1), port: mainGeometry(1) };
@@ -195,11 +213,26 @@ uniform float uWirePixels;`,
     });
   }
 
+  /* One box and one material for the whole fleet: six meshes that are never
+   * drawn have no reason to own six of either. The box is built about the
+   * waterline the hull is authored on and raised so it covers deck to
+   * masthead. */
+  const box = new BoxGeometry(PICK_WIDTH, PICK_HEIGHT, PICK_LENGTH);
+  box.translate(0, PICK_HEIGHT * 0.5 - 0.6, 0);
+  /* visible: false on the material, not on the object. The renderer drops a
+   * mesh whose material is invisible before it reaches a draw call, and the
+   * raycaster reads the object either way, which is exactly the pair of
+   * answers a pick volume wants. */
+  const blank = new MeshBasicMaterial({ visible: false });
+
   return {
     kits,
+    pick: { box, blank },
     drapes,
     wireHeight,
     dispose: () => {
+      box.dispose();
+      blank.dispose();
       for (const pair of [mains, jibs, kites]) {
         pair.starboard.dispose();
         pair.port.dispose();
@@ -376,6 +409,7 @@ export function Fleet({ race }: { race: RaceData }) {
           key={boat.id}
           boatId={boat.id}
           kit={fleet.kits[index]}
+          pick={fleet.pick}
           nodes={nodes[index]}
         />
       ))}
