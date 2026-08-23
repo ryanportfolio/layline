@@ -141,14 +141,20 @@
   --house-cursor: var(--house-cursor-graphite);
 }
 
+/* The one dark theme that is not console. White ink sets the greens rather
+   than the other way round: on the old #0c8c5e ground white reaches only
+   4.26:1, under the 4.5:1 a 10px uppercase bar label needs, and on the old
+   lighter plates it fell to 2.49:1. Down here white reads 11.6:1 on the ground
+   and 8:1 on a plate, and the plates go darker than the page instead of
+   lighter, which is how console does it. Cursor turns frost with the theme. */
 .shell[data-layline-theme="marine"] {
-  --page-ground: #0c8c5e;
-  --hud-ground: rgba(65, 184, 134, 0.97);
-  --ink: #000000;
-  --ink-dim: #050b1a;
-  --rule: rgba(0, 0, 0, 0.38);
-  --focus-ring: #000000;
-  --house-cursor: var(--house-cursor-graphite);
+  --page-ground: #06422e;
+  --hud-ground: rgba(10, 90, 63, 0.97);
+  --ink: #ffffff;
+  --ink-dim: #b6dbc8;
+  --rule: rgba(255, 255, 255, 0.28);
+  --focus-ring: #ffffff;
+  --house-cursor: var(--house-cursor-frost);
 }
 
 .shell[data-layline-theme="chart"] {

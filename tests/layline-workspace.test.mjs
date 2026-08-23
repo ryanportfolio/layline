@@ -14,7 +14,7 @@ test("the race library declares five complete route-scoped themes", async () => 
   const grounds = {
     console: "#070f16",
     sailcloth: "#dfdcd5",
-    marine: "#0c8c5e",
+    marine: "#06422e",
     chart: "#f5f1e4",
     ice: "#edfffe",
   };
@@ -39,11 +39,17 @@ test("the race library declares five complete route-scoped themes", async () => 
     }
   }
 
-  assert.match(
-    styles.match(/\.shell\[data-layline-theme="console"\] \{([\s\S]*?)\n\}/)?.[1] ?? "",
-    /--house-cursor: var\(--house-cursor-frost\);/,
-  );
-  for (const theme of ["sailcloth", "marine", "chart", "ice"]) {
+  /* The cursor follows the ground, not the theme's name: frost on the dark
+     ones, graphite on the light ones. Marine sits with console because white
+     ink forced its greens down to a #06422e ground. */
+  for (const theme of ["console", "marine"]) {
+    const block = styles.match(
+      new RegExp(`\\.shell\\[data-layline-theme="${theme}"\\] \\{([\\s\\S]*?)\\n\\}`),
+    )?.[1] ?? "";
+    assert.match(block, /--house-cursor: var\(--house-cursor-frost\);/);
+    assert.match(block, /--ink: #(ecf5f9|ffffff);/);
+  }
+  for (const theme of ["sailcloth", "chart", "ice"]) {
     const block = styles.match(
       new RegExp(`\\.shell\\[data-layline-theme="${theme}"\\] \\{([\\s\\S]*?)\\n\\}`),
     )?.[1] ?? "";
