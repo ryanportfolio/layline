@@ -1,0 +1,107 @@
+/* =========================================================================
+   THE PAGE GROUND: the race, plotted under the whole document.
+
+   Two layers on one drifting sheet. The light is CSS and never changes; the
+   plot is the same seeded race the console replays, revealed by scroll.
+   PageGround owns the offset and the reveal; nothing here holds a number the
+   component does not also hold, apart from the light, which is only ever a
+   picture.
+   ========================================================================= */
+
+.ground {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* A visitor who asked for less motion gets the same drawing with the document
+   carrying it: no offset of its own, no reveal, nothing that moves except the
+   page they are scrolling. */
+.ground[data-still="true"] {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 0;
+  overflow: visible;
+}
+
+.drift {
+  position: absolute;
+  inset: 0 0 auto 0;
+  will-change: transform;
+}
+
+/* ---- the light ----
+
+   Two falls, one behind the console and one down at the notes, and they are
+   why the page ground is a gradient surface at all. Sized and placed in
+   document pixels so they stay put against the sections they belong to
+   rather than against whatever the viewport happens to be. Every stop is the
+   same hue at a different alpha: a stop that reached plain transparent would
+   interpolate through transparent black and grey the fall out. */
+.light {
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(
+      circle 1500px at 50% 420px,
+      color-mix(in srgb, var(--sky-horizon) 9%, transparent) 0%,
+      color-mix(in srgb, var(--sky-horizon) 2.5%, transparent) 60%,
+      color-mix(in srgb, var(--sky-horizon) 0%, transparent) 100%
+    ),
+    radial-gradient(
+      circle 1350px at 50% 3400px,
+      color-mix(in srgb, var(--water-mid) 10%, transparent) 0%,
+      color-mix(in srgb, var(--water-mid) 2.8%, transparent) 60%,
+      color-mix(in srgb, var(--water-mid) 0%, transparent) 100%
+    );
+}
+
+/* ---- the plot ---- */
+
+.plot {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* Hue rides currentColor per boat, the same way the chart and the intro do, so
+   a livery change moves this with it. */
+.track {
+  fill: none;
+  stroke: color-mix(in srgb, currentColor 16%, transparent);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The light edge a near-black hull gets everywhere else it is drawn. At this
+   alpha, without it, the fleet is five boats. */
+.edge {
+  fill: none;
+  stroke: color-mix(in srgb, var(--ink-dim) 8%, transparent);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The drawn end of a track is a boat, so it is brighter than the line behind
+   it. It goes out when the last of them finishes. */
+.head {
+  fill: color-mix(in srgb, currentColor 35%, transparent);
+}
+
+/* The same three furniture colours the chart views use: the line is ink, the
+   marks and the zone are wind. */
+.startLine {
+  fill: none;
+  stroke: color-mix(in srgb, var(--ink-dim) 14%, transparent);
+}
+
+.mark {
+  fill: color-mix(in srgb, var(--wind) 16%, transparent);
+}
+
+.zone {
+  fill: none;
+  stroke: color-mix(in srgb, var(--wind) 8%, transparent);
+}

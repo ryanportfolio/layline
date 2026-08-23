@@ -6,9 +6,12 @@
    ends. It sits under the skip link's z-index on purpose: a keyboard visitor
    who tabs into the page during the intro must still see where focus went.
 
-   The rAF loop in IntroOverlay is the sequencer and writes one attribute,
-   data-state. Everything below is what each beat looks like; nothing here
-   holds a duration the loop does not also hold.
+   The rAF loop in IntroOverlay is the sequencer and writes two attributes:
+   data-state for the beat, and data-rise, which goes up a quarter-second
+   before the card's beat ends so the plan is already coming forward while the
+   card is still leaving. Everything below is what each beat looks like;
+   nothing here holds a duration the loop does not also hold, and the one
+   duration that spans both attributes arrives as --rise.
    ========================================================================= */
 
 .overlay {
@@ -65,11 +68,15 @@
 }
 
 /* Held for the first sixth of the morph, so the plan has visibly started to
-   lay over before the water comes up under it. */
+   lay over before the water comes up under it, and it lands on the same frame
+   the tilt does rather than a fifth of a second early. The curve has to be
+   slow off the mark: put the ground on the tilt's own fast-start curve and the
+   console is uncovered while the plan still reads flat, which is the console
+   arriving from under a drawing rather than the drawing becoming it. */
 .overlay[data-state="morph"] .ground,
 .overlay[data-state="release"] .ground {
   opacity: 0;
-  transition: opacity 560ms cubic-bezier(0.45, 0, 0.7, 0.4) 120ms;
+  transition: opacity 580ms cubic-bezier(0.45, 0, 0.7, 0.4) 120ms;
 }
 
 /* ---- the plan ---- */
@@ -81,12 +88,21 @@
      edge of the plan, roughly where the camera's own horizon puts it. */
   transform-origin: 50% 62%;
   opacity: 0;
-  transition: opacity 460ms var(--ease);
+  /* Sat back and dead flat, so the beat has somewhere to come forward from. */
+  transform: rotateX(0deg) scale(0.955);
+  transition:
+    opacity 460ms var(--ease),
+    transform var(--rise, 0ms) linear;
 }
 
+/* Up while the card is still leaving, then the whole beat spent creeping
+   forward and taking on the first few degrees of the tilt. What the morph
+   picks up is a move already running, not a held frame. */
+.overlay[data-rise="true"] .plane,
 .overlay[data-state="b1"] .plane,
 .overlay[data-state="fade"] .plane {
   opacity: 1;
+  transform: rotateX(3.5deg) scale(1);
 }
 
 /* The scene opens from [44, 34, 76] at 40 degrees, about 21 degrees above the
@@ -99,10 +115,14 @@
   transform: rotateX(56deg) scale(1.45) translateY(-4%);
   /* The strokes hold at full while the tilt does most of its work and only go
      over the last third of it. Fading them on the same curve as the transform
-     spent the morph on an empty screen. */
+     spent the morph on an empty screen.
+
+     The tilt's own curve leaves the mark at speed rather than from rest: the
+     plan has been creeping forward for the whole beat before this, and an
+     ease that starts at zero velocity would stall it for a frame first. */
   transition:
     opacity 340ms linear 360ms,
-    transform 700ms var(--ease);
+    transform 700ms cubic-bezier(0.2, 0.5, 0.3, 1);
 }
 
 /* The fitted course is very nearly square, so it letterboxes hard on a laptop.
@@ -167,11 +187,20 @@
   justify-content: center;
   gap: 16px;
   opacity: 1;
-  transition: opacity 380ms var(--ease);
+  transform: translateZ(0);
+  transition:
+    opacity 420ms var(--ease),
+    transform 560ms var(--ease);
 }
 
+/* The card does not dissolve, it goes away from the camera, through the same
+   perspective the plan later lays down in. One depth for the whole sequence:
+   the title recedes, the plan comes forward, the plan lays down on the water.
+   190px back on a 1400px perspective is the card at 0.88, which reads as
+   distance without ever looking like a scale animation. */
 .overlay:not([data-state="b0"]) .card {
   opacity: 0;
+  transform: translateZ(-190px);
 }
 
 .wordmark {
@@ -214,7 +243,10 @@
 /* ---- the clock the drawing is at ---- */
 
 /* The one reading that says the wait is a race running and not a loader: it
-   counts the same seconds the console will count when it takes over. */
+   counts the same seconds the console will count when it takes over. Up with
+   the card rather than arriving at the drawing: a third layer dissolving in
+   halfway through is a third seam, and the clock reading 00:00 under a title
+   is the same statement the title is making. */
 .readout {
   position: absolute;
   right: 28px;
@@ -227,9 +259,15 @@
   transition: opacity 400ms var(--ease);
 }
 
-.overlay[data-state="b1"] .readout,
-.overlay[data-state="fade"] .readout {
+.overlay[data-live="true"] .readout {
   opacity: 1;
+}
+
+/* Off with the plan it was reading, not left hanging over open water. */
+.overlay[data-state="morph"] .readout,
+.overlay[data-state="release"] .readout {
+  opacity: 0;
+  transition: opacity 240ms var(--ease);
 }
 
 .readoutLabel {

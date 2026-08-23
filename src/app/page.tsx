@@ -8,6 +8,7 @@ import { CourseRail } from "@/components/layline/CourseRail";
 import { IntroOverlay } from "@/components/layline/intro/IntroOverlay";
 import { LaylineApp } from "@/components/layline/LaylineApp";
 import { NotesSection } from "@/components/layline/NotesSection";
+import { PageGround } from "@/components/layline/PageGround";
 import { TrackChart } from "@/components/layline/svg/TrackChart";
 import RailLogo from "@/components/chrome/RailLogo";
 import styles from "./layline.module.css";
@@ -41,6 +42,10 @@ export default function LaylinePage() {
         type="font/woff2"
         crossOrigin="anonymous"
       />
+
+      {/* Under everything the shell paints and over nothing: the race drawn
+          across the whole document, with two falls of light behind it. */}
+      <PageGround />
 
       <a className={styles.skip} href="#replay-console">
         Skip to the replay console
