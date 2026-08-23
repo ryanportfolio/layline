@@ -88,3 +88,46 @@ export function serializeChip(t: number, boatId?: string): string {
   const stamp = String(Math.round(t * 10) / 10);
   return boatId === undefined ? `[[t=${stamp}]]` : `[[t=${stamp}|${boatId}]]`;
 }
+
+const MAX_ANSWER_LINES = 5;
+const CHIP_ONLY_RE = /^(?:\[\[t=-?\d+(?:\.\d+)?(?:\|[a-z][a-z0-9]*)?\]\]\s*)+$/;
+
+/**
+ * Keep a live model's finished answer in the same lead plus evidence shape as
+ * the deterministic analyst. The model usually follows the newline rule, but
+ * a longer synthesis can arrive as one paragraph. Sentence segmentation runs
+ * only when the shape is missing or too long, and a chip emitted after its
+ * sentence stays attached to that sentence.
+ */
+export function normalizeAnswerShape(text: string): string {
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+  if (lines.length >= 2 && lines.length <= MAX_ANSWER_LINES) return lines.join("\n");
+
+  const sentences: string[] = [];
+  const segmenter = new Intl.Segmenter("en", { granularity: "sentence" });
+  const blocks = lines.join(" ").replace(/(\]\])\s+(?=\S)/g, "$1\n").split("\n");
+  for (const block of blocks) {
+    for (const { segment } of segmenter.segment(block)) {
+      const sentence = segment.trim();
+      if (sentence === "") continue;
+      if (CHIP_ONLY_RE.test(sentence) && sentences.length > 0) {
+        sentences[sentences.length - 1] += ` ${sentence}`;
+      } else {
+        sentences.push(sentence);
+      }
+    }
+  }
+  if (sentences.length <= 1) return lines.join("\n");
+  if (sentences.length <= MAX_ANSWER_LINES) return sentences.join("\n");
+
+  const answerLines = [sentences[0]];
+  const evidence = sentences.slice(1);
+  const perLine = Math.ceil(evidence.length / (MAX_ANSWER_LINES - 1));
+  for (let index = 0; index < evidence.length; index += perLine) {
+    answerLines.push(evidence.slice(index, index + perLine).join(" "));
+  }
+  return answerLines.join("\n");
+}

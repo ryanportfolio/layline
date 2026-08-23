@@ -719,7 +719,7 @@ export function RaceWorkspace({
         </div>
 
         <div className={styles.searchBox}>
-          <label className={styles.searchLabel} htmlFor="race-search">Search races</label>
+          <label className={styles.searchLabel} htmlFor="race-search">Search</label>
           <span className={styles.searchFieldWrap}>
             <input
               id="race-search"

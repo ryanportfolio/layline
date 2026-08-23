@@ -79,7 +79,7 @@ test("the race rail and panes keep their interaction contracts", async () => {
     read("src/components/layline/analyst/AnalystSection.tsx"),
   ]);
 
-  assert.match(workspace, /aria-label="Search races"|htmlFor="race-search"/);
+  assert.match(workspace, /htmlFor="race-search">Search<\/label>/);
   assert.match(workspace, /if \(event\.key !== "Escape"\) return;/);
   assert.match(workspace, />\s*Clear\s*<\/button>/);
   assert.match(workspace, /Search hides \$\{hiddenBySearch\} races/);

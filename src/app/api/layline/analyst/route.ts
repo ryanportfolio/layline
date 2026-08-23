@@ -26,6 +26,7 @@ import {
   SSE_DONE,
   SSE_ERROR,
   SSE_STATUS,
+  normalizeAnswerShape,
   serializeChip,
 } from "@/lib/layline/analyst/protocol";
 import type { AnalystMessage } from "@/lib/layline/analyst/protocol";
@@ -706,7 +707,7 @@ function liveResponse(
           const { finish, calls, text } = await runRound(wire, !forced);
 
           if (forced || finish !== "tool_calls" || calls.length === 0) {
-            const answer = stripPlanTalk(text).trim();
+            const answer = normalizeAnswerShape(stripPlanTalk(text).trim());
             if (answer === "") {
               /* A model that stops without words gave no answer; done would
                * make the UI accept the silence as one. */
