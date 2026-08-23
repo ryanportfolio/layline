@@ -26,8 +26,9 @@ test('Layline page keeps its identity', async () => {
   assert.match(page, /title: "Layline · Race Replay"/);
   assert.match(page, /generateRace\(RACE_SEED\)/);
   assert.match(page, /Skip to the replay console/);
-  assert.match(page, /Spec work by Ryan Allen \| all demo concepts/);
-  assert.match(page, /href="https:\/\/fullbuild\.ai\/prototype\/layline"/);
+  assert.match(page, /Built by Ryan Allen/);
+  assert.match(page, /href="https:\/\/github\.com\/ryanportfolio\/layline"/);
+  assert.match(page, /href="https:\/\/fullbuild\.ai"/);
 });
 
 test('Layline engine identity holds: seed, fix rate, lens, version pin', async () => {
@@ -222,21 +223,19 @@ test('the rail keeps the bow and the frame budget honest', async () => {
 });
 
 test('every page section the rail marks is a section the page actually renders', async () => {
-  const [page, analyst, notes, engineRoom] = await Promise.all([
+  const [page, analyst, notes] = await Promise.all([
     read('src/app/page.tsx'),
     read('src/components/layline/analyst/AnalystSection.tsx'),
     read('src/components/layline/NotesSection.tsx'),
-    read('src/components/layline/engine/EngineRoom.tsx'),
   ]);
 
   assert.match(page, /data-leg="Replay console"/);
   assert.match(analyst, /data-leg="Debrief"/);
-  assert.match(notes, /data-leg="How the replay works"/);
+  assert.match(notes, /data-leg="Project notes"/);
 
-  /* The mark's name is the section's own heading, not a label invented for the
-     margin. The notes section's heading renders inside the engine room. */
+  /* The mark's name comes from the section itself, not from the margin. */
   assert.match(analyst, /id="debrief-heading"[\s\S]{0,80}Debrief/);
-  assert.match(engineRoom, /id="notes-heading"[\s\S]{0,120}How the replay works/);
+  assert.match(notes, /<h2[^>]*>What I built<\/h2>/);
 
   /* The colophon carries no mark: it sits below the last viewport centre, so a
      mark there could never be rounded. The finish line at the foot of the rail

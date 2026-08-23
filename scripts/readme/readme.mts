@@ -119,8 +119,8 @@ The route limits requests to the same origin, ${facts.debrief.maxTurns} turns of
 
 - Per-frame code reuses pose objects, search cursors, and the standings array.
 - Instrument text updates only when a value changes.
-- The water uses about 26,000 vertices. A uniform grid at the same detail would use about 1.6 million.
-- The fleet shares one material. Spray and fix dots use instancing.
+- The water uses 27,009 vertices. A uniform grid at the same detail would use 1,640,961.
+- The fleet shares two hull materials. Spray and raw fix dots use instancing.
 - Sustained frame misses lower the pixel ratio one step at a time.
 
 ## Controls

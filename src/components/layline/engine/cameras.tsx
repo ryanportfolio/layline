@@ -53,9 +53,6 @@ const HULL = "8.4,0 -5.6,-6.2 -5.6,6.2";
 /* Sixty frames a second over four fixes a second: fifteen frames per reading. */
 const HELD_MAX = Math.round(60 / FIX_HZ);
 
-/* The turn rate cap the evaluator applies to every angular channel. */
-const TURN_CAP = 60; // deg/s, interpolate.ts
-
 interface Frame {
   fixes: Fix[];
   width: number;
@@ -195,16 +192,11 @@ export function CameraOne() {
   const clock = useLabClock();
   const { race, bench, mounted, reduced } = clock;
   const frame = useMemo(() => segmentFrame(bench.window.fixes), [bench]);
-  const opening = useMemo(
-    () => poseAt(race, BENCH_BOAT, bench.window.from, "smooth", newPose()),
-    [race, bench],
-  );
   const dots = useRef<Array<SVGCircleElement | null>>([]);
   const rawRef = useRef<SVGGElement | null>(null);
   const smoothRef = useRef<SVGGElement | null>(null);
   const heldRef = useRef<HTMLSpanElement | null>(null);
   const lagValueRef = useRef<HTMLSpanElement | null>(null);
-  const sogRef = useRef<HTMLSpanElement | null>(null);
 
   useEffect(() => {
     const rawPose = newPose();
@@ -250,10 +242,6 @@ export function CameraOne() {
         lagValueRef.current,
         fmt2(Math.hypot(rawPose.x - smoothPose.x, rawPose.y - smoothPose.y)),
       );
-      /* Speed over the ground is a number the feed reports four times a second.
-         Printing it sixty times a second spends fifty-six frames a second
-         redrawing a reading nobody sent. */
-      if (stepped && sogRef.current !== null) sogRef.current.textContent = fmt2(smoothPose.sog);
     });
   }, [clock, race, bench, frame]);
 
@@ -262,18 +250,11 @@ export function CameraOne() {
       <div>
         <h3 className={styles.camHeading}>Four fixes a second</h3>
         <p className={styles.camBody}>
-          Each boat reports {FIX_HZ} times a second: position, speed over the ground, heading,
-          heel, wind angle. One reading every {(1000 / FIX_HZ).toFixed(0)} milliseconds.
-        </p>
-        <p className={styles.camBody}>
-          A screen refreshes sixty times a second. Draw only the fixes and each one holds for
-          fifteen frames, then jumps. The boat reaches the mark in the right place at the right
-          time and looks wrong the whole way there.
+          Raw fixes arrive every {(1000 / FIX_HZ).toFixed(0)} ms; violet holds each reading while
+          the race model fills the frames between them
         </p>
         <div className={clsx(styles.chipGrid, styles.chipGridReserved)}>
           <Chip label="Fixes" value={`${bench.window.fixes.length}`} />
-          <Chip label="Window" value={fmt2(bench.window.span)} unit="s" />
-          <Chip label="Min gap" value={fmt2(bench.gaps.min)} unit="m" />
           <Chip label="Max gap" value={fmt2(bench.gaps.max)} unit="m" />
           {/* A frame counter has nothing to count when the clock is parked, so
               it waits for the mount and never reaches the server markup: a
@@ -282,7 +263,6 @@ export function CameraOne() {
             <Chip label="Held" value={`0/${HELD_MAX}`} valueRef={heldRef} />
           ) : null}
           <Chip label="Lag" value={fmt2(0)} unit="m" valueRef={lagValueRef} />
-          <Chip label="SOG" value={fmt2(opening.sog)} unit="m/s" valueRef={sogRef} />
         </div>
       </div>
 
@@ -324,9 +304,7 @@ export function CameraOne() {
           ) : null}
         </svg>
         <figcaption className={styles.caption}>
-          {frame.fixes.length} fixes, {bench.window.span} seconds. The violet boat draws only what
-          the feed reports, holding each fix for a quarter second. {bench.boat.sail} is the same
-          data through the engine, and the lag chip prints the metres between the two
+          Raw feed and interpolated pose on one clock
         </figcaption>
       </figure>
     </Panel>
@@ -350,7 +328,6 @@ export function CameraTwo() {
   const [hover, setHover] = useState<number | null>(null);
   const trackerRef = useRef<SVGGElement | null>(null);
   const arrowRef = useRef<SVGPathElement | null>(null);
-  const sogRef = useRef<HTMLSpanElement | null>(null);
   const cogRef = useRef<HTMLSpanElement | null>(null);
 
   const curve = useMemo(() => {
@@ -387,7 +364,6 @@ export function CameraTwo() {
           `M0 0H${fmt1(reach)}M${fmt1(reach)} 0L${fmt1(reach - 9)} -4L${fmt1(reach - 9)} 4Z`,
         );
       }
-      if (sogRef.current !== null) sogRef.current.textContent = fmt2(pose.sog);
       if (cogRef.current !== null) cogRef.current.textContent = fmt1(pose.cog);
     });
   }, [clock, race, bench, frame]);
@@ -423,23 +399,12 @@ export function CameraTwo() {
       <div>
         <h3 className={styles.camHeading}>Between the fixes</h3>
         <p className={styles.camBody}>
-          A cubic curve fills each gap, one segment per pair of fixes. What matters is where the
-          curve gets its direction. At {FIX_HZ} fixes a second the readings sit close enough that
-          the shape is barely in question: join them with straight segments and the track stays
-          within {fmt2(bench.drift)} m of this curve the whole way.
-        </p>
-        <p className={styles.camBody}>
-          Each fix already carries a speed and a course, measured at that instant. Use those as
-          the tangents and the curve leaves every fix on the heading that fix reported, and
-          arrives at the next one the same way. The turn keeps its shape. The speed through it
-          stays honest.
+          Speed and course set each curve tangent, keeping the path and turn honest between fixes
         </p>
         <div className={styles.chipGrid}>
           <Chip label="Segments" value={`${frame.fixes.length - 1}`} />
           <Chip label="Curve" value={`${SIM_HZ}`} unit="hz" />
-          <Chip label="Tangent" value={fmt1(TANGENT_SECONDS)} unit="s" />
           <Chip label="Chord" value={fmt2(bench.drift)} unit="m" />
-          <Chip label="SOG" value={fmt2(opening.sog)} unit="m/s" valueRef={sogRef} />
           <Chip label="COG" value={fmt1(opening.cog)} unit="deg" valueRef={cogRef} />
         </div>
       </div>
@@ -522,9 +487,7 @@ export function CameraTwo() {
           })}
         </svg>
         <figcaption className={styles.caption}>
-          Straight lines between these fixes would run within {fmt2(bench.drift)} m of the curve.
-          What the reported speed and course buy is the direction the curve leaves each fix on,
-          drawn as the amber arrows
+          Amber arrows show the reported velocity at each fix
         </figcaption>
       </figure>
     </Panel>
@@ -591,11 +554,6 @@ export function CameraThree() {
   const dragRef = useRef<number | null>(null);
   const homeRef = useRef<{ from: number; start: number } | null>(null);
   const clockHdgRef = useRef(a.hdg);
-
-  const opening = useMemo(
-    () => poseAt(race, BENCH_BOAT, bench.window.from, "smooth", newPose()),
-    [race, bench],
-  );
 
   const writeNeedle = useCallback((heading: number) => {
     write(needleRef.current, "transform", `rotate(${fmt1(heading)} ${COMPASS_C} ${COMPASS_C})`);
@@ -677,28 +635,14 @@ export function CameraThree() {
       <div>
         <h3 className={styles.camHeading}>Heading is a circle</h3>
         <p className={styles.camBody}>
-          Position, speed and heel are plain numbers and interpolate like plain numbers. Heading
-          is not. It lives on a circle where 359 sits next to 0, so a boat crossing the top of
-          the circle produces two readings that look far apart and are not.
-        </p>
-        <p className={styles.camBody}>
-          Every angle in the engine interpolates the short way round: heading, course over
-          ground, wind direction, wind angle. Turn rate is capped at a figure no hull can beat,
-          so one bad reading bends the curve and never spins the boat.
+          Angles take the shortest path across north, with a turn-rate cap to reject impossible
+          spins
         </p>
         <div className={styles.chipGrid}>
           <Chip label="Fix A" value={fmt1(a.hdg)} unit="deg" />
           <Chip label="Fix B" value={fmt1(b.hdg)} unit="deg" />
           <Chip label="Plain" value={fmt1(plain)} unit="deg" />
           <Chip label="Short" value={fmt1(Math.abs(short))} unit="deg" />
-          <Chip label="Turn cap" value={`${TURN_CAP}`} unit="deg/s" />
-          <Chip
-            label="HDG"
-            value={fmt1(opening.hdg)}
-            unit="deg"
-            labelRef={hdgLabelRef}
-            valueRef={hdgRef}
-          />
         </div>
       </div>
 
@@ -872,10 +816,8 @@ export function CameraThree() {
         </svg>
         <p className={styles.hint}>Drag the needle</p>
         <figcaption className={styles.caption}>
-          One second of {bench.boat.sail} through the top of the circle: {fmt1(a.hdg)} degrees,
-          then {fmt1(b.hdg)}. As plain numbers they are {fmt1(plain)} apart and the needle spins
-          almost the whole circle the wrong way. Round the circle they are {fmt1(Math.abs(short))},
-          the turn that happened
+          {fmt1(a.hdg)}° to {fmt1(b.hdg)}° is {fmt1(Math.abs(short))}° across north, not {fmt1(plain)}°
+          around the compass
         </figcaption>
       </figure>
     </Panel>

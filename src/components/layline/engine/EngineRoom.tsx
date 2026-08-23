@@ -17,7 +17,6 @@ import { useMounted } from "../analyst/useMounted";
 import { buildBench, fmt2, type FinishGap } from "./benchData";
 import { CameraOne, CameraThree, CameraTwo } from "./cameras";
 import { ClockContext, useLabClock, type LabClock } from "./clock";
-import { FeedTable } from "./FeedTable";
 import { WindowStrip } from "./WindowStrip";
 import styles from "./engine.module.css";
 
@@ -54,7 +53,7 @@ function useReducedMotion(): boolean {
   return reduced;
 }
 
-export function EngineRoom() {
+export function EngineRoom({ embedded = false }: { embedded?: boolean }) {
   const mounted = useMounted();
   const reduced = useReducedMotion();
   /* Boat metadata and fixes come from the client's own seeded build, the same
@@ -206,7 +205,7 @@ export function EngineRoom() {
   return (
     <ClockContext.Provider value={clock}>
       <div className={styles.root} style={{ "--bench-hue": bench.boat.hue } as CSSProperties}>
-        <EngineHeader />
+        {embedded ? null : <EngineHeader />}
         <div className={styles.locator}>
           <p className={styles.railLabel}>Full race · {bench.boat.sail} window marked</p>
           <WindowStrip />
@@ -219,7 +218,6 @@ export function EngineRoom() {
           <CameraOne />
           <CameraTwo />
           <CameraThree />
-          <FeedTable />
         </div>
       </div>
     </ClockContext.Provider>
