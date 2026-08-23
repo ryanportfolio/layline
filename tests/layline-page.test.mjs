@@ -265,6 +265,6 @@ test('the 2D view replaces camera choices with one clear return to 3D', async ()
   assert.match(returnRule, /font-weight: 800/);
 
   const viewRule = styles.match(/\.viewGroup \{([\s\S]*?)\n\}/)?.[1] ?? '';
-  assert.match(viewRule, /background: rgba\(164, 188, 203, 0\.08\)/);
+  assert.match(viewRule, /background: color-mix\(in srgb, var\(--ink-dim\) 8%, transparent\)/);
   assert.match(viewRule, /border-color: var\(--ink-dim\)/);
 });

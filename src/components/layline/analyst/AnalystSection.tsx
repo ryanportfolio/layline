@@ -9,6 +9,8 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type HTMLAttributes,
+  type ReactNode,
 } from "react";
 import { clock } from "@/lib/layline/format";
 import { DEFAULT_RACE_ID, raceMeta } from "@/lib/layline/races";
@@ -240,17 +242,25 @@ const AnalystBody = memo(function AnalystBody({
 /**
  * The Debrief, in one of two dressings.
  *
- * `story` is the section under the console on /prototype/layline: the header
+ * `story` is the section under the console on /: the header
  * with the broadcast ident, the course backdrop, the three pennant cards and
  * the loaded-race slate, all written for a full-measure page holding one race.
  *
  * `rail` is the same conversation in a 380px column beside the viewer on
- * /prototype/layline/races. It drops every part of that dressing and takes its
+ * /races. It drops every part of that dressing and takes its
  * suggested questions from the loaded race in the registry rather than from the
  * shipped race's three, because a question naming USA 4 is only true of the
  * race USA 4 sailed. Everything below the chips is the same markup in both.
  */
-export function AnalystSection({ variant = "story" }: { variant?: "story" | "rail" } = {}) {
+export function AnalystSection({
+  variant = "story",
+  railHeaderProps,
+  railHeaderControls,
+}: {
+  variant?: "story" | "rail";
+  railHeaderProps?: HTMLAttributes<HTMLDivElement> & { "data-pane-drag-handle"?: string };
+  railHeaderControls?: ReactNode;
+} = {}) {
   const rail = variant === "rail";
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
@@ -573,10 +583,11 @@ export function AnalystSection({ variant = "story" }: { variant?: "story" | "rai
       data-leg={rail ? undefined : "Debrief"}
     >
       {rail ? (
-        <div className={styles.dockHead}>
+        <div {...railHeaderProps} className={clsx(styles.dockHead, railHeaderProps?.className)}>
           <h2 id="analyst-dock-heading" className={styles.dockHeading}>
             Debrief
           </h2>
+          {railHeaderControls}
         </div>
       ) : (
       <div className={styles.head}>

@@ -1,14 +1,44 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { cookies } from "next/headers";
 import RailLogo from "@/components/chrome/RailLogo";
 import { TrackChart } from "@/components/layline/svg/TrackChart";
 import { raceFor } from "@/lib/layline/analyst/data";
 import { MISSING, clock } from "@/lib/layline/format";
 import { DEFAULT_RACE_ID, RACES, isRaceId } from "@/lib/layline/races";
-import { RaceWorkspace, type RaceRow } from "./RaceWorkspace";
+import { RaceWorkspace, ThemePicker, type LaylineTheme, type RaceRow } from "./RaceWorkspace";
+import {
+  WORKSPACE_COOKIE_KEY,
+  parseWorkspacePreferences,
+} from "./workspaceState";
 import styles from "./races.module.css";
 import layline from "../layline.module.css";
 import "../scrollbar.css";
+
+/* Parser blocking and first in the shell. A stored theme reaches the shell
+ * before the browser has interface pixels to paint. The script changes only
+ * its parent, so client navigation to the story cannot carry the theme with it.
+ * Console remains the server and no-JavaScript result. */
+const THEME_BOOT = `try {
+  const shell = document.currentScript?.parentElement;
+  const stored = localStorage.getItem("layline-races-theme-v1");
+  if (shell && ["console", "sailcloth", "marine", "chart", "ice"].includes(stored)) {
+    shell.dataset.laylineTheme = stored;
+    document.cookie = "layline-races-theme-v1=" + encodeURIComponent(stored) + "; Path=/races; Max-Age=31536000; SameSite=Lax";
+  }
+} catch {}`;
+
+function storedTheme(value: string | undefined): LaylineTheme {
+  if (
+    value === "sailcloth" ||
+    value === "marine" ||
+    value === "chart" ||
+    value === "ice"
+  ) {
+    return value;
+  }
+  return "console";
+}
 
 export const metadata: Metadata = {
   title: "Layline · Race Library",
@@ -34,8 +64,15 @@ export default async function LaylineRacesPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const asked = (await searchParams).race;
+  const [params, cookieStore] = await Promise.all([searchParams, cookies()]);
+  const asked = params.race;
   const selectedId = typeof asked === "string" && isRaceId(asked) ? asked : DEFAULT_RACE_ID;
+  const validIds = new Set(RACES.map((meta) => meta.id));
+  const initialPreferences = parseWorkspacePreferences(
+    cookieStore.get(WORKSPACE_COOKIE_KEY)?.value,
+    validIds,
+  );
+  const initialTheme = storedTheme(cookieStore.get("layline-races-theme-v1")?.value);
   const race = raceFor(selectedId);
   if (race === null) throw new Error(`missing race ${selectedId}`);
   const fleet = new Map(race.boats.map((boat) => [boat.id, boat]));
@@ -55,7 +92,13 @@ export default async function LaylineRacesPage({
   });
 
   return (
-    <div className={`${layline.shell} ${styles.page}`} data-layline-page>
+    <div
+      className={`${layline.shell} ${styles.page}`}
+      data-layline-page
+      data-layline-theme={initialTheme}
+      suppressHydrationWarning
+    >
+      <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
       {/* Pangram is declared font-display: block, and the boot cover names the
           race in it while the renderer starts. Without this the title card
           holds unpainted for the whole block period, which is the wait it
@@ -83,7 +126,8 @@ export default async function LaylineRacesPage({
       <div className={layline.prototypeBar}>
         <strong>Layline race library</strong>
         <span>{RACES.length} races // seeded telemetry</span>
-        <Link href="https://fullbuild.ai">
+        <ThemePicker initialTheme={initialTheme} />
+        <Link href="/">
           <strong>Race story</strong>
         </Link>
         {/* The mark rides the right end of the bar and links home, the same
@@ -101,6 +145,7 @@ export default async function LaylineRacesPage({
       <RaceWorkspace
         initialRaceId={selectedId}
         rows={rows}
+        initialPreferences={initialPreferences}
         analystOffline={
           !process.env.OPENROUTER_API_KEY && process.env.LAYLINE_ANALYST_MOCK !== "1"
         }

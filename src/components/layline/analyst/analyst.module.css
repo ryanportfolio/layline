@@ -309,7 +309,7 @@
   width: 100%;
   min-height: 76px;
   padding: 12px 14px 12px 12px;
-  background: rgba(236, 245, 249, 0.04);
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
   background:
     linear-gradient(
       100deg,
@@ -352,7 +352,7 @@
 
 .suggestion:hover,
 .suggestion:focus-visible {
-  background: rgba(236, 245, 249, 0.08);
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
   background:
     linear-gradient(
       100deg,
@@ -367,7 +367,7 @@
 }
 
 .suggestion:active {
-  background: rgba(236, 245, 249, 0.14);
+  background: color-mix(in srgb, var(--ink) 14%, transparent);
   background:
     linear-gradient(
       100deg,
@@ -586,7 +586,7 @@
 .analystTurn {
   max-width: 62ch;
   padding: 10px 12px;
-  background: rgba(7, 15, 22, 0.58);
+  background: color-mix(in srgb, var(--page-ground) 58%, transparent);
   background: color-mix(in srgb, var(--page-ground) 58%, transparent);
   border-left: 2px solid var(--rule);
   border-radius: 2px;
@@ -757,7 +757,7 @@
   margin: 0 2px;
   padding: 2px 10px;
   vertical-align: 1px;
-  background: rgba(236, 245, 249, 0.03);
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
   background: color-mix(in srgb, var(--chip-hue) 14%, transparent);
   border: 1px solid var(--rule);
   border-color: color-mix(in srgb, var(--chip-hue) 45%, var(--rule));
@@ -803,8 +803,12 @@
    near-black hues. */
 .chip:hover,
 .chip:focus-visible {
-  background: rgba(236, 245, 249, 0.1);
-  background: color-mix(in srgb, var(--chip-hue) 26%, rgba(236, 245, 249, 0.06));
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--chip-hue) 26%,
+    color-mix(in srgb, var(--ink) 6%, transparent)
+  );
   border-color: var(--ink-dim);
   border-color: color-mix(in srgb, var(--chip-hue) 70%, var(--ink-dim));
   transform: translateY(-1px);
@@ -856,7 +860,7 @@
   margin: 0;
   padding: 8px 12px;
   overflow: hidden;
-  background: rgba(236, 245, 249, 0.06);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
   background: color-mix(in srgb, var(--wind) 16%, transparent);
   border: 1px solid var(--rule);
   border: 1px solid color-mix(in srgb, var(--wind) 45%, transparent);
@@ -972,7 +976,7 @@
 }
 
 .retryButton:hover {
-  background: rgba(236, 245, 249, 0.08);
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
 }
 
 /* ---- the moment strip ---- */
@@ -1431,13 +1435,13 @@
 }
 
 .sendButton:hover {
-  background: rgba(236, 245, 249, 0.08);
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
 }
 
 /* Press snap: down 1px onto the top of the wash ladder. */
 .sendButton:active,
 .retryButton:active {
-  background: rgba(236, 245, 249, 0.14);
+  background: color-mix(in srgb, var(--ink) 14%, transparent);
   transform: translateY(1px);
 }
 
@@ -1664,8 +1668,10 @@
 
 .dockHead {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
   gap: 4px;
+  min-width: 0;
 }
 
 .dockHeading {
@@ -1726,13 +1732,13 @@
 
 .dockChip:hover,
 .dockChip:focus-visible {
-  background: rgba(236, 245, 249, 0.08);
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
   border-color: color-mix(in srgb, var(--card-hue) 70%, var(--rule));
   border-left-color: var(--card-hue);
 }
 
 .dockChip:active {
-  background: rgba(236, 245, 249, 0.14);
+  background: color-mix(in srgb, var(--ink) 14%, transparent);
 }
 
 .dockConversation {
