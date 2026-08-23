@@ -14,8 +14,10 @@
  * (OPENROUTER_MODEL) swappable from the dashboard without a deploy.
  */
 import { clock } from "@/lib/layline/format";
-import type { RaceData } from "@/lib/layline/types";
-import { raceData } from "@/lib/layline/analyst/data";
+import type { LegName, RaceData } from "@/lib/layline/types";
+import { DEFAULT_RACE_ID, raceMeta } from "@/lib/layline/races";
+import type { RaceMeta } from "@/lib/layline/races";
+import { raceFor } from "@/lib/layline/analyst/data";
 import { buildSystemPrompt } from "@/lib/layline/analyst/prompt";
 import {
   MAX_MESSAGE_CHARS,
@@ -24,7 +26,6 @@ import {
   SSE_DONE,
   SSE_ERROR,
   SSE_STATUS,
-  SUGGESTED_QUESTIONS,
   serializeChip,
 } from "@/lib/layline/analyst/protocol";
 import type { AnalystMessage } from "@/lib/layline/analyst/protocol";
@@ -170,34 +171,148 @@ function gapWords(gapSeconds: number): string {
   return gapSeconds === 1 ? "1 second" : `${gapSeconds} seconds`;
 }
 
+interface LeaderSegment {
+  boatId: string;
+  /* When this boat took the lead, and the last sample it still held it. */
+  from: number;
+  to: number;
+  /* The leg the race was on at `from`, which is the leg the pass happened on. */
+  leg: LegName;
+}
+
+/**
+ * Who led, collapsed into segments. Rank 1 in the progress feed is the smallest
+ * distance to finish at every sample of every race in the registry, so this is
+ * the same lead the standings dock shows.
+ *
+ * t = 0 is excluded: that sample still carries entry order rather than a race
+ * position, so counting it manufactures a pass at t = 0.5 in every race. Pre-
+ * start samples are excluded for the same reason.
+ */
+function leaderSegments(race: RaceData): LeaderSegment[] {
+  const leading: { t: number; boatId: string; leg: LegName }[] = [];
+  for (const boat of race.boats) {
+    for (const sample of race.progress[boat.id] ?? []) {
+      if (sample.t <= 0 || sample.rank !== 1 || sample.leg === "prestart") continue;
+      leading.push({ t: sample.t, boatId: boat.id, leg: sample.leg });
+    }
+  }
+  leading.sort((a, b) => a.t - b.t);
+
+  const segments: LeaderSegment[] = [];
+  for (const entry of leading) {
+    const open = segments[segments.length - 1];
+    if (open !== undefined && open.boatId === entry.boatId) {
+      open.to = entry.t;
+      continue;
+    }
+    segments.push({ boatId: entry.boatId, from: entry.t, to: entry.t, leg: entry.leg });
+  }
+  return segments;
+}
+
+function sailOf(race: RaceData, boatId: string): string {
+  return race.boats.find((boat) => boat.id === boatId)?.sail ?? boatId;
+}
+
+/* The pass that decided the race is the start of the last leader segment, not
+ * the first change: a race can trade the lead half a dozen times, and one of
+ * those trades can last a single sample. */
 function mockLeadChange(race: RaceData): MockStep[] {
+  const segments = leaderSegments(race);
+  if (segments.length === 0) return mockStandings(race);
+
+  const decisive = segments[segments.length - 1];
+  const passT = decisive.from;
+  const passSail = sailOf(race, decisive.boatId);
   const steps: MockStep[] = [];
-  steps.push(statusStep(race, "standings_at", { t: 20 }));
-  const early = standingsAt(race, 20);
-  steps.push(statusStep(race, "standings_at", { t: 30 }));
-  const later = standingsAt(race, 30);
-  const earlyLeader = early.rows[0];
-  const laterLeader = later.rows[0];
-  steps.push(statusStep(race, "compare_boats", { a: laterLeader.boatId, b: earlyLeader.boatId }));
-  const cmp = asCompare(compareBoats(race, laterLeader.boatId, earlyLeader.boatId, 20, 30));
-  steps.push(statusStep(race, "standings_at", { t: 35 }));
-  const afterMark = standingsAt(race, 35);
-  const wasBehindBy = rowFor(early, laterLeader.boatId)?.gapSeconds ?? 0;
-  const markLeader = afterMark.rows[0];
-  const markGap = rowFor(afterMark, earlyLeader.boatId)?.gapSeconds ?? 0;
-  const markLine =
-    markLeader.boatId === laterLeader.boatId && markLeader.leg !== "beat"
-      ? `The pass stuck at the windward mark: ${laterLeader.sail} reached it first, settled onto the run ` +
-        `${gapWords(markGap)} clear of ${earlyLeader.sail}, and led the rest of the way. ${serializeChip(35, laterLeader.boatId)}`
-      : `At 0:35 the lead read ${markLeader.sail}. ${serializeChip(35, markLeader.boatId)}`;
+
+  /* The tail both branches end on: this leader either kept it to the line or
+   * lost it after the last pass anyone made. */
+  const winner = race.results.find((result) => result.rank === 1);
+  const runnerUp = race.results.find((result) => result.rank === 2);
+  const margin =
+    winner === undefined || runnerUp === undefined
+      ? 0
+      : Math.round(runnerUp.elapsed - winner.elapsed);
+  const heldTail =
+    winner !== undefined && winner.boatId === decisive.boatId
+      ? `and it led the rest of the way, winning by ${gapWords(margin)}`
+      : `and it held the lead to ${clock(decisive.to)}`;
+
+  /* Wire to wire. Nothing was passed, and saying a pass happened would be the
+   * one number in this answer that came from the template rather than the race. */
+  if (segments.length === 1) {
+    steps.push(statusStep(race, "standings_at", { t: passT }));
+    const opening = standingsAt(race, passT);
+    const second = opening.rows[1];
+    steps.push({
+      kind: "text",
+      value:
+        `Nobody took the lead in this race.\n` +
+        `${passSail} led from ${opening.raceClock} on the ${decisive.leg}, with ${second.sail} ` +
+        `${gapWords(second.gapSeconds)} back, ${heldTail}. ${serializeChip(passT, decisive.boatId)}`,
+    });
+    return steps;
+  }
+
+  const passed = segments[segments.length - 2];
+  const passedSail = sailOf(race, passed.boatId);
+  /* Mid-stretch of the previous leader's run at the front, where its lead is a
+   * lead rather than the moment it just took or just lost one. Progress lands
+   * twice a second, so the midpoint is put back on that grid. */
+  const earlyT = Math.round((passed.from + passed.to)) / 2;
+
+  steps.push(statusStep(race, "standings_at", { t: earlyT }));
+  const early = standingsAt(race, earlyT);
+  steps.push(statusStep(race, "standings_at", { t: passT }));
+  const later = standingsAt(race, passT);
+  steps.push(statusStep(race, "compare_boats", { a: decisive.boatId, b: passed.boatId }));
+  const cmp = asCompare(compareBoats(race, decisive.boatId, passed.boatId, passed.from, passT));
+  const wasBehindBy = rowFor(early, decisive.boatId)?.gapSeconds ?? 0;
+
+  /* A pass is not always a speed pass. Sable Reach's winner goes through with
+   * the slower average over the ground, so the clause that reads as the reason
+   * has to say so rather than let the two numbers imply the opposite. */
+  const speedClause =
+    Number(cmp.a.avgSogKnots) >= Number(cmp.b.avgSogKnots)
+      ? `after averaging ${cmp.a.avgSogKnots} knots over the ground to ${cmp.b.avgSogKnots} for ${passedSail} through that stretch`
+      : `having averaged ${cmp.a.avgSogKnots} knots over the ground to ${cmp.b.avgSogKnots} for ${passedSail} through that stretch, so the gain was not in straight-line speed`;
+
+  /* Where the pass settled. A pass on the beat is judged at the windward mark,
+   * which is the first sample the new leader spends on the run. A pass already
+   * made on the run has no mark left to judge it at. */
+  let settledLine: string;
+  if (decisive.leg === "run") {
+    settledLine =
+      `The pass came downwind rather than on the beat: ${passSail} went through with the leader ` +
+      `already on the run, ${heldTail}. ${serializeChip(passT, decisive.boatId)}`;
+  } else {
+    const onRun = (race.progress[decisive.boatId] ?? []).find(
+      (sample) => sample.t >= passT && sample.leg === "run",
+    );
+    if (onRun === undefined) {
+      settledLine = `${passSail} went clear at ${later.raceClock}, ${heldTail}. ${serializeChip(passT, decisive.boatId)}`;
+    } else {
+      steps.push(statusStep(race, "standings_at", { t: onRun.t }));
+      const afterMark = standingsAt(race, onRun.t);
+      const markLeader = afterMark.rows[0];
+      const markGap = rowFor(afterMark, passed.boatId)?.gapSeconds ?? 0;
+      settledLine =
+        markLeader.boatId === decisive.boatId
+          ? `The pass stuck at the windward mark: ${passSail} reached it first, settled onto the run ` +
+            `${gapWords(markGap)} clear of ${passedSail}, ${heldTail}. ${serializeChip(onRun.t, decisive.boatId)}`
+          : `At ${afterMark.raceClock} the lead read ${markLeader.sail}. ${serializeChip(onRun.t, markLeader.boatId)}`;
+    }
+  }
+
   steps.push({
     kind: "text",
     value:
-      `${laterLeader.sail} took the lead from ${earlyLeader.sail} midway up the beat.\n` +
-      `At ${early.raceClock} ${earlyLeader.sail} led with ${laterLeader.sail} ${gapWords(wasBehindBy)} back. ${serializeChip(20, earlyLeader.boatId)}\n` +
-      `By ${later.raceClock} ${laterLeader.sail} had its bow in front, after averaging ${cmp.a.avgSogKnots} knots over the ground to ` +
-      `${cmp.b.avgSogKnots} for ${earlyLeader.sail} through that stretch. ${serializeChip(30, laterLeader.boatId)}\n` +
-      markLine,
+      `${passSail} took the lead from ${passedSail} on the ${decisive.leg}.\n` +
+      `At ${early.raceClock} ${passedSail} led the ${passed.leg} with ${passSail} ${gapWords(wasBehindBy)} back. ${serializeChip(earlyT, passed.boatId)}\n` +
+      `By ${later.raceClock} ${passSail} had its bow in front, ${speedClause}. ${serializeChip(passT, decisive.boatId)}\n` +
+      settledLine,
   });
   return steps;
 }
@@ -283,18 +398,23 @@ function mockStandings(race: RaceData): MockStep[] {
   return steps;
 }
 
-function mockSteps(race: RaceData, question: string): MockStep[] {
-  if (matches(question, SUGGESTED_QUESTIONS[0])) return mockStart(race);
-  if (matches(question, SUGGESTED_QUESTIONS[1])) return mockLeadChange(race);
-  if (matches(question, SUGGESTED_QUESTIONS[2])) return mockDownwind(race);
+/* The three scripted answers are matched against the selected race's own
+ * suggested questions, in the order start, lead change, downwind. A question
+ * written for another race falls through to the stand-in, which is the honest
+ * answer: this route cannot read a question it was not given. */
+function mockSteps(race: RaceData, meta: RaceMeta, question: string): MockStep[] {
+  const [start, leadChange, downwind] = meta.suggestedQuestions;
+  if (matches(question, start)) return mockStart(race);
+  if (matches(question, leadChange)) return mockLeadChange(race);
+  if (matches(question, downwind)) return mockDownwind(race);
   return mockStandings(race);
 }
 
-function mockResponse(race: RaceData, question: string): Response {
+function mockResponse(race: RaceData, meta: RaceMeta, question: string): Response {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        for (const step of mockSteps(race, question)) {
+        for (const step of mockSteps(race, meta, question)) {
           if (step.kind === "status") {
             controller.enqueue(frame(SSE_STATUS, { label: step.value }));
             await delay(15);
@@ -426,6 +546,7 @@ function stripPlanTalk(text: string): string {
 
 function liveResponse(
   race: RaceData,
+  meta: RaceMeta,
   history: AnalystMessage[],
   clientSignal: AbortSignal,
 ): Response {
@@ -440,7 +561,7 @@ function liveResponse(
     },
   }));
   const messages: ChatMessage[] = [
-    { role: "system", content: buildSystemPrompt(race) },
+    { role: "system", content: buildSystemPrompt(race, meta.venue) },
     ...history.map((turn): ChatMessage => ({ role: turn.role, content: turn.content })),
   ];
 
@@ -639,10 +760,23 @@ export async function POST(req: Request): Promise<Response> {
     return jsonError(validated.status, validated.error);
   }
 
-  const race = raceData();
+  /* Which race the question is about. A missing id is the shipped race, which
+   * keeps the story page's request shape working unchanged. Anything else has
+   * to name a race in the registry: a raw seed would be an unaudited race and a
+   * generateRace per request. */
+  const asked = (payload as { raceId?: unknown }).raceId;
+  const raceId = asked === undefined ? DEFAULT_RACE_ID : asked;
+  if (typeof raceId !== "string") {
+    return jsonError(400, "raceId must be a string");
+  }
+  const meta = raceMeta(raceId);
+  const race = meta === undefined ? null : raceFor(raceId);
+  if (meta === undefined || race === null) {
+    return jsonError(400, "no such race");
+  }
 
   if (process.env.LAYLINE_ANALYST_MOCK === "1") {
-    return mockResponse(race, validated[validated.length - 1].content);
+    return mockResponse(race, meta, validated[validated.length - 1].content);
   }
 
   if (!process.env.OPENROUTER_API_KEY) {
@@ -653,5 +787,5 @@ export async function POST(req: Request): Promise<Response> {
     return jsonError(429, "too many requests, give it a minute");
   }
 
-  return liveResponse(race, validated, req.signal);
+  return liveResponse(race, meta, validated, req.signal);
 }

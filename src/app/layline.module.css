@@ -222,6 +222,108 @@
   flex: none;
 }
 
+/* ---- the way through to the race library ----
+
+   The bar's left slot is a link in the bar's own register. Everything it does,
+   the idle sweep, the underline and the arrow, is paint or transform inside a
+   box that never changes size, so the bar holds its 33px through all of it and
+   nothing beside it moves. */
+
+.libraryCta {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ctaLabel {
+  position: relative;
+  display: inline-block;
+}
+
+/* The sweep: the same words in the wind colour, clipped to a band that crosses
+   them once every 7 seconds. A second copy of the text rather than a gradient,
+   which this page bans, and clipping needs no mask to stay on the letters. */
+.ctaLabel::after {
+  content: attr(data-label);
+  position: absolute;
+  inset: 0;
+  color: var(--wind);
+  clip-path: inset(0 100% 0 0);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ctaLabel::after {
+    animation: ctaSheen 7000ms var(--ease) infinite;
+  }
+}
+
+@keyframes ctaSheen {
+  0%,
+  64% {
+    clip-path: inset(0 100% 0 0);
+  }
+
+  72% {
+    clip-path: inset(0 76% 0 0);
+  }
+
+  88% {
+    clip-path: inset(0 0 0 76%);
+  }
+
+  96%,
+  100% {
+    clip-path: inset(0 0 0 100%);
+  }
+}
+
+/* The underline draws itself from the left on hover. Absolute, so the bar's
+   line box never learns it is there. */
+.libraryCta::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -3px;
+  left: 0;
+  height: 1px;
+  background: var(--ink);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 220ms var(--ease);
+}
+
+.libraryCta:hover::after,
+.libraryCta:focus-visible::after {
+  transform: scaleX(1);
+}
+
+.ctaArrow {
+  flex: none;
+  width: 12px;
+  height: 8px;
+  transition: transform 160ms var(--ease);
+}
+
+.libraryCta:hover .ctaArrow {
+  transform: translateX(3px);
+}
+
+/* Static for a viewer who asked for less motion: no sweep, no draw, no nudge.
+   Focus still lands as the shell's registration box, which is instant paint on
+   every focusable thing on the page. */
+@media (prefers-reduced-motion: reduce) {
+  .libraryCta::after,
+  .ctaArrow {
+    transition: none;
+  }
+
+  .libraryCta:hover .ctaArrow {
+    transform: none;
+  }
+}
+
 /* ---- build status banner ---- */
 
 /* Loud on purpose: the owner demos this page mid-build, so the state of the
@@ -799,8 +901,13 @@
 
 /* ---- transport ---- */
 
+/* Wrapping is ungated: the row fits on one line at every width the story page
+   gives it, so nothing here moves, and the library page hands the same console
+   a 670px centre pane where the camera rig would otherwise be cut by the edge
+   of the stage. A control that is half on screen is worse than a second row. */
 .transportRow {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 16px;
 }
@@ -1400,6 +1507,80 @@
   }
 }
 
+/* ---- the library's boot: the sea the scene opens on ----
+
+   The story page holds the chart hidden for 1.2s because its intro overlay is
+   covering the viewport anyway, so a renderer that lands inside that window
+   never flashes a chart nobody needed. The library has no overlay, and held on
+   the same rules it showed a bare page ground for the 1.3s the renderer took,
+   then cut to a finished scene.
+
+   What covers that wait here is the sky and water the scene itself opens on,
+   painted flat in the same tokens the renderer draws with. The scene comes up
+   underneath it over 700ms and the cover leaves over the same 700ms, so the
+   change a viewer sees is a flat sea gaining depth and motion, not one layer
+   swapped for another. The docks follow 220ms later rather than arriving with
+   it. The chart stays underneath as the honest answer for a machine that never
+   gets a renderer, and reveals itself after 2.4s if none has arrived. */
+
+@media (min-width: 901px) {
+  .stage[data-boot="sea"] .fallbackLayer {
+    visibility: hidden;
+    animation: fallbackReveal 0s linear 2.4s forwards;
+  }
+
+  .stage[data-boot="sea"] .fallbackOut {
+    animation: none;
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      opacity 350ms var(--ease),
+      visibility 0s linear 350ms;
+  }
+
+  /* The renderer does not fade here, the cover does. Two overlapping fades
+     composite to a dip in the middle, darker than either picture, and that dip
+     is what reads as a pop. The scene is simply up at full strength behind an
+     opaque cover, and one layer's opacity is the only thing that moves. */
+  .stage[data-boot="sea"] .canvasLayer {
+    opacity: 1;
+    transition: none;
+  }
+
+  /* The instruments arrive into a picture that is already moving, rather than
+     landing with it. */
+  .stage[data-boot="sea"] .dockLeft,
+  .stage[data-boot="sea"] .dockRight,
+  .stage[data-boot="sea"] .dockBottom {
+    animation: dockIn 420ms var(--ease) 420ms both;
+  }
+}
+
+@keyframes dockIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* A viewer who asked for less motion gets the same two pictures with no fade
+   between them: the flat sea while the renderer boots, the scene once it has. */
+@media (prefers-reduced-motion: reduce) {
+  .stage[data-boot="sea"] .canvasLayer {
+    transition: none;
+  }
+
+  .stage[data-boot="sea"] .dockLeft,
+  .stage[data-boot="sea"] .dockRight,
+  .stage[data-boot="sea"] .dockBottom {
+    animation: none;
+  }
+}
+
+
 .fallback {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
@@ -1758,10 +1939,9 @@
     line-height: 22px;
   }
 
-  /* ---- transport wraps rather than clipping ---- */
+  /* ---- transport: the wrap is on everywhere, the tighter gap is not ---- */
 
   .transportRow {
-    flex-wrap: wrap;
     gap: 8px;
   }
 

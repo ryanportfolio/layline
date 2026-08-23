@@ -15,7 +15,11 @@ const LEG_LABEL: Record<LegName, string> = {
   finished: "FINISH",
 };
 
-export function TopBar({ race }: { race: RaceData }) {
+/* The venue arrives as a prop rather than off the store: the bar renders on
+ * the server, where the store holds the default race whatever the URL asked
+ * for, and a venue read there would hydrate into a different string. The
+ * default is the shipped race's own, so the story page passes nothing. */
+export function TopBar({ race, venue = "Long Beach" }: { race: RaceData; venue?: string }) {
   const clockRef = useRef<HTMLSpanElement>(null);
   const legRef = useRef<HTMLSpanElement>(null);
   const raw = useReplay((state) => state.mode === "raw");
@@ -37,7 +41,7 @@ export function TopBar({ race }: { race: RaceData }) {
     <header className={styles.dockTop}>
       <div className={styles.wordmarkBlock}>
         <span className={styles.wordmark}>LAYLINE</span>
-        <span className={styles.wordmarkMeta}>Fleet race · Long Beach</span>
+        <span className={styles.wordmarkMeta}>{`Fleet race · ${venue}`}</span>
       </div>
 
       <div className={styles.clockBlock}>
