@@ -124,7 +124,7 @@ The route limits requests to the same origin, 8 turns of history, 400 characters
 npm test
 ```
 
-The 50 tests cover seeded race output, exact samples, interpolation, compass wrapping, turn-rate limits, sail bounds, standings, frame stepping, and display formatting.
+The 56 tests cover seeded race output, exact samples, interpolation, compass wrapping, turn-rate limits, sail bounds, standings, frame stepping, and display formatting.
 
 Debrief tests cover tool output, maneuver detection, moment markers, glossary lookup, request validation, and mock streaming.
 

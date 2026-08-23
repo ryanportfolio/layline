@@ -465,7 +465,9 @@ export function AnalystSection() {
           <p className={styles.explainer}>
             Ask about any boat or race phase
             <br />
-            Answers cite the same telemetry and link back to the exact moment in the replay
+            Answers cite the same telemetry
+            <br />
+            and link back to the exact moment in the replay
           </p>
         </div>
         {/* The broadcast ident: event line, full race clock, fleet in entry
