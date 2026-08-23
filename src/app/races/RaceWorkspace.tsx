@@ -39,7 +39,7 @@ const THEME_STORAGE_KEY = "layline-races-theme-v1";
 const THEME_OPTIONS: readonly { id: LaylineTheme; label: string; ground: string }[] = [
   { id: "console", label: "Console", ground: "#070f16" },
   { id: "sailcloth", label: "Sailcloth", ground: "#dfdcd5" },
-  { id: "marine", label: "Marine", ground: "#0c8c5e" },
+  { id: "marine", label: "Marine", ground: "#06422e" },
   { id: "chart", label: "Chart", ground: "#f5f1e4" },
   { id: "ice", label: "Ice", ground: "#edfffe" },
 ];
@@ -763,16 +763,21 @@ export function RaceWorkspace({
         <div className={styles.rowScroller}>
           {pinnedRows.length === 0 ? null : (
             <div className={styles.rowGroup}>
-              <p className={styles.groupLabel}>{`Pinned ${pinnedRows.length}`}</p>
-              <ul className={styles.rows}>{pinnedRows.map((row) => renderRow(row))}</ul>
+              {/* Named for a screen reader, not drawn. A pinned row already
+                  says so on its own button, and the shelf below it is the
+                  library whether or not a heading repeats the panel's title. */}
+              <ul className={styles.rows} aria-label={`Pinned, ${pinnedRows.length}`}>
+                {pinnedRows.map((row) => renderRow(row))}
+              </ul>
             </div>
           )}
           <div className={styles.rowGroup}>
-            <p className={styles.groupLabel}>Race library</p>
             {regularRows.length === 0 ? (
               <p className={styles.emptyRows}>{emptyMainCopy}</p>
             ) : (
-              <ul className={styles.rows}>{regularRows.map((row) => renderRow(row))}</ul>
+              <ul className={styles.rows} aria-label="Race library">
+                {regularRows.map((row) => renderRow(row))}
+              </ul>
             )}
           </div>
         </div>
