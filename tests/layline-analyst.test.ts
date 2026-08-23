@@ -8,6 +8,7 @@ import { generateRace } from "../src/lib/layline/sim";
 import { RACE_SEED } from "../src/lib/layline/types";
 import { lookupTerms } from "../src/lib/layline/analyst/knowledge";
 import {
+  normalizeAnswerShape,
   parseChips,
   serializeChip,
   SUGGESTED_QUESTIONS,
@@ -162,6 +163,40 @@ test("chip parser round-trips both chip forms", () => {
   ]);
 });
 
+test("a paragraph answer becomes a lead plus evidence lines without breaking decimals", () => {
+  const paragraph =
+    "USA 4 took the lead at the windward mark. " +
+    "At 0:30 it trailed by one meter. [[t=30|usa]] " +
+    "At 0:33 it rounded first at 13.1 knots. " +
+    "It held the lead to the finish. [[t=33|usa]]";
+
+  assert.deepEqual(normalizeAnswerShape(paragraph).split("\n"), [
+    "USA 4 took the lead at the windward mark.",
+    "At 0:30 it trailed by one meter. [[t=30|usa]]",
+    "At 0:33 it rounded first at 13.1 knots.",
+    "It held the lead to the finish. [[t=33|usa]]",
+  ]);
+});
+
+test("an already shaped answer stays unchanged", () => {
+  const shaped =
+    "USA 4 won the start.\n" +
+    "It crossed first at the gun. [[t=0|usa]]\n" +
+    "It started on the line.";
+  assert.equal(normalizeAnswerShape(shaped), shaped);
+});
+
+test("a long paragraph keeps every sentence within five scannable lines", () => {
+  const paragraph = Array.from({ length: 9 }, (_, index) => `Sentence ${index + 1}.`).join(" ");
+  const normalized = normalizeAnswerShape(paragraph);
+  const lines = normalized.split("\n");
+
+  assert.equal(lines.length, 5);
+  for (let index = 1; index <= 9; index += 1) {
+    assert.match(normalized, new RegExp(`Sentence ${index}\\.`));
+  }
+});
+
 /* ------------------------------------------------------------------ */
 /* Knowledge                                                           */
 
@@ -215,6 +250,43 @@ test("route rejects empty messages and garbage bodies without a 5xx", async () =
   assert.equal(empty.status, 422);
   const garbage = await post("not json at all");
   assert.equal(garbage.status, 400);
+});
+
+test("live mode normalizes a paragraph before it reaches the SSE stream", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalKey = process.env.OPENROUTER_API_KEY;
+  const originalMock = process.env.LAYLINE_ANALYST_MOCK;
+  const paragraph =
+    "USA 4 took the lead at the windward mark. " +
+    "At 0:30 it trailed by one meter. " +
+    "At 0:33 it rounded first at 13.1 knots. " +
+    "It held the lead to the finish. [[t=33|usa]]";
+
+  delete process.env.LAYLINE_ANALYST_MOCK;
+  process.env.OPENROUTER_API_KEY = "test-key";
+  globalThis.fetch = async () =>
+    new Response(
+      `data: ${JSON.stringify({
+        choices: [{ delta: { content: paragraph }, finish_reason: "stop" }],
+      })}\n\ndata: [DONE]\n\n`,
+    );
+
+  try {
+    const res = await post({ messages: [{ role: "user", content: "How did USA 4 take the lead" }] });
+    assert.equal(res.status, 200);
+    const answer = (await res.text())
+      .split("\n")
+      .filter((line) => line.startsWith("data: ") && line.includes('"text"'))
+      .map((line) => (JSON.parse(line.slice(6)) as { text: string }).text)
+      .join("");
+    assert.deepEqual(answer.split("\n"), normalizeAnswerShape(paragraph).split("\n"));
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalKey === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = originalKey;
+    if (originalMock === undefined) delete process.env.LAYLINE_ANALYST_MOCK;
+    else process.env.LAYLINE_ANALYST_MOCK = originalMock;
+  }
 });
 
 test("mock mode says so when a question is outside its script", async () => {
