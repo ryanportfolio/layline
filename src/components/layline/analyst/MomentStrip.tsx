@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { useMemo, type CSSProperties } from "react";
+import { memo, useMemo, type CSSProperties } from "react";
 import { raceData } from "../store";
 import { useMounted } from "./useMounted";
 import styles from "./analyst.module.css";
@@ -18,7 +18,10 @@ export interface StripBuoy {
   dark: boolean;
 }
 
-export function MomentStrip({ buoys }: { buoys: StripBuoy[] }) {
+/* Memoized for the same reason as the backdrop: the bands and ticks are
+ * fixed race furniture, and the buoy list holds its identity while an answer
+ * streams. */
+export const MomentStrip = memo(function MomentStrip({ buoys }: { buoys: StripBuoy[] }) {
   /* Client-only drawing: event times differ across engine float math, so SSR
    * ships the strip empty at its CSS-fixed height (see useMounted). */
   const mounted = useMounted();
@@ -106,4 +109,4 @@ export function MomentStrip({ buoys }: { buoys: StripBuoy[] }) {
       ))}
     </div>
   );
-}
+});
