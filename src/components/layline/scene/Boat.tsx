@@ -3,6 +3,7 @@
 import type {
   BufferGeometry,
   Group,
+  Material,
   Mesh,
   MeshLambertMaterial,
   MeshStandardMaterial,
@@ -15,6 +16,16 @@ import { JIB_TACK, KITE_TACK, SKIFF } from "./skiff";
 export interface SailPair {
   port: BufferGeometry;
   starboard: BufferGeometry;
+}
+
+/* The volume the pointer picks a boat out of. One box a boat, never drawn, and
+ * deliberately not the hull: a raycast against a skiff is a walk over every
+ * triangle in it, six times, on every pointer move. The box is the hull's own
+ * envelope with a hand's worth of slack around it, so a click that looks like
+ * it landed on the boat lands on the boat. */
+export interface PickKit {
+  box: BufferGeometry;
+  blank: Material;
 }
 
 export interface BoatKit {
@@ -70,10 +81,12 @@ export function newBoatNodes(): BoatNodes {
 export function BoatRig({
   boatId,
   kit,
+  pick,
   nodes,
 }: {
   boatId: string;
   kit: BoatKit;
+  pick: PickKit;
   nodes: BoatNodes;
 }) {
   return (
@@ -156,6 +169,19 @@ export function BoatRig({
           <mesh geometry={kit.crew} material={kit.matteShell} />
         </group>
       </group>
+
+      {/* The pick volume, hung off the upright node and after everything else.
+          Both matter. Off the upright node, because a target that heeled twenty
+          degrees away from the pointer would be a boat that is harder to click
+          the harder it is sailing. After everything else, because the plate
+          pass finds the heeled node as this group's first child and the boom as
+          the first group under that: a box inserted ahead of either would move
+          every label on the water.
+
+          Drawn by nothing. The renderer skips a mesh whose material is not
+          visible, while the raycaster still reads the object, so this costs a
+          matrix and no draw call. */}
+      <mesh name={`pick-${boatId}`} geometry={pick.box} material={pick.blank} />
     </group>
   );
 }

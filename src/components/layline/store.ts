@@ -5,6 +5,7 @@ import { generateRace } from "@/lib/layline/sim";
 import { DEFAULT_RACE_ID, raceMeta } from "@/lib/layline/races";
 import { FIX_HZ } from "@/lib/layline/types";
 import type { RaceData, ReplayMode, RigName } from "@/lib/layline/types";
+import { resetFreeformCamera } from "./scene/interaction";
 
 /* One race in front of the viewer at a time, held here rather than in the store
  * so the twenty-odd raceData() call sites stay zero-argument reads. Each
@@ -217,6 +218,9 @@ export const useReplay = create<ReplayStore>((set, get) => ({
     if (id === get().raceId && currentRaceId === id) return;
     if (raceMeta(id) === undefined) return;
     pointAtRace(id);
+    /* The camera a hand left pointing at the last race's windward mark is not
+     * a view of this one. It goes back to its opening state with the rig. */
+    resetFreeformCamera();
     set({ raceId: id, ...RACE_DEFAULTS });
   },
 }));

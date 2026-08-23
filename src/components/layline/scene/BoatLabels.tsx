@@ -8,6 +8,7 @@ import type { RaceData } from "@/lib/layline/types";
 import { sampleLive, setText } from "../hud/live";
 import { useReplay } from "../store";
 import { requestSceneFrame } from "./gate";
+import { hoverId } from "./interaction";
 import { MAIN_CORNERS, SKIFF } from "./skiff";
 
 /* Twelve pixels of stem, which is enough to lift the plate off the boat without
@@ -132,6 +133,7 @@ interface LabelNode {
   shown: boolean;
   lead: boolean;
   covered: boolean;
+  hovered: boolean;
 }
 
 /* The panels, in the label layer's own coordinates. A plate drawn under one of
@@ -269,6 +271,7 @@ export function BoatLabels({ race }: { race: RaceData }) {
         shown: false,
         lead: false,
         covered: false,
+        hovered: false,
       };
     });
     parent.append(layer);
@@ -755,6 +758,9 @@ export function BoatLabels({ race }: { race: RaceData }) {
     if (built === null) return;
     const { hitDock, dodgeDocks, clearFront, restack, settle, repair } = passes;
     const { followId } = useReplay.getState();
+    /* Read once a frame rather than once a plate: six plates asking the same
+     * question would get the same answer six times. */
+    const marked = hoverId();
     const live = sampleLive(race);
     const camera = state.camera;
     /* The rig set position and aim a moment ago and nothing has flushed it into
@@ -1013,6 +1019,16 @@ export function BoatLabels({ race }: { race: RaceData }) {
       if (hidden !== node.covered) {
         node.root.classList.toggle(styles.boatLabelCovered, hidden);
         node.covered = hidden;
+      }
+      /* The plate is where the water says which boat the pointer would pick, or
+       * which one the focused standings row names. Written as an attribute
+       * rather than as a class because it is set from two places and read by
+       * one rule. */
+      const under = marked === race.boats[i].id;
+      if (under !== node.hovered) {
+        if (under) node.root.dataset.hover = "true";
+        else delete node.root.dataset.hover;
+        node.hovered = under;
       }
       /* A boat with no progress sample has no place yet, and a place nobody
        * measured is a dash rather than a number. */

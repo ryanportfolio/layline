@@ -32,10 +32,26 @@
    at the outside, power2.inOut, never looping. Reduced motion turns SETTLE into
    a cut and leaves every other verb reachable by hand.
 
-   BANNED HERE: post-processing and bloom, orbit controls, caustic stripe and
-   tiled water textures, invented numerals, decorative status lights, drop
-   shadows on panels (a 1px dim rule does that job), and gradients inside any
-   panel.
+   BANNED HERE: post-processing and bloom, library orbit controls, caustic
+   stripe and tiled water textures, invented numerals, decorative status lights,
+   drop shadows on panels (a 1px dim rule does that job), and gradients inside
+   any panel.
+
+   ORBIT CONTROLS, amended 2026-08-23 from banned outright to banned as a
+   library. What the ban was aimed at is a rig dropped on the scene with no
+   opinion in it: free to sit under the water, inside a hull, or a kilometre off
+   the course, and free to fight whichever automatic rig is composing at the
+   same time. That is still banned, and no such library is installed.
+     What ships instead is Freeform, a fourth rig built like the other three. It
+   composes the same shot struct, it is seeded from the shot already on screen
+   so taking the camera by hand is a continuation rather than a cut, its pitch,
+   range and eye height are bounded so it cannot stand anywhere the automatic
+   rigs would not, and it is exclusive with them so nothing is ever composing
+   against a hand. It hands back through the same 1.2s SETTLE, and reduced
+   motion cuts every ease it owns while leaving all of it reachable.
+     The reason it earned the amendment: the replay is a reconstruction, and a
+   reconstruction nobody can look around is a video. Every automatic rig answers
+   the question the page chose. This one answers the viewer's.
 
    THREE GRADIENT SURFACES, amended 2026-08-23 from two. The sky, the water,
    and now the page ground, which carries two radial falls in sky-horizon and
@@ -1053,6 +1069,42 @@
 
 .viewButton.segButtonOn {
   background: color-mix(in srgb, var(--ink) 24%, transparent);
+}
+
+/* Where to point the camera, beside the choice of which camera it is. Quieter
+   than the rig group by one step: these are places to look, and the rig is
+   still the thing doing the looking. Every one of them is also a gesture on the
+   water, so nothing here is the only way in. */
+.cameraGroup {
+  border-color: var(--rule);
+}
+
+.cameraGroup .viewButton {
+  min-width: 44px;
+  border-right-color: var(--rule);
+  color: var(--ink-dim);
+  font-weight: 600;
+}
+
+.cameraGroup .viewButton:hover {
+  color: var(--ink);
+}
+
+/* Freeform is the one state where a finger on the water is steering a camera
+   rather than scrolling the page, so it is the only state that takes the
+   gesture. The attribute leaves with the mode and the mode has a button, which
+   is what keeps a phone from ever being stuck unable to scroll past the
+   replay. */
+.canvasLayer[data-camera="freeform"] {
+  touch-action: none;
+}
+
+/* The plate over the boat under the pointer, or over the boat whose standings
+   row has focus. The same lift the followed boat's plate carries, so hovering
+   says selectable in the language the page already uses for selected. */
+.boatLabel[data-hover="true"] .labelBox {
+  border-color: var(--ink);
+  color: var(--ink);
 }
 
 /* The camera choices are meaningless while the chart owns the viewport. One

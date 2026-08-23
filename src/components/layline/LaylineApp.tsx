@@ -15,6 +15,7 @@ import { Transport } from "./hud/Transport";
 import { VmgStrip } from "./hud/VmgStrip";
 import { ChartView } from "./svg/ChartView";
 import { AUTOPLAY_FROM, raceData, useReplay } from "./store";
+import { useSpaceToggle, useWaterPointer, useWheelZoom } from "./useWaterPointer";
 
 /* WebGL cannot render on the server, and the loading state has nothing to add:
  * the server-rendered chart is already on screen in the layer above and stays
@@ -64,6 +65,7 @@ export function LaylineApp({
   const race = useMemo(() => raceData(), []);
   const live = useReplay((state) => state.webglOk);
   const chart2d = useReplay((state) => state.chart2d);
+  const rig = useReplay((state) => state.rig);
 
   /* On desktop the chart lives 350ms past the renderer's first frame so it
    * can fade out instead of cutting; boot inside its own 1.2s reveal delay
@@ -140,11 +142,6 @@ export function LaylineApp({
     return stop;
   }, [autoplay]);
 
-  /* The water is the biggest play/pause target on the page, video-player
-   * style. A press only counts as a click if the pointer barely moved; a drag
-   * or a touch scroll travels past the threshold (or ends in pointercancel)
-   * and leaves playback alone. The docks and top bar sit above this layer, so
-   * their controls never fall through to it. */
   /* One word to a line, sized so the longest of them fills the viewer. 0.6em is
    * this face's rough average advance, which is close enough to pick a size
    * that never runs past the pane; the cap stops a two word name filling the
@@ -159,31 +156,31 @@ export function LaylineApp({
     return `min(168px, calc(86cqi / ${(longest * 0.6).toFixed(2)}))`;
   }, [bootWords]);
 
-  const press = useRef<{ x: number; y: number; id: number } | null>(null);
-
   /* The water is also the one surface with no native pointer on it: the boat
-   * cursor draws its own, and it needs the layer to hang the listeners off. */
+   * cursor draws its own, and it needs the layer to hang the listeners off.
+   * Every pointer rule the water carries hangs off the same element: picking a
+   * boat, steering the freeform camera, and the click on open water that has
+   * always been this page's play/pause. */
   const waterRef = useRef<HTMLDivElement | null>(null);
+  useWaterPointer(waterRef, live);
+  useWheelZoom(waterRef, live && rig === "freeform" && !chart2d);
+  useSpaceToggle();
 
   return (
     <div className={styles.stage} data-boot={boot}>
       <div
         ref={waterRef}
         className={live ? `${styles.canvasLayer} ${styles.canvasLive}` : styles.canvasLayer}
-        onPointerDown={(event) => {
-          if (!live || event.button !== 0) return;
-          press.current = { x: event.clientX, y: event.clientY, id: event.pointerId };
-        }}
-        onPointerUp={(event) => {
-          const start = press.current;
-          press.current = null;
-          if (!start || start.id !== event.pointerId) return;
-          if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 8) return;
-          useReplay.getState().toggle();
-        }}
-        onPointerCancel={() => {
-          press.current = null;
-        }}
+        /* Touch belongs to the page until the visitor asks for the camera.
+           Only while the freeform rig is up does a finger on the water stop
+           being a scroll, and the attribute goes away with the mode, so a
+           phone can never be left unable to scroll past the replay. */
+        /* Gated on a live renderer as well as on the mode. The store outlives
+           a canvas, so a revisit or a lost context can leave the rig set to
+           freeform with no frame on screen, no pointer handlers attached and
+           no transport to change it with: the attribute alone would then hold
+           the page's scroll hostage over a picture nobody can steer. */
+        data-camera={live && rig === "freeform" && !chart2d ? "freeform" : undefined}
       >
         {/* 2D mode hides the renderer, it does not unmount it: the replay clock
             runs inside the render loop, and the boat plates the scene owns hang
