@@ -130,11 +130,7 @@ export function Transport() {
       <div className={clsx(styles.segGroup, styles.viewGroup)}>
         <button
           type="button"
-          className={clsx(
-            styles.segButton,
-            styles.viewButton,
-            chart2d && styles.segButtonOn,
-          )}
+          className={clsx(styles.segButton, styles.viewButton, chart2d && styles.segButtonOn)}
           aria-label="Top down chart view"
           aria-pressed={chart2d}
           data-control="chart2d"
@@ -155,20 +151,12 @@ export function Transport() {
           Switch to 3D
         </button>
       ) : (
-        <div
-          className={clsx(styles.segGroup, styles.viewGroup)}
-          role="group"
-          aria-label="Camera rig"
-        >
+        <div className={clsx(styles.segGroup, styles.viewGroup)} role="group" aria-label="Camera rig">
           {RIGS.map((entry) => (
             <button
               key={entry.name}
               type="button"
-              className={clsx(
-                styles.segButton,
-                styles.viewButton,
-                rig === entry.name && styles.segButtonOn,
-              )}
+              className={clsx(styles.segButton, styles.viewButton, rig === entry.name && styles.segButtonOn)}
               aria-label={`Camera rig ${entry.label}`}
               aria-pressed={rig === entry.name}
               onClick={() => setRig(entry.name)}

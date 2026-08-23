@@ -1,18 +1,12 @@
 import type { RaceData } from "@/lib/layline/types";
 import styles from "@/app/layline.module.css";
 import notes from "./NotesSection.module.css";
+import { BoatMark } from "./BoatMark";
 import { EngineRoom } from "./engine/EngineRoom";
 import { TelemetryPipeline } from "./TelemetryPipeline";
 
 function BoatBullet() {
-  return (
-    <svg className={notes.boatBullet} viewBox="0 0 42 24" aria-hidden="true">
-      <path className={notes.boatWake} d="M1 17h13M5 21h8" />
-      <path className={notes.boatHull} d="M12 15h27l-5 6H18z" />
-      <path className={notes.boatMast} d="M24 15V2" />
-      <path className={notes.boatSail} d="M22 4v10H13zM26 3v11h10z" />
-    </svg>
-  );
+  return <BoatMark className={notes.boatBullet} />;
 }
 
 export function NotesSection({ race }: { race: RaceData }) {

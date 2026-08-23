@@ -150,7 +150,7 @@ test("the finish strip prints the results the race already holds", () => {
 });
 
 /* The engine ident counts the bench window, not the fleet. The fleet total is
-   back on the page in the build board's "Fixes the sim wrote" row, and the
+   back on the page in the build board's "Samples generated" row, and the
    Debrief panel above prints it too. */
 test("the seed writes 1711 fixes across the fleet", () => {
   assert.equal(totalFixes(race), 1711);

@@ -1,0 +1,27 @@
+/* Over the renderer and the 2D chart, under the docks, and never in the way of
+   a press: the water below is the page's play/pause target. */
+.layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.boat {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  will-change: transform;
+}
+
+.boatShown {
+  opacity: 1;
+}
+
+.mark {
+  width: 100%;
+  height: 100%;
+  color: var(--wind);
+}

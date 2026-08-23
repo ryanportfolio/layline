@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import styles from "@/app/layline.module.css";
+import { BoatCursor } from "./BoatCursor";
 import { CaptureBridge } from "./CaptureBridge";
 import { Instruments } from "./hud/Instruments";
 import { Standings } from "./hud/Standings";
@@ -87,9 +88,14 @@ export function LaylineApp({ children }: { children: ReactNode }) {
    * their controls never fall through to it. */
   const press = useRef<{ x: number; y: number; id: number } | null>(null);
 
+  /* The water is also the one surface with no native pointer on it: the boat
+   * cursor draws its own, and it needs the layer to hang the listeners off. */
+  const waterRef = useRef<HTMLDivElement | null>(null);
+
   return (
     <div className={styles.stage}>
       <div
+        ref={waterRef}
         className={live ? `${styles.canvasLayer} ${styles.canvasLive}` : styles.canvasLayer}
         onPointerDown={(event) => {
           if (!live || event.button !== 0) return;
@@ -114,6 +120,7 @@ export function LaylineApp({ children }: { children: ReactNode }) {
           <SceneIsland race={race} />
         </div>
         {live && chart2d ? <ChartView race={race} /> : null}
+        <BoatCursor targetRef={waterRef} />
       </div>
 
       <TopBar race={race} />
