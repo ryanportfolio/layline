@@ -40,9 +40,17 @@ export default function LaylinePage() {
       <div className={styles.prototypeBar}>
         <strong>Layline race replay</strong>
         <span>2D / 3D playback // seeded telemetry</span>
-        <Link href="https://github.com/ryanportfolio/layline">
-          <strong>View source</strong>
-        </Link>
+        {/* The mark rides the right end of the bar and links home, the same
+            job it does in the colophon. The source link beside it keeps its
+            own destination. */}
+        <span className={styles.barRight}>
+          <Link className={styles.barHouseLink} href="https://fullbuild.ai" aria-label="fullbuild.ai home">
+            <RailLogo className={styles.barHouseMark} />
+          </Link>
+          <Link href="https://github.com/ryanportfolio/layline">
+            <strong>View source</strong>
+          </Link>
+        </span>
       </div>
 
       <div className={styles.statusBanner}>
