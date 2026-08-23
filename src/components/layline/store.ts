@@ -80,6 +80,11 @@ const RACE_DEFAULTS = {
   followId: "nzl",
   rig: "tv" as RigName,
   chart2d: false,
+  /* Re-armed with the race, unlike introDone. The brief states this race's
+   * wind, line and fleet, so a rail selection has a new brief to read and
+   * gets one; a latch that survived the swap would drop a viewer straight
+   * into a race nobody had been briefed on. */
+  briefDone: false,
 };
 
 interface ReplayStore {
@@ -107,6 +112,12 @@ interface ReplayStore {
    * on it: the prestart is five seconds long and spending it behind a cover
    * would mean the gun goes off where nobody can see it. */
   introDone: boolean;
+  /* True once the race brief on the boot cover has been released, by its
+   * Continue button or by Enter. The library's autoplay waits on this the way
+   * the story page's waits on introDone: the prestart is ten seconds long and
+   * running it behind a brief nobody has finished reading would spend the gun
+   * where it cannot be seen. */
+  briefDone: boolean;
   /* Capture hold. The frame loop stops advancing the clock and the canvas
    * drops to on-demand rendering, so a screenshot is taken of a stated time
    * rather than of whenever the shutter happened to fall. */
@@ -126,6 +137,7 @@ interface ReplayStore {
   setWebglOk: (ok: boolean) => void;
   setHudReady: (ready: boolean) => void;
   setIntroDone: (done: boolean) => void;
+  releaseBrief: () => void;
   freeze: () => void;
   thaw: () => void;
   selectRace: (id: string) => void;
@@ -152,6 +164,7 @@ export const useReplay = create<ReplayStore>((set, get) => ({
   webglOk: false,
   hudReady: false,
   introDone: false,
+  briefDone: RACE_DEFAULTS.briefDone,
   frozen: false,
 
   /* Play from the end means play it again: the replay never loops on its own,
@@ -202,6 +215,14 @@ export const useReplay = create<ReplayStore>((set, get) => ({
   setWebglOk: (ok) => set({ webglOk: ok }),
   setHudReady: (ready) => set({ hudReady: ready }),
   setIntroDone: (done) => set({ introDone: done }),
+
+  /* One way only. The brief is a gate a viewer walks through, not a mode they
+   * can be put back into, and the second press of a button already fading out
+   * must not restart the autoplay it triggered. */
+  releaseBrief: () => {
+    if (get().briefDone) return;
+    set({ briefDone: true });
+  },
   freeze: () => set({ frozen: true, playing: false }),
   thaw: () => set({ frozen: false }),
 

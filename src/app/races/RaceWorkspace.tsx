@@ -815,7 +815,11 @@ export function RaceWorkspace({
           venue={venue}
           autoplay="immediate"
           boot="sea"
-          bootLabel={meta?.name}
+          bootBrief={
+            meta === undefined
+              ? undefined
+              : { name: meta.name, venue: meta.venue, dateLabel: meta.dateLabel }
+          }
         >
           {children}
         </LaylineApp>

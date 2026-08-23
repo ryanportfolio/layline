@@ -1913,6 +1913,25 @@
     background: var(--page-ground);
   }
 
+  /* Behind a brief nobody has read, the rest of the column is dead weight. The
+     brief is held to one screen here (bootSea.module.css) while the stage is
+     the whole stacked console, about 1300px on a handset, so the cover ran on
+     for 500-odd px of empty water under the button, and grew again a second
+     later as the docks arrived and pushed the column down. Capped to the same
+     screen the brief is, the gate ends where the brief ends.
+
+     The canvas states its own 48vh above and the docks are pinned to their
+     natural height, so nothing underneath the cover resizes while it is up:
+     releasing the gate drops the cap and the column is already the shape it
+     was going to be. */
+  .stage[data-gate="brief"] {
+    max-height: calc(100svh - var(--composer-bar, 59px) - env(safe-area-inset-bottom));
+  }
+
+  .stage[data-gate="brief"] > * {
+    flex: none;
+  }
+
   .dockTop {
     position: static;
     order: 1;

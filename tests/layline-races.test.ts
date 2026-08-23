@@ -816,9 +816,15 @@ test("the library starts playback on its own mount, never on the story's intro l
   );
 
   const app = source("src/components/layline/LaylineApp.tsx");
+  /* Immediate autoplay never waits on introDone, the latch that survives a
+     navigation: it waits on the brief in front of it, or on nothing. */
   assert.ok(
-    app.includes('if (autoplay === "immediate" || replay.introDone)'),
-    "immediate autoplay no longer bypasses the intro latch",
+    app.includes('autoplay === "immediate" ? (briefed ? "brief" : null) : "intro"'),
+    "immediate autoplay no longer picks its own gate",
+  );
+  assert.ok(
+    app.includes('if (gate === "brief" && replay.briefDone)'),
+    "the briefed library no longer starts on the brief's release",
   );
   assert.ok(
     app.includes("if (autoplay === false) return;"),
@@ -864,26 +870,46 @@ test("the library covers the renderer's boot with the sea, the story page with i
      opacity moves. */
   const cover = source("src/components/layline/bootSea.module.css");
   assert.match(cover, /linear-gradient/);
-  /* The cover names the race it is loading, in the display face, and the page
-     preloads that face: it is declared font-display: block, so without the
-     preload the title card holds unpainted through the wait it exists to fill. */
-  assert.match(cover, /\.label \{/);
-  /* One word to a line, sized against the pane rather than the window, so the
-     longest word in a race name is what sets the size. */
-  assert.ok(cover.includes("container-type: inline-size"), "the title stopped sizing to the pane");
-  assert.ok(app.includes("86cqi"), "the title stopped filling the pane's width");
-  assert.ok(app.includes("className={sea.word}"), "the title stopped breaking a word to a line");
-  assert.ok(cover.includes("var(--font-pangram)"), "the title card left the display face");
+  assert.ok(cover.includes("container-type: inline-size"), "the brief stopped sizing to the pane");
+
+  /* The cover used to name the race and wait. It now spends the wait stating
+     the race, two ways: a chart of the last ten seconds before the gun, and
+     the same ten seconds as three panels, with a switch between them. It is
+     still the race the rail names, and the page still preloads the display
+     face the name is set in, which is declared font-display: block. */
   assert.ok(
-    workspace.includes("bootLabel={meta?.name}"),
-    "the cover stopped naming the race the rail names",
+    workspace.includes("{ name: meta.name, venue: meta.venue, dateLabel: meta.dateLabel }"),
+    "the cover stopped briefing the race the rail names",
   );
+  assert.ok(cover.includes("var(--font-pangram)"), "the race name left the display face");
   const racesPage = source("src/app/races/page.tsx");
   assert.ok(
     racesPage.includes('href="/assets/fonts/pangram-display.woff2"'),
     "the library stopped preloading the face its title card is set in",
   );
 
+  /* Both views, one switch, one gate. Each view owns its own drawing and its
+     own prestart loop, because only one is mounted at a time and both seek the
+     same store clock; the shell owns the header, the footer and the way
+     through. Neither view may release the brief. */
+  const shell = source("src/components/layline/RaceBrief.tsx");
+  assert.ok(shell.includes('data-brief-switch="chart"'), "the switch stopped offering the chart");
+  assert.ok(shell.includes('data-brief-switch="panels"'), "the switch stopped offering the panels");
+  assert.ok(shell.includes("<BriefChart race={race} reduced={reduced} />"), "the chart left the shell");
+  assert.ok(shell.includes("<BriefPanels race={race} reduced={reduced} />"), "the panels left the shell");
+  assert.ok(shell.includes("Start the race"), "the way through changed its words");
+  for (const name of ["BriefChart", "BriefPanels"]) {
+    const view = source(`src/components/layline/${name}.tsx`);
+    assert.ok(view.includes("state.seek(race.tMin + phase * span)"), `${name} stopped seeking the store`);
+    assert.ok(!view.includes("releaseBrief"), `${name} took the gate off the shell`);
+    assert.ok(view.includes("briefFacts(race)"), `${name} stopped reading the race's own facts`);
+  }
+
+  /* The store re-arms the gate per race, unlike the story page's intro, so a
+     second race gets its own brief. */
+  const store = source("src/components/layline/store.ts");
+  assert.ok(store.includes("briefDone: false"), "the gate stopped re-arming with the race");
+  assert.ok(cover.includes("--brief-accent: var(--wind);"), "the accent left the console's wind token");
   assert.match(cover, /transition:\s*opacity 900ms/);
   assert.match(cover, /\.out \{\s*opacity: 0;/);
 });

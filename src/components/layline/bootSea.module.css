@@ -1,4 +1,5 @@
-/* The library's boot cover: the sea the scene opens on, painted flat.
+/* The library's boot cover: the sea the scene opens on, painted flat, with the
+   race brief laid over it.
 
    It lives in its own module because the console stylesheet bans gradients
    inside it, the sky and the water being the renderer's job there. This is the
@@ -8,22 +9,28 @@
    to the bright band at the horizon around a fifth of the way down, then water
    falling away to deep.
 
+   The brief is one chart and the readings that hang off it: the last ten
+   seconds before the gun seen from above at true scale, then the fleet in the
+   order it lies along the line, then four numerals. Three panels made three
+   equal readings out of one subject, and the bias figure in the third was
+   computed from the wind in the second and the line in the first.
+
    Nothing else moves while this leaves. The canvas underneath sits at full
    strength the whole time, so the only animated value on the page is this
-   layer's opacity, and what a viewer sees is a still sea starting to move. */
+   layer's opacity, and what a viewer sees is a still sea starting to move.
+
+   The console's bans hold up here: no drop shadow anywhere below, no gradient
+   inside a panel, and exactly one accent. The gradient above is the sea, which
+   is one of the three surfaces allowed to carry one. */
 
 .cover {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
-  /* The title is sized against this box rather than the window, so the words
-     fill the viewer's own width whatever the rails either side are doing. */
+  display: flex;
+  flex-direction: column;
+  /* The brief is sized against this box rather than the window, so the type
+     fills the viewer's own width whatever the rails either side are doing. */
   container-type: inline-size;
-  /* Centred on the water rather than on the box: white on the bright half of
-     the sky is thin, and the block is tall when a race name runs to four
-     words. */
-  padding-top: 13%;
   /* The chart, the no-WebGL answer, reveals itself on a timer at z-index 2; a
      viewer whose renderer is merely slow should not watch it arrive. The top
      bar and the docks share this level and come later in the DOM, so they stay
@@ -40,41 +47,1228 @@
   );
   opacity: 1;
   transition: opacity 900ms var(--ease);
-  pointer-events: none;
+
+  /* The brief's own closed palette. Ink and hairlines are stated here rather
+     than taken from the console's theme tokens because what they sit on is the
+     sea, which the library themes do not repaint: a sailcloth theme would hand
+     this layer near-black ink over deep water. */
+  --brief-ink: #f4f8fb;
+  /* Stated as a colour, never as an alpha over the ink. The console's rule:
+     "Dim is a token, never an opacity: composited contrast has to be
+     knowable." This is its own --ink-dim, which is what the dock labels a
+     reader sees thirty seconds later are set in. */
+  --brief-dim: #a4bccb;
+  /* The console's --rule, stated. Hairlines are not text, so an alpha here
+     costs nothing that has to be knowable. */
+  --brief-hair: rgba(164, 188, 203, 0.28);
+  /* 0.86, the alpha the console gives its own single panel ground, and it is
+     a legibility floor rather than a preference. The plates start about a
+     fifth of the way down the cover, which is where the gradient is the
+     sky-horizon token nearly neat. Measured against that band at the old 0.42:
+     the panel labels sat on 3.23:1 and the dim ink on 1.78:1, where 10px text
+     needs 4.5. At 0.86 the worst point on the plate is 11.17:1 for ink and
+     6.18:1 for dim. A plate that lets the picture through is worth nothing if
+     the reader cannot read what is on it. */
+  --brief-panel: rgba(7, 30, 50, 0.86);
+  /* The one accent, and it is the console's own wind token rather than a hex
+     of this layer's invention. The contract at the top of layline.module.css:
+     "amber is the wind. Dial needle, laylines, ladder rungs, the start line
+     before the gun. Nothing else may borrow it." Everything this layer draws
+     is before the gun, so amber gets the ladder rungs, the wind arrow and its
+     tag, the start line itself, the bias wedge, the mark over the favored end,
+     the seconds that end is worth, and the direction trace under the plot. The
+     status hairline is not wind and does not take it. The token is declared on
+     .shell and no theme restates it, so it holds on all five. */
+  --brief-accent: var(--wind);
+
+  /* The three faces, and the console's own division of labour between them.
+     Pangram carries the race name. Martian is quarantined to measured values,
+     because "a number set in Archivo is a number nobody measured". Archivo
+     carries the labels and the button, because "a button set in mono is a lie
+     about where the data is". */
+  --brief-mono: var(--font-martian), monospace;
+  --brief-sans: var(--font-archivo), sans-serif;
+
+  /* The header sits on the gradient's top band, which is the sky-horizon token
+     nearly neat, so its ink has to follow that token rather than the plates'.
+     Stated here as the light-sky branch because the shipped token is light:
+     the server has no computed style to read, and defaulting to the branch the
+     shipped sky needs is what keeps the first painted frame legible. LaylineApp
+     measures the token's WCAG luminance after hydration and writes the white
+     branch over these two if the sky came out dark. */
+  --brief-head-ink: color-mix(in srgb, var(--water-deep) 88%, var(--sky-horizon));
+  /* Stated, never an opacity, for the same reason as --brief-dim. 88 and not
+     the 78 this started at: the meta line is 10px, so it owes 4.5:1 against
+     the sky it sits on, and 78 measured 4.44:1 at 1440 and 4.36:1 at 606,
+     sampled off a screenshot. At 88 it reads 5.76:1 and 4.95:1. */
+  --brief-head-dim: color-mix(in srgb, var(--brief-head-ink) 88%, var(--sky-horizon));
+  --brief-head-line: color-mix(in srgb, var(--water-deep) 30%, transparent);
+
+  /* Nothing is pinned over the brief at this width, so the footer sits on the
+     padding it was drawn with. The narrow branch below hands this the height
+     of the analyst's composer. */
+  --brief-foot-gap: 0px;
 }
-
-/* The race being loaded, named while it loads. Pangram, the face this page
-   spends on the wordmark and on a section heading, at a size that reads as the
-   title card it is rather than a status line. It is decorative to a screen
-   reader: the rail already names the race, and the top bar names it again the
-   moment the scene is up, so announcing it a third time is noise. */
-.label {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  color: #fff;
-  font-family: var(--font-pangram);
-  /* Set per race on the element: the size is whatever makes the longest word
-     in that name fill the pane, capped so a short name does not become a
-     billboard. */
-  line-height: 0.92;
-  letter-spacing: -0.025em;
-  text-align: center;
-}
-
-.word {
-  display: block;
-}
-
-
 
 .out {
   opacity: 0;
 }
 
-/* A viewer who asked for less motion gets the two pictures and no dissolve. */
+/* Briefed, the cover has to outrank the console it is covering. The top bar and
+   the three docks sit at z-index 3 and come later in the DOM, so at the same
+   level they win, and an instrument dock arriving over a brief nobody has read
+   is the exact pop this layer exists to stop. The skip links stay above at 20:
+   the way past the brief must never be behind it. */
+.briefed {
+  z-index: 4;
+}
+
+/* ---- the brief ---- */
+
+.brief {
+  display: flex;
+  flex-direction: column;
+  gap: 1.8cqw;
+  height: 100%;
+  padding: 3cqw 3.2cqw calc(2.2cqw + var(--brief-foot-gap));
+  overflow: hidden;
+  color: var(--brief-ink);
+  font-family: var(--brief-sans);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Every scroller on this layer, at every width, not just the stacked column
+   that is the only one to overflow today. The browser's default bar would be
+   the one piece of chrome on the page nobody drew.
+
+   It takes the bar the route already paints on <html>
+   (prototype/layline/scrollbar.css): 10px channel, 4px of thumb inside a 3px
+   transparent inset over padding-box, a hairline down the channel, square
+   corners because the console draws no radius anywhere.
+
+   The inks are this layer's own rather than that stylesheet's literals. Those
+   are --page-ground, --ink-dim and --rule, which are theme tokens; this bar
+   sits on the sea, which the themes deliberately do not repaint, so a #070f16
+   channel would lay a black stripe down a picture of water. Same geometry,
+   same light-thumb-on-dark-channel relationship, this layer's palette. */
+.brief ::-webkit-scrollbar,
+.brief::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.brief ::-webkit-scrollbar-track,
+.brief::-webkit-scrollbar-track {
+  background: var(--brief-panel);
+  border-left: 1px solid var(--brief-hair);
+}
+
+.brief ::-webkit-scrollbar-thumb,
+.brief::-webkit-scrollbar-thumb {
+  background: var(--brief-dim);
+  background-clip: padding-box;
+  border: 3px solid transparent;
+}
+
+.brief ::-webkit-scrollbar-corner,
+.brief::-webkit-scrollbar-corner {
+  background: var(--brief-panel);
+}
+
+/* Blink drops the ::-webkit-scrollbar geometry the moment it sees
+   scrollbar-color, so the standard properties stay behind this guard and only
+   engines with no ::-webkit-scrollbar of their own read them. The same handling
+   the route's own bar uses. */
+@supports not selector(::-webkit-scrollbar) {
+  .brief,
+  .brief * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--brief-dim) var(--brief-panel);
+  }
+}
+
+/* Header ink follows the sky it sits on. The gradient's top band is the
+   sky-horizon token nearly neat, so a light sky takes near-black type and a
+   dark one takes near-white, and the rule under the header goes with it. The
+   branch is computed in LaylineApp off the token's WCAG luminance; these are
+   the two results it writes. */
+.briefHead {
+  display: flex;
+  flex: none;
+  /* The name gets the whole width, at every size. Sharing the row with the meta
+     line left the title's budget swinging between 234 and 454px depending on
+     the viewport, so the size that fits two lines swung with it and the
+     stylesheet could not state one: the server painted 11cqw and the measured
+     fit corrected it to less than half that after hydration, which a reader saw
+     as the name popping in large and shrinking. Given the full width, 11cqw
+     fits every shipped name at every width and the fit never has to fire. */
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.7cqw;
+  min-width: 0;
+  padding-bottom: 1.4cqw;
+  border-bottom: 1px solid var(--brief-head-line);
+  color: var(--brief-head-ink);
+}
+
+.raceName {
+  /* Pangram, the face this page spends on the wordmark and on a section
+     heading, at the size that makes the race a title card rather than a status
+     line. Capped at two line boxes; RaceBrief measures and steps the size down
+     until the name fits inside them. */
+  font-family: var(--font-pangram);
+  font-weight: 400;
+  /* 9.4, not the 11 this started at, because 11 does not fit. Measured: the
+     largest size that holds each of the three shipped names inside two line
+     boxes lands between 9.41 and 10.40 cqw across nine viewport widths, and the
+     binding case is "Winter series race 2" at 9.41. A stated size above the
+     binding case is a size the measured fit has to correct after hydration, in
+     full view of the reader. Below it, the fit never fires and the server's
+     first paint is the final one. The fit stays as the net for a name longer
+     than any in the registry today. */
+  font-size: calc(9.4 * 1cqw);
+  line-height: 1.02;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+  max-height: 2.04em;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* The label size, and there is one of it: 10px Archivo on a 16px box with the
+   console's own 0.14em of dock tracking, uppercase. Every label on the layer
+   takes this rule rather than a size of its own, which is what holds the whole
+   layer to three sizes: 22 for a reading, 10 for a label, 9 inside the
+   drawing. */
+.raceMeta,
+.panelLabel,
+.stripLabel,
+.readLabel,
+.viewBtn,
+.twsUnit,
+.biasCap,
+.status {
+  font-family: var(--brief-sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  line-height: 16px;
+  text-transform: uppercase;
+}
+
+/* The meta line and the view switch share a row under the name, so the switch
+   reads as belonging to the brief's own title block rather than floating over
+   the drawing it changes. */
+.headRow {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1cqw 2cqw;
+}
+
+/* Given the row's spare width rather than its own intrinsic one: it is the
+   longest thing in the header and the only part of it that may wrap, and left
+   at flex: none it ran under the switch and off the layer at handset widths. */
+.raceMeta {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--brief-head-dim);
+}
+
+/* The console's transport already carries this control: a segmented pair, the
+   selected one filled at 14% of the ink it is set in. Repeated here in the
+   header's own two inks, because the switch sits on the sky rather than on a
+   plate and the sky's ink follows the theme's own luminance. */
+.viewSwitch {
+  display: flex;
+  flex: none;
+  border: 1px solid var(--brief-head-line);
+}
+
+.viewBtn {
+  padding: 5px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--brief-head-dim);
+  cursor: var(--house-cursor);
+  transition: background 160ms var(--ease), color 160ms var(--ease);
+}
+
+.viewBtn + .viewBtn {
+  border-left: 1px solid var(--brief-head-line);
+}
+
+.viewBtnOn {
+  background: color-mix(in srgb, var(--brief-head-ink) 14%, transparent);
+  color: var(--brief-head-ink);
+}
+
+.briefMain {
+  display: grid;
+  flex: 1;
+  /* One column at both widths, so the wide layout is the same stack as the
+     narrow one and not a second design. The plot takes whatever the three
+     fixed blocks under it leave, which is what makes the chart the thing that
+     grows when the viewer's window does. */
+  grid-template-columns: 1fr;
+  grid-template-rows: minmax(0, 1fr) auto auto auto;
+  gap: 1.8cqw;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* A 1px dim rule does the job a drop shadow would, which is the console's
+   standing rule and holds here. */
+.panel {
+  min-height: 0;
+  border: 1px solid var(--brief-hair);
+  background: var(--brief-panel);
+  overflow: hidden;
+  animation: briefRise 420ms var(--ease) both;
+}
+
+.panel:nth-child(2) {
+  animation-delay: 70ms;
+}
+
+.panel:nth-child(3) {
+  animation-delay: 140ms;
+}
+
+.panel:nth-child(4) {
+  animation-delay: 210ms;
+}
+
+@keyframes briefRise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.panelLabel {
+  display: flex;
+  flex: none;
+  justify-content: space-between;
+  color: var(--brief-dim);
+}
+
+/* A measured value, so it leaves the label's face for the mono. */
+.panelCount {
+  color: var(--brief-dim);
+  font-family: var(--brief-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: none;
+}
+
+/* ---- the plot: the last ten seconds, from above, at true scale ---- */
+
+.plotPlate {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.plotBox {
+  flex: 1;
+  min-height: 0;
+}
+
+.plot {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Metres, one to one, with y negated for the screen's downward axis: the same
+   frame components/layline/svg/chartFrame.ts draws the whole race in. Strokes
+   are non-scaling so a hairline stays a hairline whatever the window does to
+   the metres per pixel. */
+/* Every width below is stated in pixels and multiplied back into metres by
+   --plot-px, the measured metres per pixel RaceBrief writes onto the drawing.
+   vector-effect: non-scaling-stroke would have been shorter and it is wrong
+   here: Chrome then reads stroke-dasharray in device pixels too, so the dash
+   that reveals how far a boat has sailed repeated eight times down its own
+   track instead of drawing one prefix of it. Scaling the width keeps the dash
+   in metres, where the reveal is measured. */
+
+/* Solid and heavy is surveyed water: the line itself, in the wind's colour,
+   because the console's contract names "the start line before the gun" as one
+   of the things amber means and this whole layer is before the gun. */
+.plotLine {
+  stroke: var(--brief-accent);
+  stroke-width: calc(2 * var(--plot-px));
+}
+
+/* The two ends are marks on the water rather than weather, so they stay in
+   ink. Open ring for the pin, filled block for the committee boat: a chart
+   separates its marks by shape, not by giving each one a colour. */
+.plotMark {
+  fill: none;
+  stroke: var(--brief-ink);
+  stroke-width: 1.4;
+}
+
+
+.plotMarkFill {
+  fill: var(--brief-ink);
+}
+
+/* Dotted is a limit rather than a thing. The rungs are contours of equal gain
+   to windward ten metres apart, so they are where the wind is, not what is on
+   the water, and they rotate as one group with it. */
+.rung {
+  fill: none;
+  stroke: var(--brief-accent);
+  stroke-width: calc(1 * var(--plot-px));
+  /* Metres, so the dot spacing is a distance on the water like everything else
+     in this drawing. */
+  stroke-dasharray: 0.3 2.4;
+}
+
+/* The water the favored end has already won: the sliver between the line and
+   the rung through its middle. It is the bias, drawn at the scale the bar
+   underneath it states, and it collapses as the breeze comes back to the
+   course axis. */
+.wedge {
+  /* Stated as a mix rather than as an alpha laid over the accent, so what the
+     reader sees on the plate is a colour this stylesheet named. */
+  fill: color-mix(in srgb, var(--brief-accent) 26%, transparent);
+  stroke: none;
+}
+
+.windStroke {
+  stroke: var(--brief-accent);
+  stroke-width: 1.4;
+}
+
+.windFill {
+  fill: var(--brief-accent);
+}
+
+/* The one figure inside the drawing that is weather, so the one that takes the
+   wind's colour out here on the water. */
+.windTag {
+  fill: var(--brief-accent);
+  font-family: var(--brief-mono);
+  letter-spacing: 0.02em;
+}
+
+.favMark {
+  fill: var(--brief-accent);
+}
+
+/* The approach still to be sailed, thin and in the dim token. Weight and not
+   hue separates it from the water already crossed, which is drawn over it in
+   the boat's own colour at twice the weight: the reader can tell the two apart
+   in a photocopy. */
+.trackAhead {
+  fill: none;
+  stroke: var(--brief-dim);
+  stroke-width: calc(1 * var(--plot-px));
+}
+
+.trackSailed {
+  fill: none;
+  stroke-width: calc(2.4 * var(--plot-px));
+}
+
+/* A near-black hull colour needs a light edge to survive the plate, the same
+   outline its ledger chip carries and the same one TrackChart gives it. */
+.trackDark {
+  fill: none;
+  stroke: var(--brief-dim);
+  stroke-width: calc(4 * var(--plot-px));
+}
+
+/* Filled is the hull now, outlined is where it will be at the gun: fill, not
+   colour, carries the difference. Both are drawn at a fixed size in pixels
+   because no hull length is in the feed, and a symbol scaled to the chart
+   would be a claim about how long these boats are. */
+.hullNow {
+  /* Set for the near-black hue, which takes a light edge to hold against the
+     plate. Every other hull leaves stroke unset, so this does nothing. */
+  stroke-width: 0.7;
+}
+
+.hullGun {
+  fill: none;
+  stroke-width: 1.2;
+}
+
+.scaleRule {
+  stroke: var(--brief-ink);
+  stroke-width: calc(1.2 * var(--plot-px));
+}
+
+/* Inside the drawing the type drops to nine, the one place on the layer it is
+   not ten, because a label out on the water is read against the chart rather
+   than against the rows beside it. Sizes are written in user units by the
+   measured metres per pixel, so nine pixels stays nine pixels at every width. */
+.plotLabel,
+.plotEnd {
+  fill: var(--brief-dim);
+  font-family: var(--brief-sans);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.plotFig {
+  fill: var(--brief-dim);
+  font-family: var(--brief-mono);
+  letter-spacing: 0.02em;
+}
+
+.plotSail {
+  fill: var(--brief-ink);
+  font-family: var(--brief-mono);
+  letter-spacing: 0.02em;
+}
+
+/* Wraps rather than truncates. Wide the two notes share a line; narrow they
+   do not fit one, and an ellipsised "favored: pin by..." states nothing. */
+.plotCap {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.4cqw 2cqw;
+}
+
+.favored {
+  margin: 0;
+  color: var(--brief-dim);
+  font-family: var(--brief-mono);
+  font-size: 10px;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.favored b {
+  color: var(--brief-ink);
+  font-weight: 500;
+}
+
+/* Hidden whole when the line is square, so a line favored by nobody does not
+   read "Favored: square by" with the sentence left open. */
+.favBy {
+  white-space: nowrap;
+}
+
+.favSec {
+  color: var(--brief-accent);
+}
+
+/* ---- the direction strip: where the breeze went across the ten seconds ---- */
+
+/* The one place the shift is legible as a shape. The speed moves about half a
+   metre a second across the prestart and the direction swings four to eight
+   degrees, taking the favored end with it on two of the three seeds, so this
+   band plots the direction and the readings row carries the speed. */
+.stripPlate {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  height: 28px;
+  padding: 0 10px;
+}
+
+.stripLabel {
+  flex: none;
+  color: var(--brief-dim);
+}
+
+.stripPlot {
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+}
+
+.stripValue {
+  flex: none;
+  color: var(--brief-ink);
+  font-family: var(--brief-mono);
+  font-size: 10px;
+  line-height: 16px;
+}
+
+/* The course axis, which is the line the favored end changes hands across. */
+.stripRule {
+  /* Dotted like the ladder rungs, and for the same reason: it is a limit
+     rather than a thing. Dim rather than amber, because a line square to the
+     course is geometry and not weather. */
+  stroke: var(--brief-dim);
+  stroke-width: 1;
+  stroke-dasharray: 1 3;
+}
+
+.stripTrace {
+  fill: none;
+  stroke: var(--brief-accent);
+  stroke-width: 1.5;
+}
+
+.stripDot {
+  fill: var(--brief-accent);
+}
+
+/* ---- the fleet, in the order it lies along the line ---- */
+
+.ledger {
+  display: flex;
+  flex-direction: column;
+  /* No gap between rows: the line box is the rhythm, and eight pixels between
+     six of them was sixty pixels the chart above wanted more. */
+  gap: 0;
+  padding: 10px 12px;
+}
+
+.ledger .panelLabel {
+  margin-bottom: 6px;
+}
+
+/* Pin end to boat end, which is left to right on the plot above it, so the
+   list and the drawing are visibly the same six things in the same order. */
+.fleetRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--brief-mono);
+  font-size: 10px;
+  line-height: 20px;
+}
+
+.chip {
+  flex: none;
+  width: 9px;
+  height: 9px;
+}
+
+/* A hue that is near the plate ground needs an edge to hold against it. */
+.chipDark {
+  outline: 1px solid var(--brief-dim);
+}
+
+.sail {
+  flex: none;
+  width: 52px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* The one part of the row that gives way. A narrow console truncates the team
+   name rather than wrapping the sail number or the metres, which are the two
+   things the row is for. */
+.boatName {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--brief-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Both figure columns are wide enough for their own longest reading at 10px
+   Martian, which is a wide face: the plate clips what overflows, and a boat
+   sitting "1.9 m of" the line is worse than a truncated team name. */
+.across,
+.slot {
+  flex: none;
+  color: var(--brief-dim);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.across {
+  width: 44px;
+}
+
+.slot {
+  width: 64px;
+}
+
+.fleetFoot {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 16px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--brief-hair);
+  color: var(--brief-dim);
+  font-family: var(--brief-mono);
+  font-size: 10px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+/* ---- the readings ---- */
+
+.readCell {
+  min-width: 0;
+}
+
+.reads {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px 12px;
+  padding: 10px 12px;
+}
+
+.readLabel {
+  color: var(--brief-dim);
+}
+
+.readValue {
+  font-family: var(--brief-mono);
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 26px;
+  white-space: nowrap;
+}
+
+/* ---- the panel view ----
+
+   The same ten seconds read as three plates rather than one drawing: the fleet
+   at the line, the breeze on a dial with its trace, and what the line is worth
+   in it. Everything the two views share, the plate ground, the label type, the
+   fleet row, the accent, is stated once above and used by both; only what
+   genuinely differs is here. */
+
+.panelMain {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 1.08fr 1fr 1.12fr;
+  gap: 1.8cqw;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* A plate in this view holds a stack rather than a drawing, so it states the
+   column and the padding the chart's plates state for themselves. */
+[data-brief-view="panels"] .panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9cqw;
+  padding: 1.5cqw 1.6cqw;
+}
+
+/* Six rows on their own plate, ruled, rather than six lines of a ledger under a
+   drawing. Nothing is stretching above them here either, so the foot sits under
+   the last boat instead of at the bottom of a plate taller than its rows. */
+[data-brief-view="panels"] .fleetRow {
+  padding: 0.78cqw 0;
+  border-bottom: 1px solid var(--brief-hair);
+}
+
+/* Sized to their own figures rather than to the ledger's columns. The ledger
+   states widths so its six rows line up under a drawing three columns wide;
+   here the same two columns sit on a plate a third of that, and the width they
+   were holding came straight off the boat name, which truncated. */
+[data-brief-view="panels"] .sail {
+  width: auto;
+}
+
+[data-brief-view="panels"] .slot {
+  width: auto;
+  margin-left: auto;
+  text-align: right;
+}
+
+[data-brief-view="panels"] .fleetFoot {
+  margin-top: auto;
+}
+
+.dialWrap {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dial {
+  width: 220px;
+  max-width: 100%;
+  max-height: 100%;
+  height: auto;
+}
+
+.dialFace {
+  fill: none;
+  stroke: var(--brief-hair);
+  stroke-width: 1;
+}
+
+.dialBand {
+  fill: var(--brief-accent);
+  opacity: 0.24;
+}
+
+.dialNeedle {
+  stroke: var(--brief-accent);
+  stroke-width: 1.6;
+}
+
+.dialHead {
+  fill: var(--brief-accent);
+}
+
+.dialHub {
+  fill: var(--brief-dim);
+}
+
+.dialTicks {
+  stroke: var(--brief-dim);
+  stroke-width: 1;
+}
+
+.twsRow {
+  display: flex;
+  flex: none;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.9cqw;
+}
+
+.twsBig {
+  font-family: var(--brief-mono);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.twsUnit {
+  color: var(--brief-dim);
+}
+
+.trace {
+  flex: none;
+  width: 100%;
+  height: 4.2cqw;
+  min-height: 26px;
+}
+
+.lineDiagram {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+}
+
+.diagramEnd {
+  fill: var(--brief-ink);
+  font-family: var(--brief-mono);
+  font-size: 3.6px;
+}
+
+.diagramNote {
+  fill: var(--brief-dim);
+  font-family: var(--brief-mono);
+  font-size: 3.4px;
+}
+
+.diagramTag {
+  font-family: var(--brief-mono);
+  font-size: 4px;
+}
+
+.biasReads {
+  display: flex;
+  flex: none;
+  justify-content: space-between;
+  gap: 2cqw;
+}
+
+.biasNum {
+  font-family: var(--brief-mono);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.biasCap {
+  margin-top: 0.3cqw;
+  color: var(--brief-dim);
+}
+
+/* ---- footer ---- */
+
+.briefFoot {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2cqw;
+  animation: briefRise 420ms var(--ease) 280ms both;
+}
+
+.status {
+  flex: none;
+  margin: 0;
+  color: var(--brief-dim);
+  text-transform: none;
+  letter-spacing: 0.06em;
+}
+
+/* The two things the status line can say, stacked, so the change from one to
+   the other crossfades on the same 700ms the bar takes to finish rather than
+   cutting in the frame the bar happens to jump. */
+.statusStack {
+  position: relative;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.statusStack span {
+  transition: opacity 700ms var(--ease);
+}
+
+.statusStack span + span {
+  position: absolute;
+  inset: 0;
+  white-space: nowrap;
+}
+
+/* Hidden until the wait is long enough to be worth describing, and it fades in
+   rather than appearing, so the layer never gains a part with a cut. */
+.statusBar {
+  position: relative;
+  display: inline-block;
+  width: 14cqw;
+  height: 2px;
+  margin-left: 1cqw;
+  background: var(--brief-hair);
+  vertical-align: middle;
+  transition: opacity 400ms var(--ease);
+}
+
+/* Honest about what it is: it fills while the renderer warms and completes when
+   the renderer is up. It is a wait, not a percentage of anything, so it eases
+   out rather than running at a rate it cannot know.
+
+   A transition rather than a keyframe, and that is the whole point. The first
+   version ran a 6s animation to 88% and then swapped in a class that set
+   animation: none with width: 100%. Killing an animation drops the element back
+   to its base width before the new one applies, so the bar snapped from wherever
+   the ramp had reached straight to full, and the status text swapped in the same
+   frame. Two hard changes at one instant read as a glitch. A transition
+   interpolates from the current computed width, so the renderer arriving mid
+   ramp is one gentle 700ms settle to full instead. */
+.statusFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: var(--brief-dim);
+  transition: width var(--status-ease, 6000ms) var(--ease);
+}
+
+/* Square, like everything else on this layer and like the console's own
+   registration box, which states border-radius: 0 on whatever it rings. A pill
+   here was a control that changed shape the moment it took focus. */
+.goBtn {
+  /* Takes the footer's spare width instead of sitting in a corner of it. The
+     status line beside it is a sentence of a stated length; everything the
+     sentence does not need belongs to the way through. */
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  padding: 1.6cqw 2.4cqw;
+  overflow: hidden;
+  border: 1px solid var(--brief-ink);
+  background: var(--brief-ink);
+  color: var(--water-deep);
+  /* Archivo, the console's own primary button: mono here would be a lie about
+     where the data is, because this is a control and not a measurement.
+
+     At the reading size, not the label size. It is the one thing on the layer
+     a viewer has to do, and it was set smaller than every numeral it sits
+     under. 22px is the size the readings already use, so the layer still holds
+     to three: 22 for a reading, 10 for a label, 9 inside the drawing. */
+  font-family: var(--brief-sans);
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  line-height: 30px;
+  text-transform: uppercase;
+  /* The house pointer, never the browser hand: every control on this page
+     takes the mark the shell defines. */
+  cursor: var(--house-cursor);
+  /* Background, never shadow: the console does not raise panels and it does
+     not raise buttons either. */
+  transition:
+    background 160ms var(--ease),
+    border-color 160ms var(--ease);
+}
+
+/* The ten seconds to the gun, drawn across the foot of the thing that fires it.
+   RaceBrief writes --go-run off the replay clock every frame, so this is TRACK,
+   the console's one continuous verb, rather than the looping decoration its
+   contract rules out: "SETTLE is a UI or camera transition ... never looping".
+   It also means the button is a function of the stated time, so the capture
+   hold stops it with everything else.
+
+   currentColor, so it inverts with the button on hover instead of naming a
+   second fill this layer would then have to defend. */
+.goBtn::before {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 4px;
+  background: currentColor;
+  transform: scaleX(var(--go-run, 0));
+  transform-origin: left;
+}
+
+.goArrow {
+  display: inline-block;
+  /* Rides the same countdown, a few pixels of travel across the ten seconds,
+     so the arrow is going somewhere rather than pointing at nothing. */
+  margin-left: 0.7cqw;
+  transform: translateX(calc(var(--go-run, 0) * 8px));
+}
+
+/* Inverts, the way the console's own primary button does, rather than picking
+   up a second fill colour this layer would then have to name. */
+.goBtn:hover {
+  background: transparent;
+  color: var(--brief-ink);
+}
+
+/* Adds to the run rather than replacing it: pointing at the button must not
+   stop the countdown drawn across it. */
+/* Hover only. This layer states no focus rule of any kind, and the test that
+   pins that bans the selector by name: the console rings every focusable
+   thing on the page identically, and a second opinion here was what made the
+   button change shape the moment it took focus. */
+.goBtn:hover .goArrow {
+  transform: translateX(calc(var(--go-run, 0) * 8px + 5px));
+}
+
+/* ---- narrow: give the chart room, ground the footer ---- */
+
+/* Under the library's three-column threshold the console is taller than the
+   viewport, so the cover is too, and a brief that filled it would put its way
+   through hundreds of pixels below the fold. Held to a screen and stuck to the
+   top of one, the blocks scroll inside the brief and the footer stays where a
+   thumb can reach it.
+
+   The screen it is held to ends where the analyst's composer begins: below
+   this same width the composer leaves the flow and pins to the foot of the
+   viewport at z-index 12 (analyst.module.css), and the page already gives it
+   that much back as bottom padding. A brief measured against the whole svh
+   would put Continue underneath it, unclickable. */
+@media (max-width: 1199px) {
+  .brief {
+    position: sticky;
+    top: 0;
+    max-height: calc(100svh - var(--composer-bar, 59px) - env(safe-area-inset-bottom));
+  }
+
+  /* The composer's band, given back as padding so Continue is never drawn into
+     it. The cap above only holds while the brief is pinned; scrolled to where
+     the gate is simply fully in view, the gate's own bottom edge lands on the
+     viewport foot, and a footer flush with that edge lands under the composer.
+     Holding the footer this far off the edge clears it at both positions. */
+  .cover {
+    --brief-foot-gap: calc(var(--composer-bar, 59px) + env(safe-area-inset-bottom));
+  }
+}
+
+@container (max-width: 760px) {
+  .brief {
+    gap: 12px;
+    padding: 16px 16px calc(16px + var(--brief-foot-gap));
+  }
+
+  /* The fleet lies along 61 metres of a 70 metre line, which is about 150px at
+     this width: six sail numbers sharing it overprint into a smear, and a label
+     nobody can read is worse than no label. The ledger directly under the plot
+     names all six in the order they lie along the line and carries each hull's
+     colour, so the drawing keeps its key. */
+  .plotSail,
+  .plotEnd {
+    display: none;
+  }
+
+  .briefHead {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding-bottom: 10px;
+  }
+
+  .raceName {
+    font-size: 34px;
+  }
+
+  .raceMeta {
+    font-size: 9px;
+  }
+
+  /* Stacked, each block is as tall as what is in it and the column scrolls.
+     The plot keeps a stated height rather than shrinking with the rest: on a
+     narrow box the chart is the one thing worth the room, and the ledger is
+     what a thumb scrolls to. */
+  .briefMain,
+  .panelMain {
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+    grid-auto-rows: min-content;
+    gap: 12px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  /* Stacked, each plate is as tall as what is in it, so the two drawings the
+     panel view gives a share of a column need a stated height instead. */
+  .dialWrap {
+    flex: none;
+    min-height: 170px;
+  }
+
+  .lineDiagram {
+    flex: none;
+    height: 180px;
+  }
+
+  [data-brief-view="panels"] .panel {
+    gap: 8px;
+    padding: 12px 14px;
+  }
+
+  [data-brief-view="panels"] .fleetRow {
+    padding: 7px 0;
+  }
+
+  [data-brief-view="panels"] .fleetFoot {
+    margin-top: 8px;
+  }
+
+  .twsRow {
+    gap: 8px;
+  }
+
+  .biasReads {
+    gap: 12px;
+  }
+
+  .panel {
+    animation: none;
+  }
+
+  .plotPlate {
+    gap: 6px;
+    padding: 10px;
+  }
+
+  /* The shape of what is in it, not a stated height. A near-square box holding
+     a fleet 106 m across by 23 m deep spends four fifths of itself on empty
+     water once the scale is held isotropic, which is what a true-scale chart
+     costs if the box lies about the data. RaceBrief hands over the padded
+     data's own aspect; the floor keeps the drawing tappable on a phone if a
+     course ever comes through much wider than this one. */
+  .plotBox {
+    flex: none;
+    height: auto;
+    min-height: 96px;
+    aspect-ratio: var(--plot-aspect, 3.2);
+  }
+
+  .ledger,
+  .reads {
+    padding: 10px;
+  }
+
+  .reads {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stripPlate {
+    padding: 0 8px;
+  }
+
+  .sail {
+    width: 48px;
+  }
+
+  /* The main area scrolls under this, so the way through is never the thing
+     that scrolls off. */
+  .briefFoot {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    margin: 0 -16px -16px;
+    padding: 10px 16px 12px;
+    background: rgba(7, 30, 50, 0.94);
+  }
+
+  .status {
+    display: none;
+  }
+
+  .goBtn {
+    width: 100%;
+    padding: 14px 16px;
+    font-size: 16px;
+    line-height: 22px;
+  }
+
+  .goArrow {
+    margin-left: 8px;
+  }
+}
+
+/* Held for a capture, the layer is a still. window.__layline.freeze() stops
+   the replay clock so a screenshot can state its own race time; this is the
+   same promise for the cover over it. Without it, two captures of the same
+   stated time taken a tenth of a second apart catch the plates at two points
+   of one 420ms entrance and hash differently, which is exactly what check 1 of
+   .tmp/verify.mjs exists to catch. */
+[data-brief-still] .panel,
+[data-brief-still] .briefFoot {
+  animation: none;
+}
+
+/* The same promise for the one part of the footer that runs on wall time rather
+   than on the replay clock. The status line describes the renderer, not the
+   race, so left easing it caught two captures of the same stated time at two
+   points of one crossfade. Held, it states its values instead. */
+[data-brief-still] .statusFill,
+[data-brief-still] .statusBar,
+[data-brief-still] .statusStack span {
+  transition: none;
+}
+
+/* A viewer who asked for less motion gets the two pictures and no dissolve,
+   and a brief that states its numbers rather than sweeping to them. */
 @media (prefers-reduced-motion: reduce) {
   .cover {
+    transition: none;
+  }
+
+  .panel,
+  .briefFoot {
+    animation: none;
+  }
+
+  .statusFill,
+  .statusBar,
+  .statusStack span {
+    transition: none;
+  }
+
+  .goBtn,
+  .goArrow {
     transition: none;
   }
 }
