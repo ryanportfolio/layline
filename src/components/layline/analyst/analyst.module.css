@@ -568,6 +568,9 @@
    The plate sits over the course backdrop, so it frosts what is behind it:
    a mostly opaque ground plus blur, or hot track lines run through the text. */
 .userTurn {
+  /* Anchors the screen-reader-only speaker inside the plate rather than the
+     page, so it cannot drag the thread's scroll to the top. */
+  position: relative;
   align-self: flex-end;
   max-width: 85%;
   padding: 10px 12px;
@@ -644,6 +647,19 @@
     opacity: 1;
     transform: none;
   }
+}
+
+/* The user turn's speaker, read but never drawn. Out of flow, so the plate's
+   4px gap closes over it and the question sits where the label was. */
+.turnSpeaker {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  clip-path: inset(50%);
 }
 
 .turnLabel {

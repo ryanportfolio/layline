@@ -755,7 +755,12 @@ export function AnalystSection({ variant = "story" }: { variant?: "story" | "rai
                       className={turn.role === "user" ? styles.userTurn : styles.analystTurn}
                       aria-live={live ? "polite" : undefined}
                     >
-                      <span className={styles.turnLabel}>
+                      {/* Only the analyst is named on screen. A question is
+                          already marked as yours by the plate it sits on, and
+                          the reader who wrote it does not need telling. The
+                          label stays for a screen reader, which has no plate
+                          to read. */}
+                      <span className={turn.role === "user" ? styles.turnSpeaker : styles.turnLabel}>
                         {turn.role === "user" ? "You" : "Analyst"}
                       </span>
                       {turn.role === "user" ? (
