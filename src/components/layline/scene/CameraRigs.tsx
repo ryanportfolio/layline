@@ -8,6 +8,7 @@ import { poseAt } from "@/lib/layline/interpolate";
 import { FIX_HZ } from "@/lib/layline/types";
 import type { Pose, RaceData, ReplayMode, RigName } from "@/lib/layline/types";
 import { useReplay } from "../store";
+import { requestSceneFrame } from "./gate";
 import { SKIFF } from "./skiff";
 
 const DEG = Math.PI / 180;
@@ -191,7 +192,12 @@ function watchHead(canvas: HTMLCanvasElement): () => void {
     head.foot = clamp((floor - frame.top) / frame.height, 0.5, 1);
   };
   measure();
-  const watch = new ResizeObserver(measure);
+  /* Same as the dock band: the framing the rigs aim at moves when a panel
+   * does, and nothing in the store says so. */
+  const watch = new ResizeObserver(() => {
+    measure();
+    requestSceneFrame();
+  });
   watch.observe(canvas);
   if (bar !== null) watch.observe(bar);
   if (panel !== null) watch.observe(panel);

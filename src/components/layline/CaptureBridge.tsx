@@ -6,8 +6,17 @@ import type { ReplayMode, RigName } from "@/lib/layline/types";
 
 export interface CaptureInfo {
   t: number;
+  /* The replay time the last drawn frame was drawn at. Equal to t whenever the
+   * page is drawing, which the capture hold guarantees; behind it while the
+   * gate is holding, where the clock still runs and the picture does not. The
+   * counts below describe that frame, not t. */
+  drawnAt: number;
   drawCalls: number;
   triangles: number;
+  /* Frames the renderer has actually drawn since this canvas came up. Held
+   * either side of an action, it says whether anything was drawn for that
+   * action, which a screenshot of a settled page cannot. */
+  frames: number;
 }
 
 export interface LaylineCapture {
@@ -57,8 +66,10 @@ export function CaptureBridge() {
       mode: (mode) => store.getState().setMode(mode),
       info: () => ({
         t: store.getState().t,
+        drawnAt: renderStats.drawnAt,
         drawCalls: renderStats.drawCalls,
         triangles: renderStats.triangles,
+        frames: renderStats.frames,
       }),
     };
     window.__layline = api;
