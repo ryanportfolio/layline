@@ -69,7 +69,7 @@
 .heading {
   margin: 0 0 8px;
   font-family: var(--font-pangram);
-  font-size: clamp(32px, 5vw, 52px);
+  font-size: clamp(48px, 7.5vw, 78px);
   font-weight: 400;
   font-variation-settings: "wdth" 110, "wght" 680;
   letter-spacing: 0.01em;

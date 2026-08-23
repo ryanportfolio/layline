@@ -177,7 +177,7 @@
 .wordmark {
   margin: 0;
   font-family: var(--font-pangram);
-  font-size: clamp(38px, 7vw, 76px);
+  font-size: clamp(57px, 10.5vw, 114px);
   font-weight: 400;
   letter-spacing: 0.24em;
   line-height: 1;
