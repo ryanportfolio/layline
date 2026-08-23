@@ -1,7 +1,15 @@
 "use client";
 
 import clsx from "clsx";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { clock } from "@/lib/layline/format";
 import { FIX_HZ, type BoatMeta } from "@/lib/layline/types";
 import {
@@ -30,6 +38,15 @@ import styles from "./analyst.module.css";
  * by the route. Suggestion cards render SUGGESTED_QUESTIONS verbatim so the
  * mock route's prefix match always lands. */
 const DROPPED_LINE = "The analyst dropped the connection. Ask again.";
+
+/* No citations yet, held at module scope so every commit of a half-streamed
+ * answer hands the backdrop and the moment strip the same two objects and
+ * their memo comparisons hold. Never written to: the answered branch builds
+ * its own pair. */
+const QUIET_CITATIONS: { hot: ReadonlySet<string>; buoys: StripBuoy[] } = {
+  hot: new Set<string>(),
+  buoys: [],
+};
 
 /* ---- the composer's two states ------------------------------------------
  *
@@ -177,7 +194,12 @@ function ChipButton({
  * answers, each line under it is one evidence sentence with its chip at the
  * end, so every line renders as its own block. An answer with no newlines,
  * which a live model can still produce, falls back to one plain block. */
-function AnalystBody({
+/* Memoized, because a streaming answer re-renders the thread and every turn
+ * above the live one is the same text it was on the last commit. Without this
+ * each delta re-splits and re-parses the chips of the whole conversation. The
+ * props hold their identity across commits: the fleet map and the chip handler
+ * are both built once for the section's lifetime. */
+const AnalystBody = memo(function AnalystBody({
   text,
   live,
   fleet,
@@ -212,7 +234,7 @@ function AnalystBody({
       ))}
     </div>
   );
-}
+});
 
 export function AnalystSection() {
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -296,8 +318,8 @@ export function AnalystSection() {
    * tracks, every chip drops a lit buoy on the moment strip. Runs only when
    * the stream is idle, so a half-open chip can never feed it. */
   const { hot, buoys } = useMemo(() => {
+    if (streaming) return QUIET_CITATIONS;
     const result = { hot: new Set<string>(), buoys: [] as StripBuoy[] };
-    if (streaming) return result;
     for (let index = turns.length - 1; index >= 0; index -= 1) {
       const turn = turns[index];
       if (turn.role !== "analyst") continue;
@@ -347,18 +369,45 @@ export function AnalystSection() {
      * always carries user, assistant, ..., user. */
     if (messages[0]?.role === "assistant") messages.shift();
 
+    /* Deltas arrive about eighty times a second and a word cannot be read
+     * before it is painted, so the answer accumulates here and one commit is
+     * scheduled per frame. The finished answer is always set straight from the
+     * reader rather than left to a frame that may never come: a stream that
+     * ends in a hidden tab has no animation frame to flush it. */
+    let answer = "";
+    let finished = false;
+    /* Whether a status line is on screen, so an unchanged one is not cleared
+     * on every delta. */
+    let showing = false;
+    let pending = 0;
+    const commit = () => {
+      pending = 0;
+      if (controller.signal.aborted) return;
+      setTurns([...base, { role: "analyst", text: answer }]);
+    };
+    const schedule = () => {
+      if (pending === 0) pending = requestAnimationFrame(commit);
+    };
+    /* Every exit takes the pending frame with it. A commit landing after an
+     * abort or a failure would put a half-streamed turn back on a thread that
+     * has already moved on, which is the one thing the retry path exists to
+     * avoid. */
+    const drop = () => {
+      if (pending !== 0) cancelAnimationFrame(pending);
+      pending = 0;
+    };
+
     /* A failed answer leaves the thread as it stood before the attempt: the
      * question, one plain line, a retry. A half-streamed turn resent as
      * history would also break the route's last-must-be-user rule. */
     const fail = (line: string) => {
+      drop();
       setTurns(base);
       setStatus(null);
       setStreaming(false);
       setErrorLine(line);
     };
 
-    let answer = "";
-    let finished = false;
     try {
       /* No content-type header on purpose. The route parses the body itself
        * without sniffing the header, and the standard MIME type for JSON
@@ -392,11 +441,15 @@ export function AnalystSection() {
             continue;
           }
           if (frame.event === SSE_STATUS && typeof payload.label === "string") {
+            showing = true;
             setStatus(payload.label);
           } else if (frame.event === SSE_DELTA && typeof payload.text === "string") {
             answer += payload.text;
-            setStatus(null);
-            setTurns([...base, { role: "analyst", text: answer }]);
+            if (showing) {
+              showing = false;
+              setStatus(null);
+            }
+            schedule();
           } else if (frame.event === SSE_DONE) {
             finished = true;
           } else if (frame.event === SSE_ERROR) {
@@ -413,10 +466,12 @@ export function AnalystSection() {
         fail(DROPPED_LINE);
         return;
       }
+      drop();
       setStatus(null);
       setStreaming(false);
       setTurns(answer === "" ? base : [...base, { role: "analyst", text: answer }]);
     } catch {
+      drop();
       if (controller.signal.aborted) return;
       fail(DROPPED_LINE);
     }

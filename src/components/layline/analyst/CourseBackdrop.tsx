@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { poseAt } from "@/lib/layline/interpolate";
 import type { Pose } from "@/lib/layline/types";
 import { raceData } from "../store";
@@ -32,7 +32,15 @@ function scratchPose(): Pose {
   return { x: 0, y: 0, hdg: 0, heel: 0, twa: 0, sog: 0, cog: 0, kite: 0 };
 }
 
-export function CourseBackdrop({ hot }: { hot: ReadonlySet<string> }) {
+/* Memoized: the tracks are multi kilobyte path strings that never change
+ * after the first build, and the panel around this re-renders on every word of
+ * a streaming answer. The hot set holds its identity through a stream, so the
+ * backdrop reconciles when an answer finishes and not before. */
+export const CourseBackdrop = memo(function CourseBackdrop({
+  hot,
+}: {
+  hot: ReadonlySet<string>;
+}) {
   /* Client-only drawing: poseAt's floats print differently in Node and the
    * browser, so SSR ships the container empty (see useMounted). */
   const mounted = useMounted();
@@ -166,4 +174,4 @@ export function CourseBackdrop({ hot }: { hot: ReadonlySet<string> }) {
       </svg>
     </div>
   );
-}
+});
