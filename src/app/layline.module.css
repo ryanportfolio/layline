@@ -184,6 +184,27 @@
   font-weight: 700;
 }
 
+/* Two links, one end of the bar: keeping them in a single flex child leaves
+   the bar its three columns rather than spreading four. */
+.barRight {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.barHouseLink {
+  display: inline-flex;
+}
+
+/* The colophon's size. The mark carries a 2.7px non-scaling stroke, so below
+   20px the linework closes up and the half-drawn bay stops reading; matching
+   the footer keeps one treatment on the page and costs the bar 4px of height. */
+.barHouseMark {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
 /* ---- build status banner ---- */
 
 /* Loud on purpose: the owner demos this page mid-build, so the state of the
