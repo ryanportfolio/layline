@@ -1,11 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 320" width="880" height="320" role="img" aria-label="A real tack from the feed: 25 raw fixes over 6 seconds as dots, with the cubic Hermite the replay draws through them. Each amber arrow is half a second of the speed and course that fix reported, the tangents the curve leaves on.">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 320" width="880" height="320" role="img" aria-label="A real tack from the feed: 25 raw samples over 6 seconds as dots, with the cubic Hermite curve the replay draws through them. Each amber arrow shows half a second of reported speed and course.">
 <style>
 .track{stroke-dasharray:1000;animation:sail 12s linear infinite}
 @keyframes sail{0%{stroke-dashoffset:1000}72%{stroke-dashoffset:0}100%{stroke-dashoffset:0}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important}.track{stroke-dashoffset:0}}
 </style>
 
-<text x="40" y="34" font-family="ui-monospace,'SF Mono','Cascadia Mono',Menlo,Consolas,'Liberation Mono',monospace" font-size="13" letter-spacing="3" fill="#9198a1">BETWEEN THE FIXES</text>
+<text x="40" y="34" font-family="ui-monospace,'SF Mono','Cascadia Mono',Menlo,Consolas,'Liberation Mono',monospace" font-size="13" letter-spacing="3" fill="#9198a1">BETWEEN SAMPLES</text>
 <path d="M267.1 58.0L268.8 62.8L270.6 67.5L272.6 72.1L274.6 76.7L276.8 81.3L279.0 85.8L281.4 90.3L283.8 94.7L286.4 99.0L289.0 103.3L291.7 107.6L294.6 111.7L297.5 115.8L300.6 119.8L303.6 123.8L306.8 127.7L310.1 131.4L313.4 135.1L316.8 138.8L320.3 142.4L323.7 146.0L327.1 149.5L330.6 153.1L334.0 156.7L337.4 160.3L340.9 163.8L344.3 167.3L347.7 170.9L351.1 174.4L354.5 177.9L357.9 181.5L361.2 185.1L364.5 188.7L367.8 192.3L371.1 195.9L374.5 199.5L377.9 202.9L381.5 206.3L385.0 209.6L388.7 212.8L392.4 215.9L396.1 218.9L399.9 221.8L403.8 224.6L407.7 227.3L411.5 229.9L415.5 232.4L419.4 234.7L423.3 236.9L427.3 239.1L431.2 241.1L435.1 243.0L439.0 244.8L442.9 246.4L446.8 248.0L450.7 249.5L454.6 250.9L458.4 252.1L462.3 253.2L466.1 254.3L469.9 255.2L473.6 256.0L477.3 256.6L481.0 257.1L484.7 257.5L488.3 257.8L491.9 258.0L495.4 258.0L498.9 257.9L502.3 257.7L505.7 257.5L509.0 257.1L512.3 256.5L515.5 255.9L518.6 255.3L521.7 254.5L524.7 253.6L527.6 252.7L530.4 251.6L533.3 250.6L536.0 249.5L538.7 248.3L541.3 247.0L543.9 245.7L546.4 244.4L548.9 243.1L551.2 241.7L553.6 240.2L555.8 238.8L558.1 237.2L560.2 235.7L562.4 234.1L564.5 232.4L566.6 230.7L568.6 228.9L570.6 227.2L572.6 225.3L574.5 223.4L576.4 221.5L578.3 219.5L580.2 217.5L582.0 215.5L583.8 213.4L585.6 211.2L587.5 209.1L589.3 207.0L591.1 204.8L592.9 202.5L594.7 200.2L596.4 197.9L598.1 195.5L599.8 193.1L601.5 190.6L603.1 188.0L604.7 185.4L606.4 182.8L608.0 180.2L609.6 177.6L611.3 174.9L612.9 172.2" fill="none" stroke="#f0f6fc" stroke-width="2" class="track" pathLength="1000"/>
 <circle cx="267.1" cy="58.0" r="3.2" fill="#b48cff"/>
 <circle cx="276.8" cy="81.3" r="3.2" fill="#b48cff"/>
@@ -45,5 +45,5 @@
 <line x1="578.3" y1="219.5" x2="600.9" y2="195.9" stroke="#f0a03c" stroke-width="1.6"/><polygon points="600.9,195.9 592.8,199.3 597.9,204.1" fill="#f0a03c"/>
 <line x1="596.4" y1="197.9" x2="617.3" y2="169.8" stroke="#f0a03c" stroke-width="1.6"/><polygon points="617.3,169.8 609.7,174.1 615.4,178.3" fill="#f0a03c"/>
 <line x1="612.9" y1="172.2" x2="632.5" y2="139.6" stroke="#f0a03c" stroke-width="1.6"/><polygon points="632.5,139.6 625.4,144.7 631.4,148.3" fill="#f0a03c"/>
-<text x="40" y="302" font-family="ui-monospace,'SF Mono','Cascadia Mono',Menlo,Consolas,'Liberation Mono',monospace" font-size="13" fill="#9198a1">25 FIXES · 6 S · TANGENTS = REPORTED SOG/COG</text>
+<text x="40" y="302" font-family="ui-monospace,'SF Mono','Cascadia Mono',Menlo,Consolas,'Liberation Mono',monospace" font-size="13" fill="#9198a1">25 SAMPLES · 6 S · TANGENTS = REPORTED SOG/COG</text>
 </svg>

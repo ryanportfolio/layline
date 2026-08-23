@@ -556,11 +556,11 @@ export function AnalystSection() {
                         <span className={styles.slateStatValue}>{slate.boats}</span>
                       </div>
                       <div className={styles.slateStat}>
-                        <span className={styles.slateStatLabel}>Fix rate Hz</span>
+                        <span className={styles.slateStatLabel}>Samples / sec</span>
                         <span className={styles.slateStatValue}>{FIX_HZ}</span>
                       </div>
                       <div className={styles.slateStat}>
-                        <span className={styles.slateStatLabel}>Fixes</span>
+                        <span className={styles.slateStatLabel}>Samples</span>
                         <span className={styles.slateStatValue}>{slate.fixes}</span>
                       </div>
                     </div>

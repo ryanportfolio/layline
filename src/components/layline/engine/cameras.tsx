@@ -248,13 +248,13 @@ export function CameraOne() {
   return (
     <Panel tag={`Cam 01 · the raw feed`} bench={bench}>
       <div>
-        <h3 className={styles.camHeading}>Four fixes a second</h3>
+        <h3 className={styles.camHeading}>4 GPS points a second</h3>
         <p className={styles.camBody}>
-          Raw fixes arrive every {(1000 / FIX_HZ).toFixed(0)} ms; violet holds each reading while
+          Raw samples arrive every {(1000 / FIX_HZ).toFixed(0)} ms; violet holds each sample while
           the race model fills the frames between them
         </p>
         <div className={clsx(styles.chipGrid, styles.chipGridReserved)}>
-          <Chip label="Fixes" value={`${bench.window.fixes.length}`} />
+          <Chip label="Samples" value={`${bench.window.fixes.length}`} />
           <Chip label="Max gap" value={fmt2(bench.gaps.max)} unit="m" />
           {/* A frame counter has nothing to count when the clock is parked, so
               it waits for the mount and never reaches the server markup: a
@@ -273,7 +273,7 @@ export function CameraOne() {
           width={frame.width}
           height={frame.height}
           role="img"
-          aria-label={`${frame.fixes.length} fixes from ${bench.boat.sail} over ${bench.window.span} seconds of the beat, drawn as separate dots with the held boat and the interpolated boat on top`}
+          aria-label={`${frame.fixes.length} samples from ${bench.boat.sail} over ${bench.window.span} seconds of the beat, drawn as separate dots with the held boat and the interpolated boat on top`}
         >
           <CourseArrow frame={frame} />
           {frame.fixes.map((fix, index) => {
@@ -304,7 +304,7 @@ export function CameraOne() {
           ) : null}
         </svg>
         <figcaption className={styles.caption}>
-          Raw feed and interpolated pose on one clock
+          Raw feed and interpolated pose on 1 clock
         </figcaption>
       </figure>
     </Panel>
@@ -397,9 +397,9 @@ export function CameraTwo() {
   return (
     <Panel tag="Cam 02 · the curve" bench={bench}>
       <div>
-        <h3 className={styles.camHeading}>Between the fixes</h3>
+        <h3 className={styles.camHeading}>Between the samples</h3>
         <p className={styles.camBody}>
-          Speed and course set each curve tangent, keeping the path and turn honest between fixes
+          Speed and course set each curve tangent, keeping the path and turn honest between samples
         </p>
         <div className={styles.chipGrid}>
           <Chip label="Segments" value={`${frame.fixes.length - 1}`} />
@@ -416,7 +416,7 @@ export function CameraTwo() {
           width={frame.width}
           height={frame.height}
           role="img"
-          aria-label="The same fixes with the interpolated curve through them and the reported velocity at each fix drawn as an arrow"
+          aria-label="The same samples with the interpolated curve through them and the reported velocity at each sample drawn as an arrow"
         >
           <CourseArrow frame={frame} />
           <path className={styles.curve} d={curve} vectorEffect="non-scaling-stroke" />
@@ -487,7 +487,7 @@ export function CameraTwo() {
           })}
         </svg>
         <figcaption className={styles.caption}>
-          Amber arrows show the reported velocity at each fix
+          Amber arrows show the reported velocity at each sample
         </figcaption>
       </figure>
     </Panel>
@@ -639,8 +639,8 @@ export function CameraThree() {
           spins
         </p>
         <div className={styles.chipGrid}>
-          <Chip label="Fix A" value={fmt1(a.hdg)} unit="deg" />
-          <Chip label="Fix B" value={fmt1(b.hdg)} unit="deg" />
+          <Chip label="Point A" value={fmt1(a.hdg)} unit="deg" />
+          <Chip label="Point B" value={fmt1(b.hdg)} unit="deg" />
           <Chip label="Plain" value={fmt1(plain)} unit="deg" />
           <Chip label="Short" value={fmt1(Math.abs(short))} unit="deg" />
         </div>
@@ -654,7 +654,7 @@ export function CameraThree() {
           width={COMPASS}
           height={COMPASS}
           role="img"
-          aria-label={`A compass circle with two headings, ${fmt1(a.hdg)} and ${fmt1(b.hdg)} degrees: the short way between them crosses zero, the long way round is crossed out`}
+          aria-label={`A compass circle with 2 headings, ${fmt1(a.hdg)} and ${fmt1(b.hdg)} degrees: the short way between them crosses zero, the long way round is crossed out`}
         >
           <circle
             className={styles.compassRing}

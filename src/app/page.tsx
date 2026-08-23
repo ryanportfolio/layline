@@ -16,7 +16,7 @@ import "./scrollbar.css";
 export const metadata: Metadata = {
   title: "Layline · Race Replay",
   description:
-    "Browser race replay engine for a fictional Long Beach fleet race: continuous 3D motion rebuilt from four fixes a second of boat telemetry.",
+    "Browser race replay engine for a fictional Long Beach fleet race: continuous 3D motion rebuilt from 4 GPS points a second.",
 };
 
 export default function LaylinePage() {
@@ -47,7 +47,7 @@ export default function LaylinePage() {
 
       <div className={styles.statusBanner}>
         <strong>Telemetry in, race replay out</strong>
-        <span>Playback, analytics, and post-race review in one browser experience</span>
+        <span>Playback, analytics, and post-race review in 1 browser experience</span>
       </div>
 
       <main className={styles.main}>
@@ -71,7 +71,7 @@ export default function LaylinePage() {
                 <h2 className={styles.panelHeading}>Finish order</h2>
                 <table className={styles.results}>
                   <caption>
-                    Elapsed from the gun to the line, {race.boats.length} boats, one lap
+                    Elapsed from the gun to the line, {race.boats.length} boats, 1 lap
                   </caption>
                   <thead>
                     <tr>

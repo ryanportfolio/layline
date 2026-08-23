@@ -29,11 +29,11 @@ const panels = buildPanels(facts);
 const NEED: Record<string, string[]> = {
   "course-light": [
     `SEED ${facts.seed}`,
-    `${facts.fixesTotal} FIXES`,
+    `${facts.fixesTotal} SAMPLES`,
     ...facts.order.map((b) => b.clock),
   ],
-  "course-narrow-light": [`SEED ${facts.seed}`, `${facts.fixesTotal} FIXES`],
-  "hermite-light": [`${facts.hermite.fixes.length} FIXES`, `${facts.hermite.to - facts.hermite.from} S`],
+  "course-narrow-light": [`SEED ${facts.seed}`, `${facts.fixesTotal} SAMPLES`],
+  "hermite-light": [`${facts.hermite.fixes.length} SAMPLES`, `${facts.hermite.to - facts.hermite.from} S`],
   "debrief-light": [
     facts.debrief.question,
     facts.debrief.status,

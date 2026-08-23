@@ -21,7 +21,7 @@ const martian = Martian_Mono({
 export const metadata: Metadata = {
   title: "Layline · Race Replay",
   description:
-    "Browser race replay engine for a fictional Long Beach fleet race: continuous 3D motion rebuilt from four fixes a second of boat telemetry.",
+    "Browser race replay engine for a fictional Long Beach fleet race: continuous 3D motion rebuilt from 4 GPS points a second.",
 };
 
 export const viewport: Viewport = {

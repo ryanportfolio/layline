@@ -60,14 +60,14 @@ export const KNOWLEDGE: KnowledgeChunk[] = [
     title: "Raw and smooth telemetry",
     terms: ["raw", "smooth", "lens", "interpolation", "telemetry", "replay", "jump"],
     text:
-      "The replay has two lenses. Smooth rebuilds continuous motion between fixes with a curve that honors each fix's reported speed and course. Raw shows the fixes exactly as they arrived, four a second, holds and jumps included. The analyst reads the same fixes both lenses are built from.",
+      "The replay has 2 modes. Smooth rebuilds continuous motion between GPS samples using reported speed and course. Raw shows the samples exactly as they arrived, 4 a second, holds and jumps included. The analyst reads the same data used by both modes.",
   },
   {
     id: "fix-pipeline",
     title: "The fix pipeline",
     terms: ["fix", "fixes", "hz", "hertz", "feed", "data", "telemetry", "sample", "four"],
     text:
-      "Each boat reports four fixes a second: position, speed over ground, course over ground, heading, heel, wind angle, and gennaker state. The engine keeps everything in meters and seconds, and numbers become knots and race-clock time only at the display edge, so a figure can be wrong in exactly one place.",
+      "Each boat reports 4 telemetry samples a second: position, speed over ground, course over ground, heading, heel, wind angle, and gennaker state. The engine keeps everything in meters and seconds, then converts values to knots and race-clock time for display.",
   },
   {
     id: "camera-rigs",

@@ -69,6 +69,7 @@
 .card p {
   margin: 0;
   color: var(--ink-dim);
+  font-family: Verdana, Geneva, sans-serif;
   font-size: 15px;
   line-height: 24px;
 }
@@ -110,14 +111,75 @@
   grid-column: 1;
 }
 
-.productionCopy {
+.productionList {
   grid-column: 2;
   grid-row: 1 / span 2;
   max-width: 70ch;
   margin: 2px 0 0;
+  padding: 0;
   color: var(--ink-dim);
+  font-family: Verdana, Geneva, sans-serif;
   font-size: 17px;
   line-height: 28px;
+  list-style: none;
+}
+
+.productionList li {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 40px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.productionList li:first-child {
+  padding-top: 0;
+}
+
+.productionList li:last-child {
+  border-bottom: 0;
+}
+
+.boatBullet {
+  width: 42px;
+  height: 24px;
+  overflow: visible;
+  color: var(--wind);
+  transition: transform 180ms ease;
+}
+
+.boatWake,
+.boatMast {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.35;
+}
+
+.boatWake {
+  opacity: 0.45;
+  stroke-dasharray: 4 3;
+  animation: wakeFlow 1.6s linear infinite;
+}
+
+.boatHull {
+  fill: var(--ink);
+}
+
+.boatSail {
+  fill: currentColor;
+}
+
+.productionList li:hover .boatBullet {
+  transform: translateX(4px) rotate(-1deg);
+}
+
+@keyframes wakeFlow {
+  to {
+    stroke-dashoffset: -14;
+  }
 }
 
 @media (max-width: 760px) {
@@ -139,7 +201,17 @@
     display: block;
   }
 
-  .productionCopy {
+  .productionList {
     margin-top: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boatWake {
+    animation: none;
+  }
+
+  .boatBullet {
+    transition: none;
   }
 }
