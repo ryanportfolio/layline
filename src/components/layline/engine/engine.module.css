@@ -469,7 +469,7 @@
    explicit track the grid went 202px to 272px at hydration and moved every
    panel below it down ten pixels. */
 .chipGridReserved {
-  grid-template-rows: repeat(4, minmax(62px, auto));
+  grid-template-rows: repeat(2, minmax(62px, auto));
 }
 
 .chip {

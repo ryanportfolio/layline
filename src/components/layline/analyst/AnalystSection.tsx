@@ -448,8 +448,9 @@ export function AnalystSection() {
             Debrief
           </h2>
           <p className={styles.explainer}>
-            Ask about the start, a shift, a rounding, any boat. Every number in an answer comes
-            from the same race data the replay plays.
+            Ask about any boat or race phase
+            <br />
+            Answers cite the same telemetry and link back to the exact moment in the replay
           </p>
         </div>
         {/* The broadcast ident: event line, full race clock, fleet in entry
