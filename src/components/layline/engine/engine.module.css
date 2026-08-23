@@ -68,7 +68,9 @@
    panel is the same rank of thing, so it is set at the same size. */
 .heading {
   margin: 0 0 8px;
+  font-family: var(--font-pangram);
   font-size: clamp(32px, 5vw, 52px);
+  font-weight: 400;
   font-variation-settings: "wdth" 110, "wght" 680;
   letter-spacing: 0.01em;
   line-height: 1.05;
