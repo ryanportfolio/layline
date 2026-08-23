@@ -28,6 +28,20 @@ export default function LaylinePage() {
 
   return (
     <div className={styles.shell} data-layline-page>
+      {/* Pangram Display is declared font-display: block and this is the only
+          route that sets anything in it, so the file is asked for here rather
+          than in the root layout, where every other page would carry 21 kB it
+          never draws with. React hoists this into the head, so the fetch
+          starts with the document instead of waiting for the stylesheet to
+          parse and the wordmark to be laid out. */}
+      <link
+        rel="preload"
+        href="/assets/fonts/pangram-display.woff2"
+        as="font"
+        type="font/woff2"
+        crossOrigin="anonymous"
+      />
+
       <a className={styles.skip} href="#replay-console">
         Skip to the replay console
       </a>

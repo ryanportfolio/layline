@@ -8,7 +8,14 @@
     url("/assets/fonts/pangram-display.ttf") format("truetype");
   font-style: normal;
   font-weight: 400;
-  font-display: swap;
+  /* block, not swap. This face carries the Layline wordmark, and swap paints
+     the whole word in Archivo first and then re-cuts it in Pangram a beat
+     later, which is the one thing an opening title cannot do. Block holds the
+     text unpainted instead, and the page preloads the 21 kB woff2 so the hold
+     is a fraction of the 3 s the block period allows. Past that the browser
+     falls back on its own, so a font that never arrives still leaves readable
+     text. */
+  font-display: block;
 }
 
 :root {
