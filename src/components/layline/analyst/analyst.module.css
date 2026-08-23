@@ -659,6 +659,12 @@
     color 240ms var(--ease);
 }
 
+.turnText,
+.turnLead,
+.turnEvidence {
+  font-family: Verdana, Geneva, sans-serif;
+}
+
 .turnText {
   margin: 0;
   font-size: 15px;
