@@ -1,0 +1,327 @@
+"use client";
+
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { briefFacts, type BriefFacts } from "@/lib/layline/brief";
+import type { RaceData } from "@/lib/layline/types";
+import { BriefChart } from "./BriefChart";
+import { BriefPanels } from "./BriefPanels";
+import styles from "./bootSea.module.css";
+import { AUTOPLAY_FROM, OPEN_AT, useReplay } from "./store";
+
+/**
+ * The race brief: what the boot cover shows while the renderer warms.
+ *
+ * The cover used to name the race and wait. It now spends the wait stating the
+ * race, and it states it two ways. The chart draws the last ten seconds before
+ * the gun once, from above, at true scale in metres. The panels read the same
+ * ten seconds as three plates: the fleet at the line, the breeze on a dial, and
+ * what the line is worth in it. Every figure in either view comes out of the
+ * same RaceData the replay is about to play, through the same evaluator the
+ * instrument dock reads, so neither view can disagree with the race behind it
+ * or with the other. See lib/layline/brief.ts for where each one is read from.
+ *
+ * This file is the shell the two views hang in: the header, the switch between
+ * them, the status line and the way through. Each view owns its own drawing and
+ * its own prestart loop, because only one of them is mounted at a time and both
+ * seek the same store clock rather than keeping one of their own.
+ *
+ * The brief is a gate as well as a picture. Continue, or Enter, releases it, and
+ * the replay's autoplay waits on that release rather than running the prestart
+ * off behind a cover.
+ */
+
+/** The two ways of reading the same ten seconds. The chart is the default. */
+export type BriefView = "chart" | "panels";
+
+export function RaceBrief({
+  race,
+  name,
+  venue,
+  dateLabel,
+  live,
+  reduced,
+}: {
+  race: RaceData;
+  name: string;
+  venue: string;
+  dateLabel: string;
+  /** True once the renderer has a frame up. Only the status line reads it. */
+  live: boolean;
+  reduced: boolean;
+}) {
+  const facts: BriefFacts = useMemo(() => briefFacts(race), [race]);
+
+  /* Held here rather than in the store, and deliberately. The store re-arms
+     briefDone per race so a second race gets its own gate; a reader who has
+     said which drawing they want should not have to say it again, and this
+     shell outlives the race the rail swaps under it. The server has no
+     preference to read, so it renders the chart and so does the first client
+     paint. */
+  const [view, setView] = useState<BriefView>("chart");
+
+  const root = useRef<HTMLDivElement>(null);
+  const title = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  const statusFill = useRef<HTMLElement>(null);
+  const statusBar = useRef<HTMLSpanElement>(null);
+  const statusWarming = useRef<HTMLSpanElement>(null);
+  const statusUp = useRef<HTMLSpanElement>(null);
+
+  /* The race name is capped at two lines: measured, then stepped down a pixel
+   * at a time until it fits. Container units alone cannot do it, because what
+   * overflows is the number of words, not the width of one. */
+  const fitTitle = useCallback(() => {
+    const node = title.current;
+    if (node === null) return;
+    node.style.fontSize = "";
+    let size = Number.parseFloat(getComputedStyle(node).fontSize);
+    if (!Number.isFinite(size)) return;
+    node.style.fontSize = `${size}px`;
+    let guard = 80;
+    const fits = (): boolean => node.scrollHeight <= Math.ceil(2 * size * 1.02) + 2;
+    while (!fits() && size > 9 && guard > 0) {
+      size -= 1;
+      guard -= 1;
+      node.style.fontSize = `${size}px`;
+    }
+  }, []);
+
+  useLayoutEffect(() => {
+    fitTitle();
+    const node = root.current;
+    if (node === null || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => fitTitle());
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [fitTitle]);
+
+  /* The Continue button takes focus when the cover mounts: it is the way
+   * through the layer, and a viewer arriving by keyboard should not have to
+   * find it. preventScroll keeps the workspace's own scroll position.
+   *
+   * Switching views does not take focus back. The reader pressed the switch and
+   * is looking at what it did; moving the caret out from under them to announce
+   * a button they have already read would be the rudest thing on the layer. */
+  useEffect(() => {
+    button.current?.focus({ preventScroll: true });
+  }, []);
+
+  /* The two strings crossfade rather than swap, so the renderer arriving is one
+     settle instead of a text cut and a bar jump in the same frame. */
+  useEffect(() => {
+    const words = (): void => {
+      if (statusWarming.current !== null) statusWarming.current.style.opacity = live ? "0" : "1";
+      if (statusUp.current !== null) statusUp.current.style.opacity = live ? "1" : "0";
+    };
+    if (reduced) {
+      words();
+      return;
+    }
+    const frame = requestAnimationFrame(words);
+    return () => window.cancelAnimationFrame(frame);
+  }, [live, reduced]);
+
+  /**
+   * The hairline only exists if there is a wait to describe.
+   *
+   * On a machine that puts a frame up in a few hundred milliseconds, a bar that
+   * appears, ramps and completes inside a second is the whole of what a viewer
+   * sees of it, and what they see is a sweep with no information in it. So it
+   * stays off the layer until the renderer has been slow for long enough that
+   * saying so is worth a hairline, and a fast boot never draws one at all.
+   *
+   * When it does earn its place it is transitioned rather than keyframed. The
+   * first version killed a running animation to complete it, which drops the
+   * element to its base width before the new one applies, so the bar snapped to
+   * full from wherever the ramp had reached. A transition interpolates from the
+   * current computed width instead, so the renderer arriving is one settle.
+   *
+   * The ramp itself is a wait and not a measurement: nothing here knows how long
+   * a renderer will take, so it eases toward a value short of full and only
+   * completes when there is a frame on screen to complete it.
+   */
+  const SLOW_ENOUGH_TO_SAY_SO = 600;
+  const COMPLETE_MS = 900;
+  useEffect(() => {
+    if (live) return;
+    const timer = window.setTimeout(() => {
+      const bar = statusBar.current;
+      const fill = statusFill.current;
+      if (bar === null || fill === null) return;
+      bar.style.opacity = "1";
+      if (reduced) {
+        fill.style.width = "88%";
+        return;
+      }
+      window.requestAnimationFrame(() => {
+        fill.style.setProperty("--status-ease", "5400ms");
+        fill.style.width = "88%";
+      });
+    }, SLOW_ENOUGH_TO_SAY_SO);
+    return () => window.clearTimeout(timer);
+  }, [live, reduced]);
+
+  useEffect(() => {
+    const bar = statusBar.current;
+    const fill = statusFill.current;
+    if (!live || bar === null || fill === null) return;
+    /* Never shown, so there is nothing to complete: a bar that appeared only to
+     * announce that it was finished would be the sweep this avoids. */
+    if (bar.style.opacity !== "1") return;
+    if (reduced) {
+      fill.style.width = "100%";
+      return;
+    }
+    fill.style.setProperty("--status-ease", `${COMPLETE_MS}ms`);
+    fill.style.width = "100%";
+  }, [live, reduced]);
+
+  /**
+   * The way through, moving on the race's own clock.
+   *
+   * The console allows exactly one continuous motion verb and it is TRACK,
+   * which is clock-driven; SETTLE is the UI verb and the contract says it never
+   * loops. So a decorative pulse to say "press me" does not ship here. What
+   * moves instead is the countdown the button is offering: the band across its
+   * foot runs with the ten seconds to the gun and starts over with the loop,
+   * and the arrow rides it. The button is alive because the race is.
+   *
+   * Written as a number on the element rather than through React, the way the
+   * rest of this layer writes a reading. Because it is a function of the replay
+   * clock and not of wall time, the capture hold freezes it with everything
+   * else and two screenshots of a stated time draw the same button.
+   */
+  useEffect(() => {
+    const node = button.current;
+    if (node === null) return;
+    const span = 0 - race.tMin;
+    const write = (t: number): void => {
+      const run = span > 0 ? Math.min(1, Math.max(0, (t - race.tMin) / span)) : 0;
+      node.style.setProperty("--go-run", run.toFixed(4));
+    };
+    write(useReplay.getState().t);
+    return useReplay.subscribe((state) => {
+      if (!state.briefDone) write(state.t);
+    });
+  }, [race]);
+
+  const release = useCallback(() => {
+    const state = useReplay.getState();
+    if (state.briefDone) return;
+    /* Hand the clock back where the replay wants it: inside the prestart for
+     * an autoplay, so the gun is something the viewer watches happen; at the
+     * mid-beat moment for a viewer who asked for less motion, who gets no
+     * autoplay and should not be left on an empty start line. The reduced
+     * branch also undoes the one prestart seek the loop can land before the
+     * media query has been read into the store. */
+    state.seek(state.reducedMotion ? OPEN_AT : AUTOPLAY_FROM);
+    state.releaseBrief();
+  }, []);
+
+  /* Enter releases the brief from anywhere on the page, except while a viewer
+   * is typing, because the analyst's composer is one Tab away, and except on a
+   * control that already answers Enter itself.
+   *
+   * That last one is not hypothetical. A button takes Enter as its own
+   * activation and the keydown reaches the document undefaulted, so with the
+   * view switch focused one press both changed the drawing and released the
+   * brief: the reader asked to see the other view and got the race instead.
+   * Continue loses nothing by the exclusion, since it is a button and its own
+   * activation is what releases the brief when focus is on it. */
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== "Enter" || event.defaultPrevented) return;
+      const active = document.activeElement;
+      const tag = active === null ? "" : active.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "BUTTON" || tag === "A") return;
+      if (active instanceof HTMLElement && active.isContentEditable) return;
+      release();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [release]);
+
+  return (
+    <section
+      className={styles.brief}
+      ref={root}
+      data-brief-view={view}
+      aria-label={`Race brief, ${name}`}
+    >
+      <header className={styles.briefHead}>
+        <div className={styles.raceName} ref={title}>
+          {name}
+        </div>
+        <div className={styles.headRow}>
+          <div className={styles.raceMeta}>
+            {venue} · {dateLabel} · {facts.boats.length} boats · one windward-leeward lap
+          </div>
+          {/* The same gesture the console's transport already carries, one layer
+              up: a segmented pair that swaps the drawing and changes nothing
+              else. Both views read the same clock and the same race, so this
+              switches how the ten seconds are drawn and never what they say. */}
+          <div className={styles.viewSwitch} role="group" aria-label="How to draw the brief">
+            <button
+              type="button"
+              className={view === "chart" ? `${styles.viewBtn} ${styles.viewBtnOn}` : styles.viewBtn}
+              aria-pressed={view === "chart"}
+              data-brief-switch="chart"
+              onClick={() => setView("chart")}
+            >
+              Chart
+            </button>
+            <button
+              type="button"
+              className={view === "panels" ? `${styles.viewBtn} ${styles.viewBtnOn}` : styles.viewBtn}
+              aria-pressed={view === "panels"}
+              data-brief-switch="panels"
+              onClick={() => setView("panels")}
+            >
+              Panels
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {view === "chart" ? (
+        <BriefChart race={race} reduced={reduced} />
+      ) : (
+        <BriefPanels race={race} reduced={reduced} />
+      )}
+
+      <div className={styles.briefFoot}>
+        {/* Both strings are rendered and crossfaded rather than swapped, so the
+            renderer arriving is one settle rather than a text cut and a bar jump
+            in the same frame. The warming line is the one a screen reader gets:
+            it is the state the layer opens in, and a renderer coming up is not
+            news worth announcing. */}
+        <p className={styles.status}>
+          <span className={styles.statusStack}>
+            <span ref={statusWarming}>renderer warming, the race is already loaded</span>
+            <span ref={statusUp} style={{ opacity: 0 }} aria-hidden="true">
+              renderer up, the race is already loaded
+            </span>
+          </span>
+          <span className={styles.statusBar} ref={statusBar} style={{ opacity: 0 }} aria-hidden="true">
+            <i ref={statusFill} className={styles.statusFill} />
+          </span>
+        </p>
+        {/* Named the way the console names its own controls, because the layer
+            carries three buttons now and "the button on the cover" stopped
+            being a way to find this one. */}
+        <button
+          className={styles.goBtn}
+          type="button"
+          data-control="brief-go"
+          onClick={release}
+          ref={button}
+        >
+          Start the race
+          <span className={styles.goArrow} aria-hidden="true">
+            →
+          </span>
+        </button>
+      </div>
+    </section>
+  );
+}

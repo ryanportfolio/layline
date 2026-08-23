@@ -14,7 +14,28 @@ import { TopBar } from "./hud/TopBar";
 import { Transport } from "./hud/Transport";
 import { VmgStrip } from "./hud/VmgStrip";
 import { ChartView } from "./svg/ChartView";
+import { RaceBrief } from "./RaceBrief";
 import { AUTOPLAY_FROM, raceData, useReplay } from "./store";
+
+/** WCAG relative luminance of a #rrggbb token. */
+function luminance(hex: string): number {
+  const n = Number.parseInt(hex.slice(1), 16);
+  if (!Number.isFinite(n)) return 1;
+  const channel = (v: number): number => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  };
+  return (
+    0.2126 * channel((n >> 16) & 255) +
+    0.7152 * channel((n >> 8) & 255) +
+    0.0722 * channel(n & 255)
+  );
+}
+
+/* Above this the sky's bright band takes near-black type, below it near-white.
+ * Placed where both branches clear 3:1 against the band by a margin rather
+ * than at the crossover, so neither is ever marginal. */
+const LIGHT_SKY = 0.35;
 import { useSpaceToggle, useWaterPointer, useWheelZoom } from "./useWaterPointer";
 
 /* WebGL cannot render on the server, and the loading state has nothing to add:
@@ -30,7 +51,7 @@ export function LaylineApp({
   venue,
   autoplay = "intro",
   boot = "intro",
-  bootLabel,
+  bootBrief,
 }: {
   children: ReactNode;
   venue?: string;
@@ -58,14 +79,25 @@ export function LaylineApp({
    * The chart underneath it stays the honest answer for a machine that never
    * gets a renderer, and reveals on its own if none arrives. */
   boot?: "intro" | "sea";
-  /* Named on the cover while the renderer boots, so the wait is a title card
-   * for the race being loaded rather than an empty sea. */
-  bootLabel?: string;
+  /* The race the cover briefs while the renderer boots. Given, the sea carries
+   * the brief and holds until a viewer releases it; withheld, it is the bare
+   * sea it always was and leaves on its own. Every number the brief puts up is
+   * read out of the RaceData below, not out of this: what comes through here
+   * is only what the registry knows and a simulation cannot. */
+  bootBrief?: { name: string; venue: string; dateLabel: string };
 }) {
   const race = useMemo(() => raceData(), []);
   const live = useReplay((state) => state.webglOk);
   const chart2d = useReplay((state) => state.chart2d);
   const rig = useReplay((state) => state.rig);
+  const briefDone = useReplay((state) => state.briefDone);
+  const reducedMotion = useReplay((state) => state.reducedMotion);
+  /* The capture hold, which stops the replay clock, has to stop this layer's
+   * own entrance as well: two screenshots of the same stated race time taken a
+   * tenth of a second apart would otherwise catch the plates at two points of
+   * one 420ms fade and hash differently. */
+  const frozen = useReplay((state) => state.frozen);
+  const briefed = boot === "sea" && bootBrief !== undefined;
 
   /* On desktop the chart lives 350ms past the renderer's first frame so it
    * can fade out instead of cutting; boot inside its own 1.2s reveal delay
@@ -96,6 +128,19 @@ export function LaylineApp({
   const [cover, setCover] = useState<"up" | "out" | "gone">("up");
   useEffect(() => {
     if (boot !== "sea") return;
+    /* A briefed cover is a gate, not a wait. It holds however long the renderer
+     * takes and however long the reader takes, and the only thing that moves it
+     * is the reader: Continue, or Enter. A slow machine keeps the brief, which
+     * is the whole reason the wait now has numbers in it. */
+    if (briefed) {
+      if (!briefDone) {
+        setCover("up");
+        return;
+      }
+      setCover("out");
+      const timer = window.setTimeout(() => setCover("gone"), 1100);
+      return () => window.clearTimeout(timer);
+    }
     if (live) {
       setCover("out");
       const timer = window.setTimeout(() => setCover("gone"), 1100);
@@ -104,7 +149,22 @@ export function LaylineApp({
     setCover("up");
     const timer = window.setTimeout(() => setCover("out"), 2600);
     return () => window.clearTimeout(timer);
-  }, [live, boot]);
+  }, [live, boot, briefed, briefDone]);
+
+  /* The header's ink branch. The sky the brief's title sits on is the
+     sky-horizon token nearly neat, and the library ships a light one, so the
+     stylesheet states the near-black branch and this corrects to near-white
+     only when a build darkens the token. Reading the computed value rather
+     than the literal keeps the two in step through a theme or an override. */
+  const coverRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const node = coverRef.current;
+    if (node === null) return;
+    const sky = getComputedStyle(node).getPropertyValue("--sky-horizon").trim();
+    if (!/^#[0-9a-f]{6}$/i.test(sky) || luminance(sky) > LIGHT_SKY) return;
+    node.style.setProperty("--brief-head-ink", `color-mix(in srgb, #ffffff 88%, ${sky})`);
+    node.style.setProperty("--brief-head-line", "rgba(255, 255, 255, 0.3)");
+  }, [cover]);
 
   /* Read once at mount. A visitor who has asked for less motion gets the
    * replay paused at a mid-beat moment with everything reachable by hand,
@@ -130,31 +190,31 @@ export function LaylineApp({
       state.seek(AUTOPLAY_FROM);
       state.play();
     };
-    if (autoplay === "immediate" || replay.introDone) {
+    /* Two covers, one rule: play when the thing covering the viewport has let
+     * go. The story page waits on its intro overlay, the briefed library on
+     * the brief its reader releases, and an unbriefed library has nothing to
+     * wait for and starts on mount. */
+    const gate: "intro" | "brief" | null =
+      autoplay === "immediate" ? (briefed ? "brief" : null) : "intro";
+    if (gate === null) {
+      start();
+      return;
+    }
+    if (gate === "intro" && replay.introDone) {
+      start();
+      return;
+    }
+    if (gate === "brief" && replay.briefDone) {
       start();
       return;
     }
     const stop = useReplay.subscribe((state) => {
-      if (!state.introDone) return;
+      if (!(gate === "brief" ? state.briefDone : state.introDone)) return;
       stop();
       start();
     });
     return stop;
-  }, [autoplay]);
-
-  /* One word to a line, sized so the longest of them fills the viewer. 0.6em is
-   * this face's rough average advance, which is close enough to pick a size
-   * that never runs past the pane; the cap stops a two word name filling the
-   * whole picture. */
-  const bootWords = useMemo(
-    () => (bootLabel === undefined ? [] : bootLabel.split(/\s+/).filter((word) => word !== "")),
-    [bootLabel],
-  );
-  const bootSize = useMemo(() => {
-    const longest = bootWords.reduce((most, word) => Math.max(most, word.length), 0);
-    if (longest === 0) return undefined;
-    return `min(168px, calc(86cqi / ${(longest * 0.6).toFixed(2)}))`;
-  }, [bootWords]);
+  }, [autoplay, briefed]);
 
   /* The water is also the one surface with no native pointer on it: the boat
    * cursor draws its own, and it needs the layer to hang the listeners off.
@@ -167,7 +227,7 @@ export function LaylineApp({
   useSpaceToggle();
 
   return (
-    <div className={styles.stage} data-boot={boot}>
+    <div className={styles.stage} data-boot={boot} data-gate={briefed && !briefDone ? "brief" : undefined}>
       <div
         ref={waterRef}
         className={live ? `${styles.canvasLayer} ${styles.canvasLive}` : styles.canvasLayer}
@@ -193,23 +253,32 @@ export function LaylineApp({
         <BoatCursor targetRef={waterRef} />
       </div>
 
-      {/* The water the scene opens on, painted flat. Fades out under the first
-          rendered frame, so what changes is the picture gaining depth rather
-          than a layer being swapped for another. */}
+      {/* The water the scene opens on, painted flat, with the race brief over
+          it. Fades out under the first rendered frame, so what changes is the
+          picture gaining depth rather than a layer being swapped for another.
+          Bare, it is decorative and hidden from a screen reader; briefed, it
+          carries the only control on the layer and must not be. */}
       {boot === "sea" && cover !== "gone" ? (
         <div
-          className={cover === "out" ? `${sea.cover} ${sea.out}` : sea.cover}
-          aria-hidden="true"
+          ref={coverRef}
+          className={[sea.cover, briefed ? sea.briefed : "", cover === "out" ? sea.out : ""]
+            .filter((name) => name !== "")
+            .join(" ")}
+          data-brief-motion={briefed ? (reducedMotion ? "off" : "on") : undefined}
+          data-brief-still={briefed && frozen ? "" : undefined}
+          aria-hidden={briefed ? undefined : "true"}
+          style={briefed ? undefined : { pointerEvents: "none" }}
         >
-          {bootWords.length === 0 ? null : (
-            <span className={sea.label} style={{ fontSize: bootSize }}>
-              {bootWords.map((word, index) => (
-                <span key={`${word}-${index}`} className={sea.word}>
-                  {word}
-                </span>
-              ))}
-            </span>
-          )}
+          {briefed && bootBrief !== undefined ? (
+            <RaceBrief
+              race={race}
+              name={bootBrief.name}
+              venue={bootBrief.venue}
+              dateLabel={bootBrief.dateLabel}
+              live={live}
+              reduced={reducedMotion}
+            />
+          ) : null}
         </div>
       ) : null}
 

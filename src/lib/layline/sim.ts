@@ -141,7 +141,7 @@ function gauss(rand: () => number): number {
  * do not kink the curve. Below the first knot the boat is pinching into the
  * no-go zone; above the last it is dead downwind with the main blanketing the
  * kite. */
-function polarFrac(twaAbs: number): number {
+export function polarFrac(twaAbs: number): number {
   const a = clamp(twaAbs, 0, 180);
   if (a <= POLAR_TWA[0]) return (a / POLAR_TWA[0]) * POLAR_FRAC[0];
   const last = POLAR_TWA.length - 1;
