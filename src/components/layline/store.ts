@@ -42,8 +42,20 @@ export function raceData(): RaceData {
 
 /* Written by the render loop, read by the capture hook. Kept out of the store
  * because a per-frame counter that re-rendered the HUD would cost more than it
- * reports. */
-export const renderStats = { drawCalls: 0, triangles: 0 };
+ * reports. Frames counts drawn frames rather than loop passes: the loop runs
+ * whenever the platform offers it, and the renderer only answers when the
+ * picture can be seen and can have changed. */
+export const renderStats = { drawCalls: 0, triangles: 0, frames: 0, drawnAt: 0 };
+
+/* Module scope outlives any one canvas, so a canvas mounting into a document
+ * that has already had one resets the counters it is about to claim as its
+ * own. */
+export function resetRenderStats(): void {
+  renderStats.drawCalls = 0;
+  renderStats.triangles = 0;
+  renderStats.frames = 0;
+  renderStats.drawnAt = 0;
+}
 
 /* A mid-beat moment with the fleet split and the standings meaningful. Reduced
  * motion opens here rather than on an empty prestart line. */

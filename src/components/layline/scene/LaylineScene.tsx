@@ -4,7 +4,13 @@ import { useEffect, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { NeutralToneMapping } from "three";
 import type { RaceData } from "@/lib/layline/types";
-import { renderStats, useReplay } from "../store";
+import { renderStats, resetRenderStats, useReplay } from "../store";
+import {
+  requestSceneFrame,
+  resetSceneGate,
+  sceneGate,
+  setFrozenFrameRequest,
+} from "./gate";
 import { BoatLabels } from "./BoatLabels";
 import { BoatTracks } from "./BoatTracks";
 import { CameraRigs } from "./CameraRigs";
@@ -16,17 +22,40 @@ import { SkyDome } from "./SkyDome";
 import { WakeTrails } from "./WakeTrails";
 
 /* The clock lives here and nowhere else. Nothing outside a drawn frame moves
- * time, so a frozen page holds the instant it was frozen at. */
+ * time, so a frozen page holds the instant it was frozen at.
+ *
+ * It also settles, first thing in the frame, whether this frame is going to be
+ * drawn. The governor below and the render at the bottom both answer to that
+ * one verdict rather than deciding for themselves, so a frame cannot be half
+ * skipped: the governor must not resize a buffer nobody is about to fill. */
 function Clock() {
   useFrame((state, delta) => {
     const replay = useReplay.getState();
     if (replay.playing && !replay.frozen) {
       replay.advance(Math.min(delta, 0.25) * replay.rate);
     }
-    const render = state.gl.info.render;
-    renderStats.drawCalls = render.calls;
-    renderStats.triangles = render.triangles;
-    if (!replay.webglOk) replay.setWebglOk(true);
+
+    /* A resized drawing buffer is a cleared drawing buffer, and the governor
+     * resizes it from inside this same loop, so the comparison is made before
+     * the verdict rather than after it. */
+    const canvas = state.gl.domElement;
+    if (canvas.width !== sceneGate.bufferWidth || canvas.height !== sceneGate.bufferHeight) {
+      sceneGate.dirty = true;
+    }
+
+    /* Frozen is a capture, and a capture is always drawn: the hold only ever
+     * asks for a frame when something wants one. An unready page draws too,
+     * whatever else is true, because the chart, the docks and the intro are all
+     * waiting on the first frame and 2D mode would otherwise be a state the
+     * page could never leave after a lost context. */
+    sceneGate.willRender =
+      !sceneGate.contextLost &&
+      (replay.frozen ||
+        !replay.webglOk ||
+        (sceneGate.onScreen &&
+          sceneGate.pageVisible &&
+          !replay.chart2d &&
+          (replay.playing || sceneGate.dirty || sceneGate.chase > 0)));
   }, -100);
   return null;
 }
@@ -52,6 +81,15 @@ function QualityGovernor() {
   useFrame((state, delta) => {
     if (rungs.current === null) rungs.current = DPR_LADDER.filter((v) => v < gl.getPixelRatio());
     if (useReplay.getState().frozen) return;
+    /* Only frames that are actually drawn are evidence about how long a frame
+     * takes, and only a drawn frame can afford a resize: setDpr clears the
+     * buffer, and clearing one the gate is about to leave alone would blank a
+     * canvas that is on screen. The settle window is reset on the way past, so
+     * the reading that resumes playback is never the one that sheds. */
+    if (!sceneGate.willRender) {
+      settle.current = SETTLE_FRAMES;
+      return;
+    }
     /* Any Canvas re-render (freeze and thaw toggle the frameloop prop) re-runs
      * the reconfigure pass, which reapplies the dpr prop and lifts the ratio
      * back to the device value. The governor holds its tier and reasserts it
@@ -105,30 +143,58 @@ function DemandBridge() {
   const stamp = useRef(0);
   const holding = useRef(false);
 
-  /* Also on a resize, which is the one thing that moves the picture without
-   * going through the store: a viewport, dock or font change rewrites the
-   * camera aspect and the dock measurements the rigs frame against, and the
-   * loop at "never" ignores the renderer's own invalidation. This effect runs
-   * after the observers that take those measurements, so the frame it asks for
-   * is drawn against the settled layout. */
+  /* Entering the hold draws its first frame on the spot: nothing else is
+   * going to, and the renderer zeroes its own clock on the way in, so the stamp
+   * starts again with it and only with it. */
   useEffect(() => {
     if (!frozen) {
       holding.current = false;
       return;
     }
-    /* The renderer zeroes its own clock on the way into the hold, so the stamp
-     * starts again with it and only with it. */
     if (!holding.current) stamp.current = 0;
     holding.current = true;
     stamp.current += FROZEN_STEP;
     advance(stamp.current);
-  }, [frozen, advance, width, height]);
+  }, [frozen, advance]);
+
+  /* A resized canvas is the one thing that moves the picture without going
+   * through the store: it rewrites the camera aspect and the dock measurements
+   * the rigs frame against, and the loop at "never" ignores the renderer's own
+   * invalidation. It goes through the same door as the observers watching the
+   * same layout change, so the one frame it costs is drawn after all of them
+   * have measured. The first pass only records the box it opened at. */
+  const box = useRef<string | null>(null);
+  useEffect(() => {
+    const seen = `${width}x${height}`;
+    if (box.current === seen) return;
+    const first = box.current === null;
+    box.current = seen;
+    if (first) return;
+    requestSceneFrame();
+  }, [frozen, width, height]);
+
+  /* The only way into a renderer that is holding still, handed to the gate so
+   * a font landing, a dock resize, a restored tab or a recovered context can
+   * still reach the screen while the clock is held. R3F ignores invalidate()
+   * at "never", so a flag on its own would never be read. */
+  useEffect(() => {
+    if (!frozen) {
+      setFrozenFrameRequest(null);
+      return;
+    }
+    setFrozenFrameRequest(() => {
+      stamp.current += FROZEN_STEP;
+      advance(stamp.current);
+    });
+    return () => setFrozenFrameRequest(null);
+  }, [frozen, advance]);
 
   useEffect(
     () =>
       useReplay.subscribe((state, previous) => {
         if (!state.frozen) return;
         if (
+          state.raceId !== previous.raceId ||
           state.t !== previous.t ||
           state.rig !== previous.rig ||
           state.mode !== previous.mode ||
@@ -143,15 +209,171 @@ function DemandBridge() {
   return null;
 }
 
+/* Wakes the canvas before it reaches the viewport rather than as it arrives:
+ * an observer reports after the compositor has already been handed a frame, so
+ * a fast scroll would otherwise show one stale picture. */
+const PREWARM = "200px";
+
+/**
+ * The render, taken out of the loop's hands.
+ *
+ * A positive priority switches R3F's own rendering off for this canvas and
+ * makes this the last subscriber to run, so every pass above has posed the
+ * scene by the time the verdict taken at the top of the frame is spent here.
+ * Only the drawing is skipped: the clock, the poses and the plates all keep
+ * running, so a held frame is one nobody could see rather than one nobody
+ * built.
+ */
+function RenderGate() {
+  const gl = useThree((state) => state.gl);
+
+  useEffect(() => {
+    const canvas = gl.domElement;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const seen = entries[0]?.isIntersecting === true;
+        if (seen && !sceneGate.onScreen) requestSceneFrame();
+        sceneGate.onScreen = seen;
+      },
+      { rootMargin: PREWARM },
+    );
+    observer.observe(canvas);
+    return () => {
+      observer.disconnect();
+      sceneGate.onScreen = true;
+    };
+  }, [gl]);
+
+  /* Everything that moves the picture without going through the store or the
+   * canvas box. A restored tab can come back to a discarded buffer and a
+   * recovered context comes back to nothing at all; three.js owns the recovery
+   * itself, so the page only has to stop drawing into a dead context and ask
+   * for one frame once it is alive again. */
+  useEffect(() => {
+    const canvas = gl.domElement;
+    const onVisibility = () => {
+      sceneGate.pageVisible = !document.hidden;
+      if (sceneGate.pageVisible) requestSceneFrame();
+    };
+    const onShow = () => requestSceneFrame();
+    const onLost = () => {
+      sceneGate.contextLost = true;
+      useReplay.getState().setWebglOk(false);
+    };
+    const onRestored = () => {
+      sceneGate.contextLost = false;
+      requestSceneFrame();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pageshow", onShow);
+    canvas.addEventListener("webglcontextlost", onLost);
+    canvas.addEventListener("webglcontextrestored", onRestored);
+    /* Plate metrics move when the display face lands. */
+    void document.fonts?.ready.then(requestSceneFrame).catch(() => {});
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pageshow", onShow);
+      canvas.removeEventListener("webglcontextlost", onLost);
+      canvas.removeEventListener("webglcontextrestored", onRestored);
+    };
+  }, [gl]);
+
+  /* Only the fields that move the picture. The ready flags travel through this
+   * store too, and one of them is written by the render below: dirtying the
+   * frame that has just been drawn would cost a second frame for nothing. */
+  useEffect(
+    () =>
+      useReplay.subscribe((state, previous) => {
+        if (
+          /* The race the picture is of. The viewer is not remounted when it
+           * changes, so nothing else here would say the boats had all moved. */
+          state.raceId !== previous.raceId ||
+          state.t !== previous.t ||
+          state.rig !== previous.rig ||
+          state.mode !== previous.mode ||
+          state.followId !== previous.followId ||
+          state.chart2d !== previous.chart2d ||
+          state.playing !== previous.playing ||
+          state.frozen !== previous.frozen ||
+          state.reducedMotion !== previous.reducedMotion
+        ) {
+          sceneGate.dirty = true;
+        }
+      }),
+    [],
+  );
+
+  useFrame((state) => {
+    if (!sceneGate.willRender) return;
+    /* three.js returns from render() without drawing while the context is
+     * lost, so the picture would be marked laid down when it was not. */
+    const context = state.gl.getContext();
+    if (context !== null && context.isContextLost()) return;
+
+    state.gl.render(state.scene, state.camera);
+
+    const canvas = state.gl.domElement;
+    sceneGate.bufferWidth = canvas.width;
+    sceneGate.bufferHeight = canvas.height;
+
+    /* A change owes one more frame, because the passes above are a frame
+     * behind the camera and the picture that stays on screen has to be the one
+     * playback would have settled on. The capture hold is exempt: it draws
+     * exactly the frame it asked for, which is the contract every reference
+     * shot on this page was taken under. */
+    const replay = useReplay.getState();
+    if (sceneGate.dirty) {
+      sceneGate.dirty = false;
+      sceneGate.chase = replay.frozen ? 0 : 1;
+    } else if (sceneGate.chase > 0) {
+      sceneGate.chase -= 1;
+    }
+
+    /* Stamped with the instant this frame was drawn at, because the clock
+     * runs whether or not the picture does: reading a live t next to the cost
+     * of a frame drawn seconds ago would describe a picture nobody has seen. */
+    const drawn = state.gl.info.render;
+    renderStats.drawCalls = drawn.calls;
+    renderStats.triangles = drawn.triangles;
+    renderStats.frames += 1;
+    renderStats.drawnAt = replay.t;
+
+    /* Raised here and nowhere else: the flag says a frame is on screen, and
+     * this is the only line that knows one is. The intro drops its cover on
+     * it. */
+    if (!replay.webglOk) replay.setWebglOk(true);
+  }, 1);
+
+  return null;
+}
+
 export function LaylineScene({ race }: { race: RaceData }) {
   const frozen = useReplay((state) => state.frozen);
+
+  /* The gate is one per document and outlives every canvas mounted into it,
+   * same as the ready flag below. A lost context or a scrolled-away observer
+   * left behind by the last visit would keep this one dark, so the record goes
+   * back to its opening state before the first frame is asked for. */
+  const opened = useRef(false);
+  if (!opened.current) {
+    opened.current = true;
+    resetSceneGate();
+    resetRenderStats();
+  }
 
   /* The store is one per document and outlives every canvas mounted into it,
    * so leaving the flag set would let the next visit to this route pull the
    * chart down before its renderer had drawn anything, and leave a blank
    * console behind if the context never came back. The flag belongs to the
    * canvas that raised it and dies with it. */
-  useEffect(() => () => useReplay.getState().setWebglOk(false), []);
+  useEffect(
+    () => () => {
+      useReplay.getState().setWebglOk(false);
+      resetSceneGate();
+      resetRenderStats();
+    },
+    [],
+  );
 
   return (
     <Canvas
@@ -184,6 +406,7 @@ export function LaylineScene({ race }: { race: RaceData }) {
       <Clock />
       <QualityGovernor />
       <DemandBridge />
+      <RenderGate />
     </Canvas>
   );
 }

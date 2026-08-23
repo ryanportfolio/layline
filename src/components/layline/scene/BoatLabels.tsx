@@ -7,6 +7,7 @@ import styles from "@/app/layline.module.css";
 import type { RaceData } from "@/lib/layline/types";
 import { sampleLive, setText } from "../hud/live";
 import { useReplay } from "../store";
+import { requestSceneFrame } from "./gate";
 import { MAIN_CORNERS, SKIFF } from "./skiff";
 
 /* Twelve pixels of stem, which is enough to lift the plate off the boat without
@@ -278,7 +279,12 @@ export function BoatLabels({ race }: { race: RaceData }) {
      * changes when a font arrives or a rank turns into a dash. */
     const sized = new Map<Element, LabelNode>();
     for (const node of built) sized.set(node.box, node);
+    /* The placement pass runs on frames the gate skips, so a paused, 2D or
+     * scrolled-away page reads these the moment they change. A held one does
+     * not: the hold stops the loop rather than the drawing, so a plate that
+     * changes size under it has to ask. */
     const plates = new ResizeObserver((entries) => {
+      requestSceneFrame();
       for (const entry of entries) {
         const node = sized.get(entry.target);
         const size = entry.borderBoxSize[0];
@@ -342,7 +348,10 @@ export function BoatLabels({ race }: { race: RaceData }) {
       dockCount.current = held;
     };
     measure();
-    const layout = new ResizeObserver(measure);
+    const layout = new ResizeObserver(() => {
+      measure();
+      requestSceneFrame();
+    });
     layout.observe(layer);
     for (const panel of panels) layout.observe(panel);
 

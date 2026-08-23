@@ -1,3 +1,5 @@
+import { requestSceneFrame } from "./gate";
+
 /**
  * How much of the bottom of the canvas the console covers, in the pixels the
  * rasteriser counts in.
@@ -31,7 +33,14 @@ export function watchDockBand(canvas: HTMLCanvasElement): () => void {
     dockBand.pixels = Math.max(0, covered) * (canvas.height / frame.height);
   };
   measure();
-  const watch = new ResizeObserver(measure);
+  /* The band is a render input that no store write announces, so a panel that
+   * changes height on its own leaves the shaders fading against the wrong line
+   * until something else asks for a frame. A canvas resize is already caught by
+   * the drawing buffer comparison; a panel resize is not. */
+  const watch = new ResizeObserver(() => {
+    measure();
+    requestSceneFrame();
+  });
   watch.observe(canvas);
   if (panel !== null) watch.observe(panel);
   return () => {
