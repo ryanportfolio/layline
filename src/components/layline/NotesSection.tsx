@@ -108,7 +108,7 @@ export function NotesSection({ race }: { race: RaceData }) {
           </article>
         </div>
         <div className={notes.engineProof}>
-          <p className={notes.kicker}>Interactive proof</p>
+          <p className={notes.kicker}>Interactive</p>
           <h3 className={notes.labHeading}>Interpolation lab</h3>
           <p className={notes.labLead}>
             1 telemetry window, 12 seconds long, across 3 synchronized views
