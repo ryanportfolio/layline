@@ -964,10 +964,16 @@
 /* The race as a strip of time above the input: leg bands, the gun, a tick
    per rounding and finish, a lit buoy per cited moment. It carries the
    push-to-bottom the input row used to own. */
+/* The wrapper exists so a buoy's label can stand above the strip: the strip
+   itself clips, to keep the comet inside its own rule. */
+.stripWrap {
+  position: relative;
+  margin-top: auto;
+}
+
 .strip {
   position: relative;
   height: 30px;
-  margin-top: auto;
   overflow: hidden;
   border: 1px solid var(--rule);
   border-radius: 2px;
@@ -1016,39 +1022,6 @@
   background: var(--wind);
 }
 
-.roundTick {
-  position: absolute;
-  bottom: 0;
-  width: 2px;
-  height: 10px;
-}
-
-.finishTick {
-  position: absolute;
-  bottom: 0;
-  width: 2px;
-  height: 14px;
-}
-
-.tickOutlined {
-  box-shadow: 0 0 0 1px var(--ink-dim);
-}
-
-/* Ticks surface one by one, left to right, once the first question lands.
-   Opacity only, so the reveal ships ungated; before it the strip tells the
-   prestart story: bands and the gun. */
-.roundTick,
-.finishTick {
-  opacity: 0;
-  transition: opacity 400ms var(--ease);
-  transition-delay: calc(var(--i) * 28ms);
-}
-
-.panel[data-raced="true"] .roundTick,
-.panel[data-raced="true"] .finishTick {
-  opacity: 1;
-}
-
 /* The comet: an amber front crossing the race while the analyst reads it. */
 .comet {
   position: absolute;
@@ -1095,13 +1068,81 @@
   width: 7px;
   height: 7px;
   margin: -4px 0 0 -4px;
-  border-radius: 50%;
+  padding: 0;
+  appearance: none;
   background: color-mix(in srgb, var(--buoy-hue, var(--wind)) 85%, transparent);
+  border: 0;
+  border-radius: 50%;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--buoy-hue, var(--wind)) 25%, transparent);
+  cursor: var(--house-cursor);
+  /* The strip is inert; its buoys are the one thing on it that answers. */
+  pointer-events: auto;
+  transition:
+    box-shadow 120ms var(--ease),
+    transform 120ms var(--ease);
+}
+
+/* A 7px disc is a fair target for the eye and a poor one for the hand, so the
+   hit area is grown to 21px without moving what is drawn. */
+.buoy::before {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+}
+
+.buoy:hover {
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--buoy-hue, var(--wind)) 40%, transparent);
+  transform: scale(1.25);
+}
+
+.buoy:active {
+  transform: scale(1.05);
 }
 
 .buoyOutlined {
   border: 1px solid var(--ink-dim);
+}
+
+/* What the hovered buoy is: the moment's race clock, and the sail the answer
+   hung it on. Rides above the strip, tinted with the boat's own hue, the same
+   way its chip is. Never hit-testable, so it cannot take the pointer off the
+   buoy that opened it. */
+.buoyTip {
+  position: absolute;
+  bottom: calc(100% + 5px);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 2px 8px;
+  background: var(--page-ground);
+  border: 1px solid var(--rule);
+  border-color: color-mix(in srgb, var(--tip-hue, var(--wind)) 55%, var(--rule));
+  border-radius: 2px;
+  color: var(--ink);
+  font-family: var(--font-martian), monospace;
+  font-size: 10px;
+  line-height: 15px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.buoyTip[data-anchor="mid"] {
+  transform: translateX(-50%);
+}
+
+.buoyTip[data-anchor="end"] {
+  transform: translateX(-100%);
+}
+
+.tipTime {
+  font-variant-numeric: tabular-nums;
+}
+
+.tipSail {
+  color: var(--ink-dim);
+  letter-spacing: 0.1em;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -1619,13 +1660,6 @@
   line-height: 1.1;
 }
 
-.dockNote {
-  margin: 0;
-  color: var(--ink-dim);
-  font-size: 12px;
-  line-height: 18px;
-}
-
 .dockPanel {
   position: relative;
   display: flex;
@@ -1708,14 +1742,8 @@
   line-height: 20px;
 }
 
-/* The strip's tick reveal and the streaming comet hang off the story panel's
-   own class. The rail panel repeats those hooks rather than restating what
-   they draw. */
-.dockPanel[data-raced="true"] .roundTick,
-.dockPanel[data-raced="true"] .finishTick {
-  opacity: 1;
-}
-
+/* The streaming comet hangs off the story panel's own class. The rail panel
+   repeats that hook rather than restating what it draws. */
 .dockPanel[data-state="streaming"] .comet {
   display: block;
 }

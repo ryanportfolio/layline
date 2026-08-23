@@ -83,12 +83,19 @@ export default async function LaylineRacesPage({
       <div className={layline.prototypeBar}>
         <strong>Layline race library</strong>
         <span>{RACES.length} races // seeded telemetry</span>
-        <Link href="/">
+        <Link href="https://fullbuild.ai">
           <strong>Race story</strong>
         </Link>
-        <Link href="https://github.com/ryanportfolio/layline">
-          <strong>View source</strong>
-        </Link>
+        {/* The mark rides the right end of the bar and links home, the same
+            pairing the story page's bar carries. */}
+        <span className={layline.barRight}>
+          <Link className={layline.barHouseLink} href="https://fullbuild.ai" aria-label="fullbuild.ai home">
+            <RailLogo className={layline.barHouseMark} />
+          </Link>
+          <Link href="https://github.com/ryanportfolio/layline">
+            <strong>View source</strong>
+          </Link>
+        </span>
       </div>
 
       <RaceWorkspace
@@ -144,19 +151,6 @@ export default async function LaylineRacesPage({
           </div>
         </div>
       </RaceWorkspace>
-
-      <footer className={layline.colophon}>
-        <span>Spec work by Ryan Allen | all demo concepts</span>
-        <span aria-hidden="true">·</span>
-        <Link href="https://github.com/ryanportfolio/layline">
-          <strong>View source</strong>
-        </Link>
-        <span aria-hidden="true">·</span>
-        <Link className={layline.homeLink} href="https://fullbuild.ai">
-          <RailLogo className={layline.footerHouseMark} />
-          <span>fullbuild.ai</span>
-        </Link>
-      </footer>
     </div>
   );
 }

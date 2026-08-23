@@ -9,6 +9,7 @@ import type { Pose, RaceData } from "@/lib/layline/types";
 import { sampleLive } from "../hud/live";
 import { useReplay } from "../store";
 import { BoatRig, newBoatNodes, type BoatKit, type BoatNodes, type SailPair } from "./Boat";
+import { applyDrape, drapeUniforms, type DrapeUniforms } from "./drape";
 import { fleetFrame, sizeFleetFrame } from "./frame";
 import {
   CLOTH,
@@ -74,6 +75,7 @@ const WIRE_PIXELS = 0.85;
 
 interface FleetKit {
   kits: BoatKit[];
+  drapes: DrapeUniforms[];
   wireHeight: { value: number };
   dispose: () => void;
 }
@@ -140,10 +142,27 @@ uniform float uWirePixels;`,
   });
 
   const kits: BoatKit[] = [];
+  const drapes: DrapeUniforms[] = [];
   for (const boat of race.boats) {
     const livery = liveryOf(boat);
     const texture = sailTexture(boat, livery);
     const kiteCloth = kiteTexture(livery);
+    const kiteMaterial = new MeshStandardMaterial({
+      map: kiteCloth,
+      emissive: SAIL_GLOW,
+      emissiveMap: kiteCloth,
+      emissiveIntensity: 0.16,
+      roughness: 0.78,
+      metalness: 0,
+      side: FrontSide,
+      transparent: true,
+      opacity: 0,
+    });
+    /* The kite is stopped on the mainsail in the vertex shader; see drape.ts
+     * for why it cannot be baked and why it cannot run on the CPU. */
+    const drape = drapeUniforms();
+    applyDrape(kiteMaterial, drape);
+    drapes.push(drape);
     kits.push({
       hull: hullGeometry(livery),
       matte: matteGeometry(livery),
@@ -169,17 +188,7 @@ uniform float uWirePixels;`,
        * under the diffuse, or the lit side and the shaded side of a sail with
        * twenty percent draft in it converge on one value and the camber stops
        * reading. */
-      kite: new MeshStandardMaterial({
-        map: kiteCloth,
-        emissive: SAIL_GLOW,
-        emissiveMap: kiteCloth,
-        emissiveIntensity: 0.16,
-        roughness: 0.78,
-        metalness: 0,
-        side: FrontSide,
-        transparent: true,
-        opacity: 0,
-      }),
+      kite: kiteMaterial,
       mains,
       jibs,
       kites,
@@ -188,6 +197,7 @@ uniform float uWirePixels;`,
 
   return {
     kits,
+    drapes,
     wireHeight,
     dispose: () => {
       for (const pair of [mains, jibs, kites]) {
@@ -308,14 +318,28 @@ export function Fleet({ race }: { race: RaceData }) {
       setSail(node.jibMesh, side < 0 ? kit.jibs.starboard : kit.jibs.port, luff);
 
       const kiteNode = node.kite;
+      const hoist = pose.kite;
+      const grow = 0.38 + 0.62 * hoist;
+      const stretch = 0.18 + 0.82 * hoist;
       if (kiteNode !== null) {
-        const hoist = pose.kite;
-        const grow = 0.38 + 0.62 * hoist;
-        kiteNode.scale.set(grow, 0.18 + 0.82 * hoist, grow);
+        kiteNode.scale.set(grow, stretch, grow);
         kiteNode.updateMatrix();
         kiteNode.visible = hoist > 0.02;
         kit.kite.opacity = Math.min(1, hoist * 1.8);
       }
+      /* What the drape has to know: where the boom is, how much draft is in the
+       * cloth, which side it was cut for, and the hoist scale, which is applied
+       * to the kite node after the shader has run and so has to be undone
+       * inside it. The cut side is a sign because that is what picks the
+       * geometry; the camber beside it is the number that goes soft. */
+      const drape = fleet.drapes[i];
+      drape.uDrapeOn.value = hoist > 0.02 ? 1 : 0;
+      drape.uBoom.value = boom;
+      drape.uSpread.value = 1 - luff;
+      drape.uLee.value = side < 0 ? -1 : 1;
+      drape.uKiteScale.value[0] = grow;
+      drape.uKiteScale.value[1] = stretch;
+      drape.uKiteScale.value[2] = grow;
       setSail(node.kiteMesh, side < 0 ? kit.kites.starboard : kit.kites.port, luff);
 
       const crewNode = node.crew;
