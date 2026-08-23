@@ -176,9 +176,9 @@
 
 .wordmark {
   margin: 0;
-  font-family: var(--font-archivo), sans-serif;
+  font-family: var(--font-pangram);
   font-size: clamp(38px, 7vw, 76px);
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: 0.24em;
   line-height: 1;
   /* The wordmark is set in caps as a mark; the source stays sentence case. */

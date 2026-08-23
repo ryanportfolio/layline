@@ -17,12 +17,12 @@
      hues     one per nation, carried across chip, label, trail, gennaker and
               livery so a boat is the same colour everywhere it appears
 
-   TWO TYPEFACES, TWO JOBS. Archivo carries the wordmark, dock labels, buttons
-   and standings names; dock labels are caps with +4% tracking and fixed axis
-   settings. Martian Mono is quarantined to measured values: the clock, the
-   instruments, every table figure, tabular numerals throughout. A number set in
-   Archivo is a number nobody measured, and a button set in mono is a lie about
-   where the data is.
+   THREE TYPEFACES, THREE JOBS. Pangram Display carries the wordmark and big
+   section headings. Archivo carries dock labels, buttons and standings names;
+   dock labels are caps with +4% tracking and fixed axis settings. Martian Mono
+   is quarantined to measured values: the clock, the instruments, every table
+   figure, tabular numerals throughout. A number set in Archivo is a number
+   nobody measured, and a button set in mono is a lie about where the data is.
 
    FOUR MOTION VERBS, AND AN EFFECT THAT IS NOT ONE OF THEM DOES NOT SHIP.
    TRACK is clock-driven interpolated boat and camera motion, the only
@@ -48,6 +48,7 @@
 .shell {
   /* A night ground, so the pointer takes the frost cut of the mark */
   --house-cursor: var(--house-cursor-frost);
+  --font-pangram: "Pangram Display", var(--font-archivo), sans-serif;
 
   --sky-zenith: #33628c;
   --sky-horizon: #d9e6ee;

@@ -1,6 +1,16 @@
 /* The page's own tokens live in layline.module.css on its shell class; this
  * file carries only the document reset and the one cursor the module reads. */
 
+@font-face {
+  font-family: "Pangram Display";
+  src:
+    url("/assets/fonts/pangram-display.woff2") format("woff2"),
+    url("/assets/fonts/pangram-display.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 :root {
   --house-cursor-frost: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='32'%20height='32'%20viewBox='0%200%20100%20100'%3E%3Cg%20stroke='%230a0d1a'%20stroke-linecap='round'%20stroke-linejoin='round'%20fill='none'%3E%3Cpath%20d='M8%2082%20H92'%20stroke-width='9'/%3E%3Cpath%20d='M18%2082%20V48%20L35%2032%20L52%2048%20V82'%20stroke-width='10'/%3E%3Cpath%20d='M52%2048%20H82%20V82'%20stroke-width='10'/%3E%3Cpath%20d='M52%2048%20L68%2032%20L82%2046'%20stroke-width='10'/%3E%3Cpath%20d='M25%2076%20l12%20-12%20M25%2066%20l9%20-9'%20stroke-width='6'/%3E%3C/g%3E%3Cpath%20d='M52%2048%20H82%20V82%20H52%20Z'%20fill='%230a0d1a'%20stroke='%230a0d1a'%20stroke-width='10'%20stroke-linejoin='round'/%3E%3Cg%20stroke='%23f4f6ff'%20stroke-linecap='round'%20stroke-linejoin='round'%20fill='none'%3E%3Cpath%20d='M8%2082%20H92'%20stroke-width='4'/%3E%3Cpath%20d='M18%2082%20V48%20L35%2032%20L52%2048%20V82'%20stroke-width='4.5'/%3E%3Cpath%20d='M52%2048%20H82%20V82'%20stroke-width='4.5'/%3E%3Cpath%20d='M52%2048%20L68%2032%20L82%2046'%20stroke-width='4.5'/%3E%3Cpath%20d='M25%2076%20l12%20-12%20M25%2066%20l9%20-9'%20stroke-width='2.5'/%3E%3C/g%3E%3Cpath%20d='M52%2048%20H82%20V82%20H52%20Z'%20fill='%23f4f6ff'/%3E%3C/svg%3E") 11 10, pointer;
 }
