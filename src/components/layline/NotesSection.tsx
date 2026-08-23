@@ -62,12 +62,19 @@ export function NotesSection({ race }: { race: RaceData }) {
       <div className={notes.sectionBlock}>
         <p className={notes.kicker}>Under the hood</p>
         <h2 className={notes.heading}>Performance</h2>
-        <p className={notes.lead}>
-          Current demo scope is {race.boats.length} boats, {fixCount.toLocaleString("en-US")} telemetry
-          samples, and {duration} seconds
-          <br />
-          Tens of boats and multi-hour recordings are the next benchmark
-        </p>
+        <ul className={`${notes.lead} ${notes.performanceList}`}>
+          <li>
+            <BoatBullet />
+            <span>
+              Current demo scope is {race.boats.length} boats, {fixCount.toLocaleString("en-US")} telemetry
+              samples, and {duration} seconds
+            </span>
+          </li>
+          <li>
+            <BoatBullet />
+            <span>Tens of boats and multi-hour recordings are the next benchmark</span>
+          </li>
+        </ul>
         <div className={notes.gridTwo}>
           <article className={notes.card}>
             <h3>Frame loop</h3>

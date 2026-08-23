@@ -29,8 +29,22 @@
   max-width: 68ch;
   margin: 0 0 28px;
   color: var(--ink-dim);
+  font-family: Verdana, Geneva, sans-serif;
   font-size: 17px;
   line-height: 28px;
+}
+
+.performanceList {
+  padding: 0;
+  list-style: none;
+}
+
+.performanceList li {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 40px;
 }
 
 .gridThree,
@@ -92,6 +106,7 @@
   max-width: 62ch;
   margin: 0 0 24px;
   color: var(--ink-dim);
+  font-family: Verdana, Geneva, sans-serif;
   font-size: 16px;
   line-height: 26px;
 }
@@ -208,10 +223,12 @@
 
 @media (prefers-reduced-motion: reduce) {
   .boatWake {
-    animation: none;
+    animation-duration: 0.001ms;
+    animation-iteration-count: 1;
+    stroke-dashoffset: -14;
   }
 
   .boatBullet {
-    transition: none;
+    transition-duration: 0.001ms;
   }
 }
