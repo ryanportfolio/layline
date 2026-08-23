@@ -1,0 +1,277 @@
+/* ============================================================================
+   THE RACE LIBRARY. Layout only.
+
+   Every colour, typeface and easing here is a token layline.module.css already
+   declares on .shell, which this page wears: the library is a third arrangement
+   of the console's own materials, not a second palette. The console's ban list
+   governs, so no gradients and no drop shadows; selection is stated the way the
+   standings dock states a followed row, an ink wash behind a 2px ink edge.
+
+   Three widths, and only the middle pane is the same shape in all of them:
+
+   1600 and up   280 / flex / 380, one viewport tall, nothing on the page
+                 scrolls but the rail, the thread and the finish table.
+   1200 to 1599  220 / flex / 340. The rail gives up 60px and the analyst 40
+                 before the viewer gives up any.
+   Under 1200    one column. Three panes will not hold their jobs at a third of
+                 a laptop each, so the rail becomes a chip row across the top,
+                 the viewer takes a stated slice of the viewport and the analyst
+                 runs full width under it. Below 901 the console's own stacked
+                 rules take the viewer apart into its docks.
+   ========================================================================= */
+
+/* The height of the composer bar the analyst pins to the foot of the viewport
+   below 1200px: a 42px field inside 8px of padding either side, over a 1px
+   rule. Declared on the page because two rules read it, the bar itself in the
+   analyst sheet and the room this page leaves under everything for it. */
+.page {
+  --composer-bar: 59px;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px;
+}
+
+/* ---- the race rail ---- */
+
+.library {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.libraryHeading {
+  margin: 0;
+  color: var(--ink-dim);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  line-height: 16px;
+  text-transform: uppercase;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  min-height: 0;
+  overflow-y: auto;
+  list-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule) transparent;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-left: 2px solid var(--rule);
+  border-radius: 2px;
+  color: var(--ink);
+  font-family: var(--font-archivo), sans-serif;
+  text-align: left;
+  cursor: var(--house-cursor);
+  transition:
+    background-color 120ms var(--ease),
+    border-color 120ms var(--ease);
+}
+
+.row:hover {
+  background: rgba(236, 245, 249, 0.06);
+  border-color: var(--ink-dim);
+}
+
+/* The followed-row grammar the standings dock uses, borrowed whole: the race
+   you are watching is the row the page is following. */
+.row[aria-current="true"] {
+  background: rgba(236, 245, 249, 0.1);
+  border-color: var(--ink-dim);
+  border-left-color: var(--ink);
+}
+
+.rowName {
+  font-size: 15px;
+  font-variation-settings: "wght" 560;
+  line-height: 20px;
+}
+
+.rowMeta {
+  color: var(--ink-dim);
+  font-family: var(--font-martian), monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  line-height: 14px;
+  text-transform: uppercase;
+}
+
+/* Fleet size and the winning time, both measured off the race's own build, so
+   both are set in the numeral face like every other measurement on the page. */
+.rowStats {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--ink-dim);
+  font-family: var(--font-martian), monospace;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+  line-height: 14px;
+  text-transform: uppercase;
+}
+
+.rowStats strong {
+  color: var(--ink);
+  font-weight: 400;
+}
+
+/* ---- the viewer ---- */
+
+/* The console's stage is flex: 1 inside whatever holds it, and takes its
+   height from that. Here that is the grid row. */
+.console {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ---- the analyst ---- */
+
+.analyst {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The column's shape before the analyst mounts into it, so the grid does not
+   resize once around the reader on the first frame. */
+.analystHold {
+  flex: 1;
+  min-height: 420px;
+}
+
+/* The honest state for a build with no key and no mock: the pane keeps its
+   place and says why it is quiet, instead of taking questions the route would
+   answer with a 503. */
+.analystOffline {
+  flex: 1;
+  padding: 18px 16px;
+  border: 1px solid var(--rule);
+}
+
+.offlineHeading {
+  margin: 0 0 10px;
+  color: var(--ink);
+  font-family: var(--font-archivo), sans-serif;
+  font-size: 18px;
+}
+
+.offlineLine {
+  margin: 0 0 6px;
+  color: var(--ink-dim);
+  font-family: var(--font-martian), monospace;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+/* ---- under the three-column threshold ---- */
+
+@media (max-width: 1199px) {
+  /* The bar is fixed over the page, so the page ends above it: the colophon is
+     the last thing down here and it is not going under a composer. */
+  .page {
+    padding-bottom: calc(var(--composer-bar) + env(safe-area-inset-bottom));
+  }
+
+  /* The rail becomes a picker across the top, carrying the same four readings
+     a row carries in the column: a chip that drops the fleet size and the
+     winning time would ask a phone to choose between races on the name alone. */
+  .rows {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 4px;
+  }
+
+  /* Stated rather than content sized, and narrow enough that 366px of handset
+     holds two chips and the front edge of the third: a row that ends flush
+     with the viewport reads as all there is, and nobody scrolls it. */
+  .row {
+    flex: none;
+    width: 168px;
+  }
+
+  /* Stacked at this width. The two readings sit on one line in a 194px row and
+     on two in a 144px one, where side by side would set them at 5px. */
+  .rowStats {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  /* A stated slice of the viewport rather than a share of a column: the stage
+     sizes itself from its parent, and a parent sized from its child measures
+     larger every pass. Under 901px the console stylesheet takes over and lays
+     the viewer out as a column of docks, so the height goes back to auto. */
+  .console {
+    height: 70vh;
+    min-height: 440px;
+  }
+}
+
+@media (max-width: 900px) {
+  .console {
+    height: auto;
+    min-height: 0;
+  }
+}
+
+/* ---- laptop: three columns, one viewport ---- */
+
+@media (min-width: 1200px) {
+  .workspace {
+    /* The prototype bar is 33px: 16px of line inside 8px of padding either
+       side, over a 1px rule. */
+    height: calc(100vh - 33px);
+    grid-template-columns: 220px minmax(0, 1fr) 340px;
+  }
+}
+
+/* 220px of rail leaves 194px of row, and the longest venue and date line in
+   the library, KESTREL SOUND · 13 NOV 2028, is 27 monospaced characters. Nine
+   points and a quarter of the tracking put it on one line with room to spare;
+   the analyst's ident line takes the same drop when its column narrows. A
+   longer venue than that wraps to a second line rather than being cut. */
+@media (min-width: 1200px) and (max-width: 1599px) {
+  .rowMeta {
+    font-size: 9px;
+    letter-spacing: 0.04em;
+  }
+}
+
+@media (min-width: 1600px) {
+  .workspace {
+    gap: 16px;
+    padding: 16px;
+    grid-template-columns: 280px minmax(0, 1fr) 380px;
+  }
+}
+
+/* Selection and hover are colour changes already; nothing here moves. The
+   query is stated so the sheet says so rather than leaving it to be read off
+   the absence of a transform. */
+@media (prefers-reduced-motion: reduce) {
+  .row {
+    transition: none;
+  }
+}

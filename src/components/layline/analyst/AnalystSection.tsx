@@ -11,6 +11,7 @@ import {
   type CSSProperties,
 } from "react";
 import { clock } from "@/lib/layline/format";
+import { DEFAULT_RACE_ID, raceMeta } from "@/lib/layline/races";
 import { FIX_HZ, type BoatMeta } from "@/lib/layline/types";
 import {
   MAX_MESSAGE_CHARS,
@@ -75,7 +76,7 @@ const NEXT_MS = 260; // dark between one question and the next
  * one paragraph re-render instead of re-rendering the whole Debrief panel,
  * the course backdrop and the slate's drawing sixty times a question.
  */
-function TypedHint({ active }: { active: boolean }) {
+function TypedHint({ active, questions }: { active: boolean; questions: readonly string[] }) {
   const [line, setLine] = useState<{ text: string; out: boolean }>({ text: "", out: false });
   const at = useRef({ question: 0, char: 0 });
 
@@ -88,7 +89,7 @@ function TypedHint({ active }: { active: boolean }) {
     let timer = 0;
     const type = () => {
       const state = at.current;
-      const target = SUGGESTED_QUESTIONS[state.question];
+      const target = questions[state.question];
       state.char += 1;
       setLine({ text: target.slice(0, state.char), out: false });
       if (state.char < target.length) {
@@ -98,7 +99,7 @@ function TypedHint({ active }: { active: boolean }) {
       timer = window.setTimeout(() => {
         setLine((current) => ({ ...current, out: true }));
         timer = window.setTimeout(() => {
-          state.question = (state.question + 1) % SUGGESTED_QUESTIONS.length;
+          state.question = (state.question + 1) % questions.length;
           state.char = 0;
           setLine({ text: "", out: false });
           timer = window.setTimeout(type, NEXT_MS);
@@ -107,7 +108,7 @@ function TypedHint({ active }: { active: boolean }) {
     };
     timer = window.setTimeout(type, 700);
     return () => window.clearTimeout(timer);
-  }, [active]);
+  }, [active, questions]);
 
   if (line.text === "") return null;
   return (
@@ -236,7 +237,21 @@ const AnalystBody = memo(function AnalystBody({
   );
 });
 
-export function AnalystSection() {
+/**
+ * The Debrief, in one of two dressings.
+ *
+ * `story` is the section under the console on /prototype/layline: the header
+ * with the broadcast ident, the course backdrop, the three pennant cards and
+ * the loaded-race slate, all written for a full-measure page holding one race.
+ *
+ * `rail` is the same conversation in a 380px column beside the viewer on
+ * /prototype/layline/races. It drops every part of that dressing and takes its
+ * suggested questions from the loaded race in the registry rather than from the
+ * shipped race's three, because a question naming USA 4 is only true of the
+ * race USA 4 sailed. Everything below the chips is the same markup in both.
+ */
+export function AnalystSection({ variant = "story" }: { variant?: "story" | "rail" } = {}) {
+  const rail = variant === "rail";
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [status, setStatus] = useState<string | null>(null);
@@ -248,6 +263,7 @@ export function AnalystSection() {
   const [composerFocused, setComposerFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const threadRef = useRef<HTMLOListElement | null>(null);
+  const conversationRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const retryRef = useRef<Turn[] | null>(null);
   /* Boat metadata comes from the client's own seeded race build, same as the
@@ -256,6 +272,32 @@ export function AnalystSection() {
   const fleet = useMemo(
     () => new Map<string, BoatMeta>(raceData().boats.map((boat) => [boat.id, boat])),
     [],
+  );
+
+  const storeRaceId = useReplay((state) => state.raceId);
+  /* Which race this analyst answers about. The rail follows the viewer beside
+   * it. The story page is pinned to the shipped race, the one its copy, its
+   * chart and its finish table are about, rather than to the store, which a
+   * visit to the library may have left on another race. */
+  const raceId = rail ? storeRaceId : DEFAULT_RACE_ID;
+
+  /* The three questions offered, and the hue each one is asked in. The story
+   * page keeps the shipped race's three verbatim, so its cards and the mock
+   * route's prefix match are untouched. The rail reads the loaded race's own
+   * three from the registry, and colours each by the boat it names: the fleet
+   * carries one hue per boat everywhere, so a question about GBR 21 arrives in
+   * GBR 21's colour without a lookup table to keep in step. */
+  const questions = useMemo<readonly string[]>(
+    () => (rail ? (raceMeta(raceId)?.suggestedQuestions ?? SUGGESTED_QUESTIONS) : SUGGESTED_QUESTIONS),
+    [rail, raceId],
+  );
+  const questionHues = useMemo(
+    () =>
+      questions.map(
+        (question) =>
+          raceData().boats.find((boat) => question.includes(boat.sail))?.hue ?? "var(--wind)",
+      ),
+    [questions],
   );
 
   /* The composer's two idle layers. Both are client-only: the typed line and
@@ -414,7 +456,10 @@ export function AnalystSection() {
        * opens with a word the spec bans from every file. */
       const res = await fetch("/api/layline/analyst", {
         method: "POST",
-        body: JSON.stringify({ messages }),
+        body: JSON.stringify({
+          messages,
+          raceId: rail ? useReplay.getState().raceId : DEFAULT_RACE_ID,
+        }),
         signal: controller.signal,
       });
       if (!res.ok || res.body === null) {
@@ -475,7 +520,7 @@ export function AnalystSection() {
       if (controller.signal.aborted) return;
       fail(DROPPED_LINE);
     }
-  }, []);
+  }, [rail]);
 
   const ask = useCallback(
     (raw: string) => {
@@ -484,9 +529,19 @@ export function AnalystSection() {
       setInput("");
       inputRef.current?.focus();
       setRaced(true);
+      /* Stacked, the rail's composer is a bar pinned to the foot of the
+       * viewport and the thread it writes into can be most of a screen above
+       * it. Bring the answer to the person who asked for it. */
+      if (rail && window.matchMedia("(max-width: 1199px)").matches) {
+        const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        conversationRef.current?.scrollIntoView({
+          behavior: reduced ? "auto" : "smooth",
+          block: "start",
+        });
+      }
       void stream([...turns, { role: "user", text }]);
     },
-    [streaming, stream, turns],
+    [rail, streaming, stream, turns],
   );
 
   const retry = useCallback(() => {
@@ -510,7 +565,22 @@ export function AnalystSection() {
   }, []);
 
   return (
-    <section className={styles.debrief} aria-labelledby="debrief-heading" data-leg="Debrief">
+    <section
+      className={rail ? styles.dock : styles.debrief}
+      aria-labelledby={rail ? "analyst-dock-heading" : "debrief-heading"}
+      data-leg={rail ? undefined : "Debrief"}
+    >
+      {rail ? (
+        <div className={styles.dockHead}>
+          <h2 id="analyst-dock-heading" className={styles.dockHeading}>
+            Debrief
+          </h2>
+          <p className={styles.dockNote}>
+            Ask about the race in the viewer. Answers cite its telemetry and jump the replay to the
+            moment
+          </p>
+        </div>
+      ) : (
       <div className={styles.head}>
         <div className={styles.headText}>
           <p className={styles.kicker}>Race analyst</p>
@@ -547,14 +617,30 @@ export function AnalystSection() {
           </div>
         </div>
       </div>
+      )}
 
       <div
-        className={styles.panel}
+        className={rail ? styles.dockPanel : styles.panel}
         data-state={turns.length === 0 ? "empty" : streaming ? "streaming" : "answered"}
         data-raced={raced ? "true" : undefined}
       >
-        <CourseBackdrop hot={hot} />
-        <div className={styles.panelGrid}>
+        {rail ? null : <CourseBackdrop hot={hot} />}
+        <div className={rail ? styles.dockGrid : styles.panelGrid}>
+          {rail ? (
+            <div className={styles.dockChips}>
+              {questions.map((question, index) => (
+                <button
+                  key={question}
+                  type="button"
+                  className={styles.dockChip}
+                  style={{ "--card-hue": questionHues[index] } as CSSProperties}
+                  onClick={() => ask(question)}
+                >
+                  {question}
+                </button>
+              ))}
+            </div>
+          ) : (
           <div className={styles.rail}>
             <h3 className={styles.railLabel}>Suggested questions</h3>
             <ul className={styles.suggestionList}>
@@ -603,9 +689,15 @@ export function AnalystSection() {
               The analyst reads the same seeded telemetry as the replay and answers only from it.
             </p>
           </div>
+          )}
 
-          <div className={styles.conversation}>
+          <div className={rail ? styles.dockConversation : styles.conversation} ref={conversationRef}>
             {turns.length === 0 ? (
+              rail ? (
+                <p className={styles.dockEmpty}>
+                  The whole race is loaded. Tap a question or ask your own
+                </p>
+              ) : (
               <div className={styles.slate}>
                 {/* The loaded-race slate. Numbers repeat what the console and
                     the notes already publish, so the board is decorative; the
@@ -654,6 +746,7 @@ export function AnalystSection() {
                   The whole race is loaded. Tap a question or ask your own.
                 </p>
               </div>
+              )
             ) : (
               <ol className={styles.thread} ref={threadRef} aria-label="Conversation">
                 {turns.map((turn, index) => {
@@ -746,7 +839,7 @@ export function AnalystSection() {
                 {/* The question typing itself into the empty field. Decoration
                     over a real placeholder that stays in the markup, so the
                     hint survives with JavaScript off and in the tree. */}
-                <TypedHint active={idleComposer && !streaming} />
+                <TypedHint active={idleComposer && !streaming} questions={questions} />
                 {/* The fleet sailing a lap of your question, focused. */}
               </div>
               {/* Never `disabled`: a disabled button drops out of the tab order,

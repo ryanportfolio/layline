@@ -230,7 +230,10 @@ test('every page section the rail marks is a section the page actually renders',
   ]);
 
   assert.match(page, /data-leg="Replay console"/);
-  assert.match(analyst, /data-leg="Debrief"/);
+  /* The Debrief marks the leg on the story page and nowhere else. The same
+     component renders in the race library's rail, which has no course rail
+     down its margin for a leg mark to be rounded on. */
+  assert.match(analyst, /data-leg=\{rail \? undefined : "Debrief"\}/);
   assert.match(notes, /data-leg="Project notes"/);
 
   /* The mark's name comes from the section itself, not from the margin. */
