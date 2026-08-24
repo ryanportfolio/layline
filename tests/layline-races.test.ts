@@ -873,10 +873,11 @@ test("the library covers the renderer's boot with the sea, the story page with i
   assert.ok(cover.includes("container-type: inline-size"), "the brief stopped sizing to the pane");
 
   /* The cover used to name the race and wait. It now spends the wait stating
-     the race, two ways: a chart of the last ten seconds before the gun, and
-     the same ten seconds as three panels, with a switch between them. It is
-     still the race the rail names, and the page still preloads the display
-     face the name is set in, which is declared font-display: block. */
+     the race in two halves that meet at the gun: the panels are the start, and
+     the performance view is the race after it, read against the polar the
+     engine sails the fleet along. A switch swaps them. It is still the race the
+     rail names, and the page still preloads the display face the name is set
+     in, which is declared font-display: block. */
   assert.ok(
     workspace.includes("{ name: meta.name, venue: meta.venue, dateLabel: meta.dateLabel }"),
     "the cover stopped briefing the race the rail names",
@@ -888,22 +889,40 @@ test("the library covers the renderer's boot with the sea, the story page with i
     "the library stopped preloading the face its title card is set in",
   );
 
-  /* Both views, one switch, one gate. Each view owns its own drawing and its
-     own prestart loop, because only one is mounted at a time and both seek the
-     same store clock; the shell owns the header, the footer and the way
-     through. Neither view may release the brief. */
+  /* Both views, one switch, one gate. The shell owns the prestart clock, the
+     header, the footer and the way through, and it has to: only one view is
+     mounted at a time and the performance view does not move, so a loop living
+     in a view stopped the countdown the moment a reader opened the other tab.
+     Neither view may release the brief. */
   const shell = source("src/components/layline/RaceBrief.tsx");
-  assert.ok(shell.includes('data-brief-switch="chart"'), "the switch stopped offering the chart");
-  assert.ok(shell.includes('data-brief-switch="panels"'), "the switch stopped offering the panels");
-  assert.ok(shell.includes("<BriefChart race={race} reduced={reduced} />"), "the chart left the shell");
+  assert.ok(shell.includes('data-brief-switch="panels"'), "the switch stopped offering the start");
+  assert.ok(
+    shell.includes('data-brief-switch="performance"'),
+    "the switch stopped offering the race after it",
+  );
   assert.ok(shell.includes("<BriefPanels race={race} reduced={reduced} />"), "the panels left the shell");
+  assert.ok(shell.includes("<BriefPerformance race={race} />"), "the performance view left the shell");
   assert.ok(shell.includes("Start the race"), "the way through changed its words");
-  for (const name of ["BriefChart", "BriefPanels"]) {
+  assert.ok(
+    shell.includes("state.seek(race.tMin + phase * span)"),
+    "the shell stopped driving the prestart",
+  );
+  for (const name of ["BriefPanels", "BriefPerformance"]) {
     const view = source(`src/components/layline/${name}.tsx`);
-    assert.ok(view.includes("state.seek(race.tMin + phase * span)"), `${name} stopped seeking the store`);
+    assert.ok(!view.includes("requestAnimationFrame"), `${name} started keeping a clock of its own`);
     assert.ok(!view.includes("releaseBrief"), `${name} took the gate off the shell`);
-    assert.ok(view.includes("briefFacts(race)"), `${name} stopped reading the race's own facts`);
   }
+  /* The start reads the race through brief.ts; the race after it reads through
+     the analytics module the instrument dock and the analyst lane share, so a
+     figure cannot mean one thing in one half and another in the other. */
+  assert.ok(
+    source("src/components/layline/BriefPanels.tsx").includes("briefFacts(race)"),
+    "the start stopped reading the race's own facts",
+  );
+  assert.ok(
+    source("src/components/layline/BriefPerformance.tsx").includes("polarReview(race)"),
+    "the performance view stopped reading the console's own analytics",
+  );
 
   /* The store re-arms the gate per race, unlike the story page's intro, so a
      second race gets its own brief. */

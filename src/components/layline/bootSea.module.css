@@ -74,10 +74,10 @@
      of this layer's invention. The contract at the top of layline.module.css:
      "amber is the wind. Dial needle, laylines, ladder rungs, the start line
      before the gun. Nothing else may borrow it." Everything this layer draws
-     is before the gun, so amber gets the ladder rungs, the wind arrow and its
-     tag, the start line itself, the bias wedge, the mark over the favored end,
-     the seconds that end is worth, and the direction trace under the plot. The
-     status hairline is not wind and does not take it. The token is declared on
+     is before the gun, so amber gets the wind arrow and its tag, the start
+     line itself, the mark over the favored end, and the seconds that end is
+     worth. The status hairline is not wind and does not take it, and neither
+     does the performance view, where nothing drawn is weather. The token is declared on
      .shell and no theme restates it, so it holds on all five. */
   --brief-accent: var(--wind);
 
@@ -242,7 +242,6 @@
    drawing. */
 .raceMeta,
 .panelLabel,
-.stripLabel,
 .readLabel,
 .viewBtn,
 .twsUnit,
@@ -305,20 +304,6 @@
   color: var(--brief-head-ink);
 }
 
-.briefMain {
-  display: grid;
-  flex: 1;
-  /* One column at both widths, so the wide layout is the same stack as the
-     narrow one and not a second design. The plot takes whatever the three
-     fixed blocks under it leave, which is what makes the chart the thing that
-     grows when the viewer's window does. */
-  grid-template-columns: 1fr;
-  grid-template-rows: minmax(0, 1fr) auto auto auto;
-  gap: 1.8cqw;
-  min-height: 0;
-  overflow: hidden;
-}
-
 /* A 1px dim rule does the job a drop shadow would, which is the console's
    standing rule and holds here. */
 .panel {
@@ -364,83 +349,6 @@
   text-transform: none;
 }
 
-/* ---- the plot: the last ten seconds, from above, at true scale ---- */
-
-.plotPlate {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
-}
-
-.plotBox {
-  flex: 1;
-  min-height: 0;
-}
-
-.plot {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-/* Metres, one to one, with y negated for the screen's downward axis: the same
-   frame components/layline/svg/chartFrame.ts draws the whole race in. Strokes
-   are non-scaling so a hairline stays a hairline whatever the window does to
-   the metres per pixel. */
-/* Every width below is stated in pixels and multiplied back into metres by
-   --plot-px, the measured metres per pixel RaceBrief writes onto the drawing.
-   vector-effect: non-scaling-stroke would have been shorter and it is wrong
-   here: Chrome then reads stroke-dasharray in device pixels too, so the dash
-   that reveals how far a boat has sailed repeated eight times down its own
-   track instead of drawing one prefix of it. Scaling the width keeps the dash
-   in metres, where the reveal is measured. */
-
-/* Solid and heavy is surveyed water: the line itself, in the wind's colour,
-   because the console's contract names "the start line before the gun" as one
-   of the things amber means and this whole layer is before the gun. */
-.plotLine {
-  stroke: var(--brief-accent);
-  stroke-width: calc(2 * var(--plot-px));
-}
-
-/* The two ends are marks on the water rather than weather, so they stay in
-   ink. Open ring for the pin, filled block for the committee boat: a chart
-   separates its marks by shape, not by giving each one a colour. */
-.plotMark {
-  fill: none;
-  stroke: var(--brief-ink);
-  stroke-width: 1.4;
-}
-
-
-.plotMarkFill {
-  fill: var(--brief-ink);
-}
-
-/* Dotted is a limit rather than a thing. The rungs are contours of equal gain
-   to windward ten metres apart, so they are where the wind is, not what is on
-   the water, and they rotate as one group with it. */
-.rung {
-  fill: none;
-  stroke: var(--brief-accent);
-  stroke-width: calc(1 * var(--plot-px));
-  /* Metres, so the dot spacing is a distance on the water like everything else
-     in this drawing. */
-  stroke-dasharray: 0.3 2.4;
-}
-
-/* The water the favored end has already won: the sliver between the line and
-   the rung through its middle. It is the bias, drawn at the scale the bar
-   underneath it states, and it collapses as the breeze comes back to the
-   course axis. */
-.wedge {
-  /* Stated as a mix rather than as an alpha laid over the accent, so what the
-     reader sees on the plate is a colour this stylesheet named. */
-  fill: color-mix(in srgb, var(--brief-accent) 26%, transparent);
-  stroke: none;
-}
-
 .windStroke {
   stroke: var(--brief-accent);
   stroke-width: 1.4;
@@ -450,94 +358,8 @@
   fill: var(--brief-accent);
 }
 
-/* The one figure inside the drawing that is weather, so the one that takes the
-   wind's colour out here on the water. */
-.windTag {
-  fill: var(--brief-accent);
-  font-family: var(--brief-mono);
-  letter-spacing: 0.02em;
-}
-
 .favMark {
   fill: var(--brief-accent);
-}
-
-/* The approach still to be sailed, thin and in the dim token. Weight and not
-   hue separates it from the water already crossed, which is drawn over it in
-   the boat's own colour at twice the weight: the reader can tell the two apart
-   in a photocopy. */
-.trackAhead {
-  fill: none;
-  stroke: var(--brief-dim);
-  stroke-width: calc(1 * var(--plot-px));
-}
-
-.trackSailed {
-  fill: none;
-  stroke-width: calc(2.4 * var(--plot-px));
-}
-
-/* A near-black hull colour needs a light edge to survive the plate, the same
-   outline its ledger chip carries and the same one TrackChart gives it. */
-.trackDark {
-  fill: none;
-  stroke: var(--brief-dim);
-  stroke-width: calc(4 * var(--plot-px));
-}
-
-/* Filled is the hull now, outlined is where it will be at the gun: fill, not
-   colour, carries the difference. Both are drawn at a fixed size in pixels
-   because no hull length is in the feed, and a symbol scaled to the chart
-   would be a claim about how long these boats are. */
-.hullNow {
-  /* Set for the near-black hue, which takes a light edge to hold against the
-     plate. Every other hull leaves stroke unset, so this does nothing. */
-  stroke-width: 0.7;
-}
-
-.hullGun {
-  fill: none;
-  stroke-width: 1.2;
-}
-
-.scaleRule {
-  stroke: var(--brief-ink);
-  stroke-width: calc(1.2 * var(--plot-px));
-}
-
-/* Inside the drawing the type drops to nine, the one place on the layer it is
-   not ten, because a label out on the water is read against the chart rather
-   than against the rows beside it. Sizes are written in user units by the
-   measured metres per pixel, so nine pixels stays nine pixels at every width. */
-.plotLabel,
-.plotEnd {
-  fill: var(--brief-dim);
-  font-family: var(--brief-sans);
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.plotFig {
-  fill: var(--brief-dim);
-  font-family: var(--brief-mono);
-  letter-spacing: 0.02em;
-}
-
-.plotSail {
-  fill: var(--brief-ink);
-  font-family: var(--brief-mono);
-  letter-spacing: 0.02em;
-}
-
-/* Wraps rather than truncates. Wide the two notes share a line; narrow they
-   do not fit one, and an ellipsised "favored: pin by..." states nothing. */
-.plotCap {
-  display: flex;
-  flex: none;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 0.4cqw 2cqw;
 }
 
 .favored {
@@ -566,77 +388,9 @@
   color: var(--brief-accent);
 }
 
-/* ---- the direction strip: where the breeze went across the ten seconds ---- */
-
-/* The one place the shift is legible as a shape. The speed moves about half a
-   metre a second across the prestart and the direction swings four to eight
-   degrees, taking the favored end with it on two of the three seeds, so this
-   band plots the direction and the readings row carries the speed. */
-.stripPlate {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 10px;
-  height: 28px;
-  padding: 0 10px;
-}
-
-.stripLabel {
-  flex: none;
-  color: var(--brief-dim);
-}
-
-.stripPlot {
-  flex: 1;
-  min-width: 0;
-  height: 20px;
-}
-
-.stripValue {
-  flex: none;
-  color: var(--brief-ink);
-  font-family: var(--brief-mono);
-  font-size: 10px;
-  line-height: 16px;
-}
-
-/* The course axis, which is the line the favored end changes hands across. */
-.stripRule {
-  /* Dotted like the ladder rungs, and for the same reason: it is a limit
-     rather than a thing. Dim rather than amber, because a line square to the
-     course is geometry and not weather. */
-  stroke: var(--brief-dim);
-  stroke-width: 1;
-  stroke-dasharray: 1 3;
-}
-
-.stripTrace {
-  fill: none;
-  stroke: var(--brief-accent);
-  stroke-width: 1.5;
-}
-
-.stripDot {
-  fill: var(--brief-accent);
-}
-
-/* ---- the fleet, in the order it lies along the line ---- */
-
-.ledger {
-  display: flex;
-  flex-direction: column;
-  /* No gap between rows: the line box is the rhythm, and eight pixels between
-     six of them was sixty pixels the chart above wanted more. */
-  gap: 0;
-  padding: 10px 12px;
-}
-
-.ledger .panelLabel {
-  margin-bottom: 6px;
-}
-
-/* Pin end to boat end, which is left to right on the plot above it, so the
-   list and the drawing are visibly the same six things in the same order. */
+/* Pin end to boat end, which is left to right on the diagram beside it, so
+   the list and the drawing are visibly the same six things in the same
+   order. */
 .fleetRow {
   display: flex;
   align-items: center;
@@ -679,16 +433,11 @@
 /* Both figure columns are wide enough for their own longest reading at 10px
    Martian, which is a wide face: the plate clips what overflows, and a boat
    sitting "1.9 m of" the line is worse than a truncated team name. */
-.across,
 .slot {
   flex: none;
   color: var(--brief-dim);
   text-align: right;
   white-space: nowrap;
-}
-
-.across {
-  width: 44px;
 }
 
 .slot {
@@ -763,18 +512,17 @@
   padding: 1.5cqw 1.6cqw;
 }
 
-/* Six rows on their own plate, ruled, rather than six lines of a ledger under a
-   drawing. Nothing is stretching above them here either, so the foot sits under
-   the last boat instead of at the bottom of a plate taller than its rows. */
+/* Six rows on their own plate, ruled, rather than six lines under a drawing.
+   Nothing is stretching above them, so the foot sits under the last boat
+   instead of at the bottom of a plate taller than its rows. */
 [data-brief-view="panels"] .fleetRow {
   padding: 0.78cqw 0;
   border-bottom: 1px solid var(--brief-hair);
 }
 
-/* Sized to their own figures rather than to the ledger's columns. The ledger
-   states widths so its six rows line up under a drawing three columns wide;
-   here the same two columns sit on a plate a third of that, and the width they
-   were holding came straight off the boat name, which truncated. */
+/* Sized to their own figures rather than to a stated width. The column here
+   sits on a plate a third of the cover wide, and the width it was holding came
+   straight off the boat name, which truncated. */
 [data-brief-view="panels"] .sail {
   width: auto;
 }
@@ -899,6 +647,260 @@
 .biasCap {
   margin-top: 0.3cqw;
   color: var(--brief-dim);
+}
+
+/* ---- the performance view ----
+
+   The race after the gun, read as a polar with the fleet's figures beside it.
+   Panels is a picture of ten seconds and moves; this does not, because every
+   sample on it has already happened. Everything the two views share, the plate
+   ground, the label type, the fleet chip, the readings row, is stated once
+   above and used by both; only what genuinely differs is here.
+
+   Nothing in this view is weather, so nothing in it takes the accent. The
+   contract at the top of layline.module.css gives amber to the wind, and a
+   boat's speed against its polar is not the wind. */
+
+.perfMain {
+  display: grid;
+  flex: 1;
+  /* The polar is square and the table is a list, so the two want opposite
+     shapes out of the same row. The plot gets the narrower column and fills it
+     corner to corner; the table gets the wider one, because six columns of
+     figures truncate long before a circle does. */
+  grid-template-columns: minmax(0, 1.06fr) minmax(0, 1fr);
+  /* The table is as tall as its seven rows and no taller; the strip takes what
+     is left. A table stretched to fill the column left the same band of empty
+     plate under it that the drawing this view replaced was cut for. */
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 1.8cqw;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.polarPlate {
+  display: flex;
+  flex-direction: column;
+  grid-row: 1 / 4;
+  gap: 0.7cqw;
+  padding: 1cqw 1.2cqw;
+}
+
+/* The plot holds its own square whatever the column does, and centres in what
+   is left. A polar stretched to a column's aspect would put a boat's speed at
+   sixty degrees somewhere other than where the same speed at a hundred and
+   twenty is drawn, which is the one thing a radial plot must not do. */
+.polarBox {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+.polar {
+  width: auto;
+  max-width: 100%;
+  height: 100%;
+  max-height: 100%;
+  aspect-ratio: 1;
+}
+
+/* Rings and spokes are the paper the plot is drawn on, so they sit at the
+   weight the plate's own hairline does and no heavier. Non-scaling, because a
+   grid line that thickened with the window would start reading as data. */
+.polarGrid {
+  fill: none;
+  stroke: var(--brief-hair);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.polarTick {
+  fill: var(--brief-dim);
+  font-family: var(--brief-mono);
+  font-size: 3.4px;
+  letter-spacing: 0.02em;
+}
+
+.polarAngle {
+  fill: var(--brief-dim);
+  font-family: var(--brief-sans);
+  font-size: 3.2px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* The standard the fleet is measured against, so it is drawn in ink and the
+   fleet is drawn in colour over it. One weight up from the grid and one down
+   from a track: it is a claim about the boats, not one of them. */
+.polarTarget {
+  fill: none;
+  stroke: var(--brief-ink);
+  stroke-width: 1.2;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Eight hundred odd samples on one plate, so each one is a wash rather than a
+   mark and the density is what the reader sees. Raising one boat is a style
+   write on this group; the transition is what keeps that from being a flicker,
+   and it settles once rather than looping, which is the console's rule for a
+   UI move. */
+.polarCloud {
+  fill-opacity: 0.5;
+  transition: opacity 180ms var(--ease);
+}
+
+.polarCap {
+  flex: none;
+  margin: 0;
+  color: var(--brief-dim);
+  font-family: var(--brief-mono);
+  font-size: 9px;
+  line-height: 14px;
+}
+
+.perfTable {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 1cqw 1.2cqw;
+}
+
+.perfTable .panelLabel {
+  margin-bottom: 0.5cqw;
+}
+
+/* One track for the chip, one for the sail number, and five for the figures.
+   The five are not equal, and not sized to content either: a column that
+   resized as the fleet's numbers changed would stop the eye running down it,
+   but five equal ones spent the same width on "87.5" as on the head over it.
+   Measured at 1440, equal columns left "beat vmg" 3px of slack while "beat %"
+   sat on 16. The fractions here are the heads, which are the widest thing in
+   each column, so every one of them clears by eight pixels or better. */
+.perfRow {
+  display: grid;
+  align-items: center;
+  grid-template-columns:
+    63px repeat(2, minmax(0, 0.86fr)) repeat(2, minmax(0, 1.16fr))
+    minmax(0, 0.96fr);
+  gap: 0 0.42cqw;
+  padding: 0.5cqw 0;
+  border-bottom: 1px solid var(--brief-hair);
+  font-family: var(--brief-mono);
+  font-size: 10px;
+  line-height: 18px;
+}
+
+/* Tracked tighter than the plate labels above it, and that is the one place
+   on the layer where it is. "beat vmg" at the 0.1em every other label carries
+   needs 53px in a 53px column: it fits with nothing to spare, and the first
+   width or webfont that moves it by a pixel truncates it to "beat v...". The
+   row is five column heads over figures, not prose, so it can hold tighter. */
+/* The row says it is the one raising a boat out of the fleet beside it. The
+   same flat tint the view switch marks its pressed half with, because both are
+   "you are on this one" and the layer should not have two ways of saying it.
+   The head and the fleet's own row raise nothing, so neither takes it. */
+.perfRow:hover {
+  background: color-mix(in srgb, var(--brief-ink) 7%, transparent);
+}
+
+.perfHead:hover,
+.perfMedian:hover {
+  background: none;
+}
+
+.perfHead {
+  color: var(--brief-dim);
+  font-family: var(--brief-sans);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  line-height: 14px;
+  text-transform: uppercase;
+}
+
+/* The fleet's own row, and the only one that is not a boat. It reads as a
+   total rather than as a seventh competitor: no chip, no rule under it, and
+   the label in the same dim the column heads take. */
+.perfMedian {
+  border-bottom: none;
+  color: var(--brief-dim);
+}
+
+/* The chip travels with the sail number rather than in a column of its own,
+   so the name cell is a row of two things and the figures keep their five. */
+.perfRow .sail {
+  display: flex;
+  align-items: center;
+  gap: 0.55cqw;
+  width: auto;
+}
+
+.perfNum {
+  min-width: 0;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Holds the chip column open on the row that has no chip, so the fleet's
+   figures stay in the same five columns the boats' are in. */
+.chipBlank {
+  width: 9px;
+  height: 9px;
+}
+
+/* ---- the VMG strip: the same six boats against the clock ---- */
+
+.vmgPlate {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6cqw;
+  min-height: 0;
+  padding: 1cqw 1.2cqw;
+}
+
+/* No aspect ratio, so it takes the width the column leaves and the height the
+   table does not want. Every stroke on it is non-scaling for the same reason
+   the console's own strip states it: a trace that thickened with the plate
+   would read as a heavier boat. */
+.vmgStrip {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+}
+
+.vmgRule {
+  stroke: var(--brief-hair);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Six traces on one strip, so each is thin enough that the crossings stay
+   legible and the one under the pointer can come forward without the others
+   leaving. */
+.vmgTrace {
+  fill: none;
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+  stroke-opacity: 0.72;
+  vector-effect: non-scaling-stroke;
+  transition: opacity 180ms var(--ease);
+}
+
+/* What the figures rest on, stated under them rather than in a legend nobody
+   reads. Spans both columns: it describes the plate and the table equally. */
+.perfNote {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--brief-dim);
+  font-family: var(--brief-mono);
+  font-size: 9px;
+  line-height: 14px;
 }
 
 /* ---- footer ---- */
@@ -1090,16 +1092,6 @@
     padding: 16px 16px calc(16px + var(--brief-foot-gap));
   }
 
-  /* The fleet lies along 61 metres of a 70 metre line, which is about 150px at
-     this width: six sail numbers sharing it overprint into a smear, and a label
-     nobody can read is worse than no label. The ledger directly under the plot
-     names all six in the order they lie along the line and carries each hull's
-     colour, so the drawing keeps its key. */
-  .plotSail,
-  .plotEnd {
-    display: none;
-  }
-
   .briefHead {
     flex-direction: column;
     align-items: flex-start;
@@ -1116,11 +1108,11 @@
   }
 
   /* Stacked, each block is as tall as what is in it and the column scrolls.
-     The plot keeps a stated height rather than shrinking with the rest: on a
-     narrow box the chart is the one thing worth the room, and the ledger is
+     The polar keeps its square rather than shrinking with the rest: on a narrow
+     box the drawing is the one thing worth the room, and the table under it is
      what a thumb scrolls to. */
-  .briefMain,
-  .panelMain {
+  .panelMain,
+  .perfMain {
     grid-template-columns: 1fr;
     grid-template-rows: none;
     grid-auto-rows: min-content;
@@ -1166,25 +1158,6 @@
     animation: none;
   }
 
-  .plotPlate {
-    gap: 6px;
-    padding: 10px;
-  }
-
-  /* The shape of what is in it, not a stated height. A near-square box holding
-     a fleet 106 m across by 23 m deep spends four fifths of itself on empty
-     water once the scale is held isotropic, which is what a true-scale chart
-     costs if the box lies about the data. RaceBrief hands over the padded
-     data's own aspect; the floor keeps the drawing tappable on a phone if a
-     course ever comes through much wider than this one. */
-  .plotBox {
-    flex: none;
-    height: auto;
-    min-height: 96px;
-    aspect-ratio: var(--plot-aspect, 3.2);
-  }
-
-  .ledger,
   .reads {
     padding: 10px;
   }
@@ -1193,8 +1166,63 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .stripPlate {
-    padding: 0 8px;
+  .polarPlate,
+  .perfTable,
+  .vmgPlate {
+    gap: 8px;
+    padding: 12px 14px;
+  }
+
+  /* Capped rather than square-to-the-width. At 390 the plot took the whole
+     first screen and the reader met the cover with a picture and no numbers on
+     it; held to 260 the top of the table is on the same screen. */
+  .polar {
+    max-height: 260px;
+  }
+
+  .vmgStrip {
+    min-height: 64px;
+  }
+
+  /* Five figure columns will not sit on 284 pixels of row: "beat vmg" wants 50
+     of them for its head alone and five equal tracks leave 41. So the row
+     wraps instead of dropping a column, the two percentages on the first line
+     and the three knots figures under them, and every head stays over the
+     column it names. Placed rather than flowed, because auto-placement puts
+     the sixth cell back under the chip. */
+  .perfRow {
+    grid-template-columns: 63px repeat(3, minmax(0, 1fr));
+    gap: 1px 6px;
+  }
+
+  .perfRow > :nth-child(2) {
+    grid-area: 1 / 2;
+  }
+
+  .perfRow > :nth-child(3) {
+    grid-area: 1 / 3;
+  }
+
+  .perfRow > :nth-child(4) {
+    grid-area: 2 / 2;
+  }
+
+  .perfRow > :nth-child(5) {
+    grid-area: 2 / 3;
+  }
+
+  .perfRow > :nth-child(6) {
+    grid-area: 2 / 4;
+  }
+
+  /* The name sits against the two lines of figures rather than beside the
+     first of them. */
+  .perfRow > :nth-child(1) {
+    grid-row: 1 / 3;
+  }
+
+  .perfRow .sail {
+    gap: 6px;
   }
 
   .sail {

@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { briefFacts, type BriefFacts } from "@/lib/layline/brief";
 import type { RaceData } from "@/lib/layline/types";
-import { BriefChart } from "./BriefChart";
 import { BriefPanels } from "./BriefPanels";
+import { BriefPerformance } from "./BriefPerformance";
 import styles from "./bootSea.module.css";
 import { AUTOPLAY_FROM, OPEN_AT, useReplay } from "./store";
 
@@ -12,26 +12,37 @@ import { AUTOPLAY_FROM, OPEN_AT, useReplay } from "./store";
  * The race brief: what the boot cover shows while the renderer warms.
  *
  * The cover used to name the race and wait. It now spends the wait stating the
- * race, and it states it two ways. The chart draws the last ten seconds before
- * the gun once, from above, at true scale in metres. The panels read the same
- * ten seconds as three plates: the fleet at the line, the breeze on a dial, and
- * what the line is worth in it. Every figure in either view comes out of the
- * same RaceData the replay is about to play, through the same evaluator the
- * instrument dock reads, so neither view can disagree with the race behind it
- * or with the other. See lib/layline/brief.ts for where each one is read from.
+ * race, in two halves that meet at the gun. Panels is the start: the fleet at
+ * the line, the breeze on a dial, and what the line is worth in it, all running
+ * live off the prestart clock. Performance is the race after it: every steady
+ * sample the fleet sailed, plotted against the polar the engine sails them
+ * along, with the fleet's VMG and what each turn cost beside it.
+ *
+ * Every figure in either view comes out of the same RaceData the replay is
+ * about to play, through the same evaluators the instrument dock reads, so
+ * neither view can disagree with the race behind it or with the other. See
+ * lib/layline/brief.ts and lib/layline/analytics.ts for where each one is read
+ * from.
  *
  * This file is the shell the two views hang in: the header, the switch between
- * them, the status line and the way through. Each view owns its own drawing and
- * its own prestart loop, because only one of them is mounted at a time and both
- * seek the same store clock rather than keeping one of their own.
+ * them, the prestart clock, the status line and the way through. The clock is
+ * here rather than in a view because only one view is mounted at a time and
+ * Performance does not move: a loop that lived in Panels would stop the
+ * countdown, and the scene warming behind the cover with it, the moment a
+ * reader looked at the other tab.
  *
  * The brief is a gate as well as a picture. Continue, or Enter, releases it, and
  * the replay's autoplay waits on that release rather than running the prestart
  * off behind a cover.
  */
 
-/** The two ways of reading the same ten seconds. The chart is the default. */
-export type BriefView = "chart" | "panels";
+/** The start, and the race after it. The start is the default. */
+export type BriefView = "panels" | "performance";
+
+/* One turn of the prestart, in wall-clock ms. The prestart itself is ten race
+ * seconds; nine wall seconds is slow enough that the fleet reads as boats
+ * rather than as a sweep. */
+const PRESTART_LOOP_MS = 9000;
 
 export function RaceBrief({
   race,
@@ -55,9 +66,9 @@ export function RaceBrief({
      briefDone per race so a second race gets its own gate; a reader who has
      said which drawing they want should not have to say it again, and this
      shell outlives the race the rail swaps under it. The server has no
-     preference to read, so it renders the chart and so does the first client
+     preference to read, so it renders the start and so does the first client
      paint. */
-  const [view, setView] = useState<BriefView>("chart");
+  const [view, setView] = useState<BriefView>("panels");
 
   const root = useRef<HTMLDivElement>(null);
   const title = useRef<HTMLDivElement>(null);
@@ -177,6 +188,50 @@ export function RaceBrief({
   }, [live, reduced]);
 
   /**
+   * The prestart, run on the replay's own clock.
+   *
+   * The loop seeks the store rather than keeping a clock of its own, so the
+   * panels and the scene warming underneath them are reading the same instant
+   * and the brief's wind is the replay's wind by construction rather than by
+   * two formulas agreeing. Each view subscribes to that clock to paint; none of
+   * them drives it. It stops seeking while the capture hold is on, which is
+   * what lets a screenshot state its own time.
+   *
+   * Reduced motion never runs it at all. The brief holds the first fix in the
+   * feed, and the store's clock stays where it opened, at the mid-beat moment
+   * the store picks for a viewer who asked for less motion. That is also why
+   * the opening seek sits inside this effect rather than above it: under
+   * reduced motion there must be no seek to undo.
+   */
+  useEffect(() => {
+    if (reduced) return;
+    const store = useReplay;
+    const span = 0 - race.tMin;
+    let frame = 0;
+    let origin = 0;
+    const step = (stamp: number): void => {
+      const state = store.getState();
+      /* Released. The replay owns the clock from here, and the cover has a fade
+       * left to live through: another second of this loop seeking behind it
+       * would fight the autoplay for the same clock. */
+      if (state.briefDone) return;
+      frame = requestAnimationFrame(step);
+      if (state.frozen) return;
+      if (origin === 0) origin = stamp;
+      const phase = ((stamp - origin) % PRESTART_LOOP_MS) / PRESTART_LOOP_MS;
+      state.seek(race.tMin + phase * span);
+    };
+    /* Open the replay on the prestart before the first painted frame, so the
+     * scene coming up behind the brief is at the moment the brief describes.
+     * Only if it is not already there: a held capture would otherwise leave
+     * its stated time the instant this effect re-ran. */
+    const opened = store.getState();
+    if (!opened.frozen && !(opened.t >= race.tMin && opened.t < 0)) opened.seek(race.tMin);
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [race, reduced]);
+
+  /**
    * The way through, moving on the race's own clock.
    *
    * The console allows exactly one continuous motion verb and it is TRACK,
@@ -257,19 +312,11 @@ export function RaceBrief({
             {venue} · {dateLabel} · {facts.boats.length} boats · one windward-leeward lap
           </div>
           {/* The same gesture the console's transport already carries, one layer
-              up: a segmented pair that swaps the drawing and changes nothing
-              else. Both views read the same clock and the same race, so this
-              switches how the ten seconds are drawn and never what they say. */}
-          <div className={styles.viewSwitch} role="group" aria-label="How to draw the brief">
-            <button
-              type="button"
-              className={view === "chart" ? `${styles.viewBtn} ${styles.viewBtnOn}` : styles.viewBtn}
-              aria-pressed={view === "chart"}
-              data-brief-switch="chart"
-              onClick={() => setView("chart")}
-            >
-              Chart
-            </button>
+              up: a segmented pair that swaps which half of the race is on
+              screen and changes nothing else. Both views read the same
+              RaceData, so this switches what is being described and never
+              whether the two descriptions agree. */}
+          <div className={styles.viewSwitch} role="group" aria-label="Which half of the race to read">
             <button
               type="button"
               className={view === "panels" ? `${styles.viewBtn} ${styles.viewBtnOn}` : styles.viewBtn}
@@ -279,14 +326,25 @@ export function RaceBrief({
             >
               Panels
             </button>
+            <button
+              type="button"
+              className={
+                view === "performance" ? `${styles.viewBtn} ${styles.viewBtnOn}` : styles.viewBtn
+              }
+              aria-pressed={view === "performance"}
+              data-brief-switch="performance"
+              onClick={() => setView("performance")}
+            >
+              Performance
+            </button>
           </div>
         </div>
       </header>
 
-      {view === "chart" ? (
-        <BriefChart race={race} reduced={reduced} />
-      ) : (
+      {view === "panels" ? (
         <BriefPanels race={race} reduced={reduced} />
+      ) : (
+        <BriefPerformance race={race} />
       )}
 
       <div className={styles.briefFoot}>
