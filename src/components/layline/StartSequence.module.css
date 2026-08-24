@@ -1,0 +1,1033 @@
+/* ============================================================================
+   THE SEQUENCE BOARD. A committee board for the race library: three rows, each
+   counting its own real prestart from -0:10 to 0:00, a flag struck at the gun,
+   and a first-across reading that was not there a second earlier.
+
+   The whole loop is CSS. A CSS animation's phase is a function of the document
+   timeline, so two captures paused at the same currentTime are identical by
+   construction and there is no clock for anything here to read.
+
+   THE BASE RULES ARE THE POSTER FRAME. Every animated element states, outside
+   any keyframe, where it stands after its gun: clock at 0:00, flag struck, fill
+   full, result up. The row carrying data-poster then overrides that back to the
+   last second before its own gun: clock at -0:01 in ink, wind amber, flag up,
+   fill bar at 94%, first across still a reserved line. So the board's still
+   picture is one clock about to count against two that have finished, which is
+   what the section claims, rather than the same three zeros three times.
+
+   That still picture is what a visitor sees before hydration (the server writes
+   no data-run), what a visitor who asked for less motion sees, and what
+   hold("static") captures. The animations are the departure from it, and
+   animation-fill-mode: both means a running animation's 0% keyframe wins over
+   every base rule including the poster ones. That is why reduced motion needs
+   one animation: none per selector and no duplicated block.
+
+   THE GATE lives in StartSequenceCapture. Nothing runs without data-run, which
+   an IntersectionObserver writes, because this board sits on a page holding a
+   live WebGL context whose pixel-ratio governor steps down on sustained slow
+   frames.
+
+   PAUSING IS NOT DONE HERE. One owner decides whether these animations run and
+   it is the Web Animations API in StartSequenceCapture, because Blink sets an
+   ignore-CSS-play-state flag on a CSS animation the moment the API touches it,
+   so an animation-play-state rule in this file would be a second opinion that
+   silently stopped counting after the first hold(). data-frozen is written on
+   the section as a record of the state; nothing in this file reads it.
+   ========================================================================== */
+
+.section {
+  /* The countdown is the mechanism, so it is sized first and everything else is
+     sized against it. 80px mono runs "-0:10" 280px wide, measured, and column 2
+     is cut to 288px, which is that string plus the 8px of slack a right-aligned
+     odometer needs to sit flush under its own header.
+
+     80px is not a taste call and it is not the spec's 76px. bar.md M1 asks the
+     countdown to be at least 4x the largest other measured run in the section,
+     and the largest is the 20px race name, so anything under 80px fails by
+     arithmetic. Re-checked after the heading dropped to 44px and still 80: M1
+     exempts the Pangram heading from the multiple, so the 20px race name sets
+     the floor either way. */
+  --clock: 80px;
+  --step: 84px;
+  --wind-step: 28px;
+  /* The staff is the visible slice of the flag drawing's 128 unit viewBox, and
+     --flag-drop is the same units, so the struck flag lands on the foot of the
+     staff at every width: --flag-drop is always --staff-h minus the flag's own
+     28 units. */
+  --staff-h: 128px;
+  --flag-drop: 100px;
+  padding: 72px 0 80px;
+  border-top: 1px solid var(--rule);
+}
+
+/* One expression puts every full-bleed child's content on the notes column at
+   every width. The notes section is a 1120px box carrying 16px of its own
+   padding, so its text starts 1088px wide and centred, measured live at 1440:
+   x=164, not the 148px the box edge sits at. */
+.head,
+.headRow,
+.row,
+.foot {
+  padding-inline: max(16px, calc((100% - 1088px) / 2));
+}
+
+/* ---- type block ---- */
+
+.kicker {
+  margin: 0 0 6px;
+  color: var(--wind);
+  font-family: var(--font-martian), monospace;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  line-height: 16px;
+  text-transform: uppercase;
+}
+
+/* No max-width. The 16ch that used to sit here existed to break a 25 character
+   heading after "starts"; a two word heading sets its own line.
+
+   The size is set by ink, not by font-size. bar.md M1 passed at 4.00x on
+   font-size while the heading was still the largest object in the section:
+   Pangram at "wght" 680 lays down far more ink per line than Martian Mono at
+   400, so at the old 78px this heading painted 14,701 bright pixels against the
+   countdown's 5,669. Measured at 1440 with luminance above 90: 56px is 7,766,
+   48px is 5,792, 44px is 4,932. 44 is the largest size at which the countdown
+   is the inkiest thing in the section, which is the whole point of it. */
+.heading {
+  margin: 0 0 14px;
+  color: var(--ink);
+  font-family: var(--font-pangram);
+  font-size: clamp(40px, 5vw, 44px);
+  font-weight: 400;
+  font-variation-settings: "wdth" 110, "wght" 680;
+  letter-spacing: 0.01em;
+  line-height: 1.05;
+}
+
+.lead {
+  max-width: 68ch;
+  margin: 0 0 44px;
+  color: var(--ink-dim);
+  font-family: Verdana, Geneva, sans-serif;
+  font-size: 17px;
+  line-height: 28px;
+}
+
+/* ---- the board ---- */
+
+.board {
+  border-top: 1px solid var(--rule);
+}
+
+/* Column 1 is 48px because the flag is drawn 48 wide; the 8px it took came out
+   of column 5, which measured about 90px of slack at 1440 and still holds
+   "AUS 33" and "+0.23 S" without wrapping. Total width is unchanged. */
+.headRow,
+.row {
+  display: grid;
+  grid-template-columns: 48px 288px minmax(240px, 1fr) 120px 172px 40px;
+  column-gap: 24px;
+  align-items: center;
+  border-bottom: 1px solid var(--rule);
+}
+
+.headRow {
+  height: 32px;
+  color: var(--ink-dim);
+  font-family: var(--font-martian), monospace;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  line-height: 16px;
+  text-transform: uppercase;
+}
+
+.row {
+  position: relative;
+  height: 140px;
+  color: inherit;
+  cursor: var(--house-cursor);
+  text-decoration: none;
+}
+
+/* ---- col 1, the flag ---- */
+
+.flagCell {
+  display: block;
+  height: var(--staff-h);
+}
+
+.flagSvg {
+  display: block;
+  width: 48px;
+  height: var(--staff-h);
+}
+
+/* --rule renders 1.80:1 against this ground, which is under the 3:1 a non-text
+   mark needs to be seen at all, so at 1:1 the pole vanished and the flag read as
+   a stray highlight. This is the same value the top bar's chip border uses,
+   measured 4.35:1 composited. */
+.staff {
+  fill: color-mix(in srgb, var(--ink-dim) 62%, transparent);
+}
+
+.flag {
+  transform: translateY(var(--flag-drop));
+  transform-box: view-box;
+  transform-origin: 0 0;
+  fill: var(--ink-dim);
+}
+
+/* ---- col 2, the countdown odometer ---- */
+
+/* line-height has to equal --step exactly or the rungs walk off the window a
+   fraction at a time and rung ten sits high by most of a glyph.
+
+   width: max-content sizes the window to the longest rung, "-0:10", so the box
+   right-aligns against the string's own five mono cells rather than against the
+   grid column. Without it a 1fr column at 900 and under would fling the
+   countdown across the row to meet the wind. */
+.clockWindow {
+  display: block;
+  width: max-content;
+  height: var(--step);
+  overflow: hidden;
+  color: var(--ink-dim);
+}
+
+/* text-align: right is what makes this an odometer rather than five glyphs that
+   jump. The minus sign leaves the string at the gun, and left-aligned that slid
+   every digit and the colon one whole mono cell, 56px at 80px, in the frame the
+   whole section is built around. Right-aligned, the digits and the colon hold
+   their cells and only the minus appears and vanishes, in the leftmost one. */
+.clockStack {
+  display: block;
+  transform: translateY(calc(var(--step) * -10));
+  font-family: var(--font-martian), monospace;
+  font-size: var(--clock);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--step);
+  text-align: right;
+}
+
+.clockStack > span {
+  display: block;
+  height: var(--step);
+}
+
+/* ---- col 3, the race ---- */
+
+.raceCell {
+  display: block;
+  min-width: 0;
+}
+
+/* The bar's own underline gesture, drawn as a rule rather than filled: this
+   section paints no rectangle it could have drawn as a line. */
+.name {
+  position: relative;
+  display: inline-block;
+  color: var(--ink);
+  font-family: var(--font-archivo), sans-serif;
+  font-size: 20px;
+  font-variation-settings: "wdth" 105, "wght" 620;
+  line-height: 24px;
+}
+
+.name::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -4px;
+  left: 0;
+  height: 0;
+  border-bottom: 1px solid var(--ink);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 220ms var(--ease);
+}
+
+.row:hover .name::after,
+.row:focus-visible .name::after {
+  transform: scaleX(1);
+}
+
+.where {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin-top: 6px;
+  color: var(--ink-dim);
+}
+
+/* 15px, not the spec's 13px, and the foot CTA moved the same way for the same
+   reason: bar.md M2 closes the type scale at five distinct sizes plus the
+   countdown, and a 13px here would have made a sixth. It reads as one size with
+   .resultSail and .cta, which is the point of a closed scale. */
+.venue {
+  font-family: var(--font-archivo), sans-serif;
+  font-size: 15px;
+  line-height: 18px;
+}
+
+.date {
+  font-family: var(--font-martian), monospace;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  line-height: 18px;
+  text-transform: uppercase;
+}
+
+/* ---- col 4, the wind odometer ---- */
+
+.windCell {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.windWindow {
+  display: block;
+  height: var(--wind-step);
+  overflow: hidden;
+  color: var(--ink-dim);
+}
+
+.windStack {
+  display: block;
+  transform: translateY(calc(var(--wind-step) * -10));
+  font-family: var(--font-martian), monospace;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  line-height: var(--wind-step);
+}
+
+.windStack > span {
+  display: block;
+  height: var(--wind-step);
+}
+
+/* The unit never scrolls, so it sits outside the clipped window. */
+.windUnit {
+  color: var(--ink-dim);
+  font-family: var(--font-martian), monospace;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  line-height: 16px;
+}
+
+/* ---- col 5, first across ---- */
+
+/* The cell holds its own box and never fades. What fades is .resultBody inside
+   it, and what stands in the empty column while the row counts is ::before. */
+.result {
+  position: relative;
+  display: block;
+}
+
+/* The reserved line. With the cell at opacity 0 the FIRST ACROSS column ran
+   about 295px of nothing under a header that names it, which reads as a missing
+   value rather than as a result that has not happened yet. A dash would read as
+   a value and MISSING means "not finite", so this is neither: 24px of --rule on
+   the sail line's baseline, crossed out as the result rises. Linework, like
+   every other division in this section. */
+.result::before {
+  content: "";
+  position: absolute;
+  top: 14px;
+  left: 0;
+  width: 24px;
+  height: 0;
+  border-top: 1px solid var(--rule);
+  opacity: 0;
+}
+
+.resultBody {
+  display: block;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.resultSail {
+  display: block;
+  color: var(--ink);
+  font-family: var(--font-archivo), sans-serif;
+  font-size: 15px;
+  font-variation-settings: "wght" 620;
+  letter-spacing: 0.04em;
+  line-height: 20px;
+}
+
+/* The finish table's own chip treatment, carried here so a boat is the same
+   colour in both places. GBR 21's hue is one shade off --ink, which is what the
+   rule around every chip is for. */
+.chip {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 8px;
+  vertical-align: -1px;
+  border: 1px solid var(--rule);
+}
+
+.resultMargin {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  margin-top: 2px;
+}
+
+.marginValue {
+  color: var(--ink);
+  font-family: var(--font-martian), monospace;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  line-height: 24px;
+}
+
+.marginUnit {
+  color: var(--ink-dim);
+  font-family: var(--font-martian), monospace;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  line-height: 24px;
+}
+
+/* ---- col 6, the way through ---- */
+
+.arrowCell {
+  display: flex;
+  justify-content: flex-end;
+  color: var(--ink-dim);
+}
+
+/* 200ms rather than the spec's 160ms, and exactly bar.md M6's floor: M6 gives
+   this section one transition under 200ms and spends it on the hard cut at the
+   gun, so a hover nudge cannot also be under it. */
+.arrow {
+  flex: none;
+  width: 12px;
+  height: 8px;
+  transition: transform 200ms var(--ease);
+}
+
+.row:hover .arrowCell,
+.row:focus-visible .arrowCell {
+  color: var(--ink);
+}
+
+.row:hover .arrow,
+.row:focus-visible .arrow {
+  transform: translateX(3px);
+}
+
+/* ---- the fill bar ---- */
+
+/* The one gradient in this section, and the reason the section has its own
+   module: layline.module.css is asserted gradient free
+   (tests/prototype-layline.test.mjs:89). Scaled from the left, so the bright
+   end rides the leading edge and reads as the current second. */
+.fill {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 1px;
+  /* Each stop is --ink at a stated strength rather than that token's value
+     typed out, so the one bright leading edge on the board follows the token if
+     it ever moves. color-mix against transparent is the alpha, not a second
+     colour, so this stays a one gradient section. */
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--ink) 14%, transparent) 0%,
+    color-mix(in srgb, var(--ink) 34%, transparent) 55%,
+    var(--ink) 100%
+  );
+  opacity: 1;
+  transform: scaleX(1);
+  transform-origin: left center;
+}
+
+/* ---- the foot ---- */
+
+.foot {
+  padding-top: 40px;
+}
+
+.cta {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  padding: 14px 20px;
+  border: 1px solid var(--rule);
+  background: transparent;
+  color: var(--ink);
+  cursor: var(--house-cursor);
+  font-family: var(--font-archivo), sans-serif;
+  /* 15px, not the spec's 14px, for M2's reason: see .venue. */
+  font-size: 15px;
+  font-variation-settings: "wdth" 105, "wght" 650;
+  letter-spacing: 0.04em;
+  line-height: 20px;
+  text-decoration: none;
+  transition: border-color 200ms var(--ease);
+}
+
+.cta:hover,
+.cta:focus-visible {
+  border-color: var(--ink);
+}
+
+.cta:hover .arrow,
+.cta:focus-visible .arrow {
+  transform: translateX(3px);
+}
+
+/* ============================================================================
+   MOTION.
+
+   One 30s cycle, one gun every 10s, three rows staggered by a negative delay so
+   exactly one of them is counting at any instant. Percentages are that cycle in
+   a row's own local time: 33.3333% is 10000ms, the gun.
+
+   THE GUN BRIGHTENS FIRST, THEN SETTLES. The first version of this table dimmed
+   the clock on the gun frame with a hard cut while the flag had moved 0.0009px
+   and the result was still at opacity 0, so the largest element on the board
+   getting darker was the whole section's first visual event and the payoff
+   arrived 220 to 300ms later. Now the only instant change at 10000 is the row
+   rule going to --ink, the clock holds its live colour for another 600ms, and
+   nothing is dimmer than it was until 10600.
+
+   0        arm, the fill bar back to zero width
+   0        to 10000   count: clock and wind step one rung a second
+   10000    the gun: the row rule cuts to --ink, one frame, no ramp
+   10000    to 10220   the flag is struck
+   10000    to 10300   first across rises, the reserved line crosses out
+   10000    to 11200   the row rule settles back over --settle 1.2s
+   10600    to 11000   clock and wind fade to dim, having held the gun's colour
+   11200    to 29600   the row holds the picture its gun left
+   29600              both odometers cut back to their first rung
+   29600    to 30000   rearm: flag back up, result and fill bar out
+   ========================================================================== */
+
+/* Both odometers snap back to their first rung at 98.6667%, the instant the
+   rearm starts, rather than holding to the cycle wrap at 100%.
+
+   Holding to 100% is what the first version did, and it painted a row that
+   contradicted itself for the whole 400ms rearm: measured at 29800 the flag had
+   already risen to y=20 and the result had faded to 0.20 while the clock still
+   read 0:00, so the row said fired and armed at the same time. Snapping here
+   puts the reading back with the flag and the result, and a frozen capture
+   anywhere in the window gets one coherent picture.
+
+   The step sits on the 33.3333% keyframe because a keyframe's timing function
+   governs the interval that STARTS there, so steps(1, end) holds the tenth rung
+   across the whole 33.3333% to 98.6667% hold and cuts on the last frame of it.
+   Same idiom as ruleFlash. It has to be a cut rather than a rewind: the element
+   rule's own steps(10, end) would otherwise walk the stack back through ten
+   rungs, running the count backwards, which is a thing this race never does. */
+@keyframes cdClock {
+  0% {
+    transform: translateY(0);
+  }
+
+  33.3333% {
+    animation-timing-function: steps(1, end);
+    transform: translateY(calc(var(--step) * -10));
+  }
+
+  98.6667% {
+    transform: translateY(0);
+  }
+
+  100% {
+    transform: translateY(0);
+  }
+}
+
+@keyframes cdWind {
+  0% {
+    transform: translateY(0);
+  }
+
+  33.3333% {
+    animation-timing-function: steps(1, end);
+    transform: translateY(calc(var(--wind-step) * -10));
+  }
+
+  98.6667% {
+    transform: translateY(0);
+  }
+
+  100% {
+    transform: translateY(0);
+  }
+}
+
+/* The reading holds the colour it was taken in for 600ms past the gun, then
+   settles to dim over 400ms. Nothing on this board is allowed to get darker
+   before something has got brighter, and the reading is the largest element on
+   it. --live-ink is the colour a reading has while it is still being taken: ink
+   for the clock, amber for the wind, because amber is the wind.
+   35.3333% is 10600ms, 36.6667% is 11000ms. */
+@keyframes gunInk {
+  0% {
+    color: var(--live-ink);
+  }
+
+  35.3333% {
+    animation-timing-function: var(--ease);
+    color: var(--live-ink);
+  }
+
+  36.6667% {
+    color: var(--ink-dim);
+  }
+
+  98.6667% {
+    animation-timing-function: var(--ease);
+    color: var(--ink-dim);
+  }
+
+  100% {
+    color: var(--live-ink);
+  }
+}
+
+@keyframes flagStrike {
+  0% {
+    transform: translateY(0);
+    fill: var(--ink);
+  }
+
+  33.3333% {
+    animation-timing-function: var(--ease);
+    transform: translateY(0);
+    fill: var(--ink);
+  }
+
+  34.0667% {
+    transform: translateY(var(--flag-drop));
+    fill: var(--ink-dim);
+  }
+
+  98.6667% {
+    animation-timing-function: var(--ease);
+    transform: translateY(var(--flag-drop));
+    fill: var(--ink-dim);
+  }
+
+  100% {
+    transform: translateY(0);
+    fill: var(--ink);
+  }
+}
+
+/* The one hard cut on the board, and the only thing that changes on the gun
+   frame itself. steps(1, end) holds --rule for the whole count and swaps the
+   rule to --ink on the last frame of it: an instant brighten is the one thing
+   on screen that can say "now". It came off concept-a's table as a 60ms linear
+   ramp, which was 60ms of border-colour travel nobody could read and which
+   bar.md M6 forbids; the bar wins. 37.3333% is 11200ms, so the settle back is
+   --settle, 1.2s. */
+@keyframes ruleFlash {
+  0% {
+    animation-timing-function: steps(1, end);
+    border-bottom-color: var(--rule);
+  }
+
+  33.3333% {
+    animation-timing-function: var(--ease);
+    border-bottom-color: var(--ink);
+  }
+
+  37.3333% {
+    border-bottom-color: var(--rule);
+  }
+
+  100% {
+    border-bottom-color: var(--rule);
+  }
+}
+
+/* The reset happens at zero width, so nothing is seen snapping back. */
+@keyframes fillSweep {
+  0% {
+    animation-timing-function: linear;
+    opacity: 1;
+    transform: scaleX(0);
+  }
+
+  33.3333% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+
+  98.6667% {
+    animation-timing-function: var(--ease);
+    opacity: 1;
+    transform: scaleX(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scaleX(1);
+  }
+}
+
+/* The reserved line is the exact inverse of resultUp over the same 300ms, so
+   the column is never both empty and unmarked, and never carries two marks. */
+@keyframes lineOut {
+  0% {
+    opacity: 1;
+  }
+
+  33.3333% {
+    animation-timing-function: var(--ease);
+    opacity: 1;
+  }
+
+  34.3333% {
+    opacity: 0;
+  }
+
+  98.6667% {
+    animation-timing-function: var(--ease);
+    opacity: 0;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes resultUp {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  33.3333% {
+    animation-timing-function: var(--ease);
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  34.3333% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  98.6667% {
+    animation-timing-function: var(--ease);
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* Every animated element takes the same cycle and the row's own delay. The
+   delay is inherited off .row as a custom property, so the three rows differ by
+   one inline value and nothing else. */
+.row,
+.clockWindow,
+.clockStack,
+.windWindow,
+.windStack,
+.flag,
+.result::before,
+.resultBody,
+.fill {
+  animation-delay: var(--row-delay, 0s);
+  animation-duration: 30s;
+  animation-fill-mode: both;
+  animation-iteration-count: infinite;
+  animation-timing-function: linear;
+}
+
+/* The gate. Server markup carries no data-run, so the first paint is the fired
+   picture rather than a flash of some mid-cycle frame before hydration, and a
+   board scrolled off screen costs the WebGL page nothing. */
+.section[data-run="1"]:not([data-static="1"]) .row {
+  animation-name: ruleFlash;
+}
+
+.section[data-run="1"]:not([data-static="1"]) .clockWindow {
+  --live-ink: var(--ink);
+  animation-name: gunInk;
+}
+
+.section[data-run="1"]:not([data-static="1"]) .clockStack {
+  animation-name: cdClock;
+  animation-timing-function: steps(10, end);
+}
+
+.section[data-run="1"]:not([data-static="1"]) .windWindow {
+  --live-ink: var(--wind);
+  animation-name: gunInk;
+}
+
+.section[data-run="1"]:not([data-static="1"]) .windStack {
+  animation-name: cdWind;
+  animation-timing-function: steps(10, end);
+}
+
+.section[data-run="1"]:not([data-static="1"]) .flag {
+  animation-name: flagStrike;
+}
+
+.section[data-run="1"]:not([data-static="1"]) .resultBody {
+  animation-name: resultUp;
+}
+
+.section[data-run="1"]:not([data-static="1"]) .result::before {
+  animation-name: lineOut;
+}
+
+.section[data-run="1"]:not([data-static="1"]) .fill {
+  animation-name: fillSweep;
+}
+
+/* ---- the poster frame, the picture under every animation ---- */
+
+/* One row is at its last second, not fired: this is the board's still picture
+   and it is the same frame the running loop holds at the lastSecond beat, so
+   the section says the same thing whether or not it is moving. Every rule here
+   is a base rule, so a running animation's 0% keyframe wins over all of it and
+   the loop is untouched.
+
+   Rung nine of eleven is "-0:01"; rung ten is "0:00". The fill bar is at 94%
+   because 9400ms of a 10000ms linear sweep is 0.94. */
+.row[data-poster="1"] .clockWindow {
+  color: var(--ink);
+}
+
+.row[data-poster="1"] .clockStack {
+  transform: translateY(calc(var(--step) * -9));
+}
+
+.row[data-poster="1"] .windWindow {
+  color: var(--wind);
+}
+
+.row[data-poster="1"] .windStack {
+  transform: translateY(calc(var(--wind-step) * -9));
+}
+
+.row[data-poster="1"] .flag {
+  transform: translateY(0);
+  fill: var(--ink);
+}
+
+.row[data-poster="1"] .fill {
+  transform: scaleX(0.94);
+}
+
+.row[data-poster="1"] .resultBody {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.row[data-poster="1"] .result::before {
+  opacity: 1;
+}
+
+/* ---- 901px to 1200px: the columns tighten, the countdown does not ---- */
+
+/* This tier used to cut the countdown to 52px and the row to 104px, which put
+   the 44px heading at 1.95x the countdown's ink and turned the board back into
+   a table with a title on it. bar.md M1 is the whole section, so the numeral
+   holds its 80px here and the width is taken out of the columns instead:
+   48 + 288 + 196 + 96 + 118 + 32 with 12px gaps is 838px of demand against the
+   845px the narrowest width in this tier has to give. 845 and not 869: the
+   course rail holds 24px of the viewport at 901 and up, and the row carries its
+   own 16px either side. The race column's 196px floor is what keeps "Summer
+   fleet race" and its venue on one line each; at the 163px it had at 901 all
+   three of those strings wrapped. */
+@media (min-width: 901px) and (max-width: 1200px) {
+  .headRow,
+  .row {
+    grid-template-columns: 48px 288px minmax(196px, 1fr) 96px 118px 32px;
+    column-gap: 12px;
+  }
+}
+
+/* ---- narrow: the row becomes four lines ---- */
+
+@media (max-width: 900px) {
+  .section {
+    /* 64, not the 56 this tier used to run. M1 wants the numeral at 4x the
+       largest other run, and the lead and the race name below both sit at 16,
+       so 64 is the arithmetic rather than a taste call. "-0:10" runs 3.5px of
+       width for every 1px of size, so 224px here: the three column row spends
+       48 + 12 + 224 + 12 + 69 = 365 against the 358px of content a 390 viewport
+       gives it, and the clock window's own overflow: hidden absorbs the
+       remainder without the row scrolling. 360 cannot absorb it, which is what
+       the sub-390 tier at the foot of this file is for. */
+    --clock: 64px;
+    --step: 68px;
+    /* The narrow figure keeps the wide one's proportions: 96 of 128 units of
+       staff, the flag struck at 96 minus its own 28. */
+    --staff-h: 96px;
+    --flag-drop: 68px;
+  }
+
+  /* The heading comes down with the countdown, and further. Pangram at "wght"
+     680 lays down far more ink per pixel of size than Martian Mono at 400, so
+     the 44px heading painted 4,932 bright pixels here against a 64px
+     countdown's 3,708 and read as the largest object in the section. Measured
+     at 900 with luminance above 90: 34px is 3,028, and the numeral is back in
+     front. */
+  .heading {
+    font-size: 34px;
+  }
+
+  /* The labels leave with the columns they were labelling. */
+  .headRow {
+    display: none;
+  }
+
+  .row {
+    grid-template-columns: 48px 1fr auto;
+    column-gap: 12px;
+    row-gap: 8px;
+    align-items: start;
+    height: auto;
+    padding-block: 18px 20px;
+    padding-inline: 16px;
+  }
+
+  /* The staff runs the length of the clock line and the race line rather than
+     stretching row one to its own 88px and leaving a hole under the clock. */
+  .flagCell {
+    grid-row: 1 / span 2;
+    grid-column: 1;
+  }
+
+  .clockWindow {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
+  .windCell {
+    grid-row: 1;
+    grid-column: 3;
+    align-items: baseline;
+    margin-left: auto;
+  }
+
+  .windStack {
+    font-size: 16px;
+  }
+
+  .raceCell {
+    grid-row: 2;
+    grid-column: 2;
+  }
+
+  .arrowCell {
+    grid-row: 2;
+    grid-column: 3;
+    align-items: center;
+    margin-top: 8px;
+  }
+
+  .result {
+    grid-row: 3;
+    grid-column: 2 / span 2;
+  }
+
+  .resultMargin {
+    display: inline-flex;
+    margin-top: 0;
+    margin-left: 12px;
+  }
+
+  .resultSail {
+    display: inline-block;
+  }
+
+  .marginValue {
+    font-size: 15px;
+    line-height: 18px;
+  }
+
+  .marginUnit {
+    line-height: 18px;
+  }
+
+  /* 16, not 17, so the countdown's 64 is exactly 4x the largest other run in
+     the section rather than 3.76x it. The wind stack alongside is already 16. */
+  .name {
+    font-size: 16px;
+    line-height: 20px;
+  }
+
+  /* The lead comes down with the name, and for the same arithmetic: at 17 it
+     was the largest run in the section after the countdown and it alone held
+     M1's multiple at 3.76x. */
+  .lead {
+    margin-bottom: 32px;
+    font-size: 16px;
+    line-height: 26px;
+  }
+}
+
+@media (max-width: 760px) {
+  .section {
+    padding: 48px 0 56px;
+  }
+}
+
+/* Below 390 the three column row runs out of width before the countdown does.
+   The row spends 48 on the flag, 12 and 12 on its gaps, 69 on the wind cell and
+   32 on its own padding, so the odometer gets the viewport minus 173px.
+   "-0:10" measures 3.5px of width for every 1px of size, which makes 13vw the
+   largest numeral that fits without the row scrolling sideways: 45.5vw of
+   string against 100vw minus 173px of room, that holds down to 320. Stated as a
+   residual rather than hidden: M1's 4x multiple holds from 390 up and falls to
+   2.6x at 320, because the labels around the clock cannot shrink with it and
+   still clear the 4.5:1 contrast floor. */
+@media (max-width: 389px) {
+  .section {
+    --clock: 13vw;
+    --step: calc(13vw + 4px);
+  }
+}
+
+/* Static for a viewer who asked for less motion. The base rules underneath are
+   the poster frame: row one at -0:01 with its clock in ink, its wind amber, its
+   flag up, its fill bar at 94% and its FIRST ACROSS still a reserved line, and
+   the two rows below it fired, dim, struck and reading their real results. That
+   is the same board hold("static") states and the same board the server paints
+   before hydration. Nothing is hidden and every route out of here still
+   works. */
+@media (prefers-reduced-motion: reduce) {
+  .row,
+  .clockWindow,
+  .clockStack,
+  .windWindow,
+  .windStack,
+  .flag,
+  .result::before,
+  .resultBody,
+  .fill {
+    animation: none;
+  }
+
+  .name::after,
+  .arrow,
+  .cta {
+    transition: none;
+  }
+
+  .row:hover .arrow,
+  .row:focus-visible .arrow,
+  .cta:hover .arrow,
+  .cta:focus-visible .arrow {
+    transform: none;
+  }
+}

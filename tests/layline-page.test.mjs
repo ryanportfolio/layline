@@ -268,3 +268,82 @@ test('the 2D view replaces camera choices with one clear return to 3D', async ()
   assert.match(viewRule, /background: color-mix\(in srgb, var\(--ink-dim\) 8%, transparent\)/);
   assert.match(viewRule, /border-color: var\(--ink-dim\)/);
 });
+
+test('the race library CTA counts a real prestart down to the gun', async () => {
+  const [page, board, css, bridge] = await Promise.all([
+    read('src/app/page.tsx'),
+    read('src/components/layline/StartSequence.tsx'),
+    read('src/components/layline/StartSequence.module.css'),
+    read('src/components/layline/StartSequenceCapture.tsx'),
+  ]);
+
+  /* The section is the page's way into the library for a reader who scrolled,
+     and it links at this repo's own route, not the fullbuild prefix. */
+  assert.match(page, /<StartSequence \/>/);
+  assert.match(board, /id="race-library"/);
+  assert.match(board, /href="\/races"/);
+  assert.match(board, /href=\{`\/races\?race=\$\{row\.id\}`\}/);
+  assert.doesNotMatch(board, /prototype\/layline/);
+
+  /* THE NUMBERS ARE THE RACE'S OWN. Every rung is read off the built race
+     through the same helpers the console uses, so the odometer walks values
+     the simulator produced rather than values written into the markup. */
+  assert.match(board, /raceFor\(/);
+  assert.match(board, /briefFacts\(/);
+  assert.match(board, /windReadingAt\(/);
+
+  /* The section owns its stylesheet so the page's own module stays gradient
+     free, which the house-rules test above asserts. One gradient lives here
+     instead: the fill bar's leading edge. */
+  assert.equal((css.match(/linear-gradient/g) ?? []).length, 1);
+  assert.doesNotMatch(css, /radial-gradient|backdrop-filter|box-shadow/);
+
+  /* Comments come out first so these count declarations rather than prose: the
+     stylesheet explains its own timing at length and quotes the properties it
+     avoids to say why it avoids them. */
+  const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.doesNotMatch(withoutComments, /border-radius/);
+  assert.doesNotMatch(css, /cursor:\s*pointer/);
+  assert.match(css, /cursor: var\(--house-cursor\)/);
+
+  /* Two odometer columns, the clock and the wind, each stepping a fixed ten
+     rungs. steps(var(--steps), end) would let a race with a different prestart
+     walk its digits out of step with its own clock and say nothing about it. */
+  assert.equal((withoutComments.match(/steps\(10, end\)/g) ?? []).length, 2);
+  assert.doesNotMatch(css, /steps\(var\(/);
+
+  /* Both stacks cut back to their first rung when the flag starts rising, not
+     when the cycle wraps 400ms later, or the board paints a fired clock on a
+     row that has already rearmed. */
+  for (const name of ['cdClock', 'cdWind']) {
+    const frames = withoutComments.match(new RegExp(`@keyframes ${name}\\s*\\{(?:[^}]*\\}){4}`));
+    assert.ok(frames, `${name} keyframes not found`);
+    assert.match(frames[0], /33\.3333% \{\s*animation-timing-function: steps\(1, end\);/);
+    assert.match(frames[0], /98\.6667% \{\s*transform: translateY\(0\);/);
+  }
+
+  /* Reduced motion is stated here rather than left to the shell's global
+     collapse, which is a safety net and not the mechanism. */
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
+
+  /* ONE CAPTURE AUTHORITY PER PAGE: this board is the third loop on the route
+     and answers the same freeze the replay clock and the rail's wake do.
+
+     The subscription is pinned WITH its guard. This store carries no
+     subscribeWithSelector, so a plain subscribe fires on every set(), and
+     LaylineScene advances the replay clock inside useFrame: unguarded, the
+     listener ran once per rendered frame, each one forcing layout and walking
+     the section's animations, with the board off screen and its gate shut. */
+  assert.match(bridge, /useReplay\.getState\(\)\.frozen/);
+  assert.match(
+    bridge,
+    /useReplay\.subscribe\(\(state\) => \{\s*if \(state\.frozen !== frozen\) applyFrozen\(state\.frozen\);/,
+  );
+  assert.match(bridge, /unwatch\(\);/);
+
+  /* The gate exists because this page holds a live WebGL context, and closing
+     it has to destroy the loop rather than orphan animations the Web Animations
+     API has already paused. */
+  assert.match(bridge, /new IntersectionObserver/);
+  assert.match(bridge, /for \(const animation of animations\(\)\) animation\.cancel\(\);/);
+});

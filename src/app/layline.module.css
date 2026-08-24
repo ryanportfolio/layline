@@ -303,15 +303,62 @@
 /* ---- the way through to the race library ----
 
    The bar's left slot is a link in the bar's own register. Everything it does,
-   the idle sweep, the underline and the arrow, is paint or transform inside a
-   box that never changes size, so the bar holds its 33px through all of it and
-   nothing beside it moves. */
+   the idle sweep, the border, the fill and the arrow, is paint or transform
+   inside a box that never changes size, so the bar holds its 37px through all
+   of it and nothing beside it moves. */
 
 .libraryCta {
   position: relative;
   display: inline-flex;
   align-items: center;
+  /* The bar is a flex row that stretches its children, and the house mark sets
+     a 20px line the chip would otherwise grow to meet. Centring holds the chip
+     at its own content height, so it is the same box at every width. */
+  align-self: center;
   gap: 8px;
+  /* The box grows by its border and padding and the negative margin gives the
+     same amount back, so the bar's line box never learns the chip is there and
+     the 37px holds. Change one of these three and change the other two. */
+  margin: -3px 0;
+  padding: 2px 10px;
+  /* Brighter than --rule, and deliberately the one hairline on this page that
+     is. --rule renders 1.79:1 on this ground, under the 3:1 a control boundary
+     needs to be found at all, and this box exists to say the words beside it
+     are a way through rather than a caption. Sampled off the painted pixel at
+     rgb(104, 122, 134) on rgb(7, 15, 22), which is 4.35:1. An earlier note
+     said 4.39:1 off a partially covered 1px border pixel; 4.35 is the composite
+     and it matches the arithmetic, 0.62 * 164 + 0.38 * 7 = 104.3. */
+  border: 1px solid color-mix(in srgb, var(--ink-dim) 62%, transparent);
+  transition:
+    border-color 160ms var(--ease),
+    background-color 160ms var(--ease);
+}
+
+/* The chip lights rather than moves: the border takes the ink and the ground
+   takes a fifth of the dim ink. A tenth measured 1.17:1 against the rest at
+   rgb(22, 32, 40), which is a fill nobody can see; a fifth is still a texture
+   rather than a surface and the border keeps carrying the state change, 4.35:1
+   to 17.44:1. color-mix rather than a gradient, which this page bans. */
+.libraryCta:hover,
+.libraryCta:focus-visible {
+  border-color: var(--ink);
+  background-color: color-mix(in srgb, var(--ink-dim) 20%, transparent);
+}
+
+/* Staff and flag, the sequence board's own signal read at 10px: the board
+   draws a rectangle on a staff, so this draws a rectangle on a staff and the
+   two read as one family. Dim at rest so the label stays the loudest thing in
+   the chip. Not amber: --wind is the wind, and a way through the site is not
+   weather. */
+.ctaFlag {
+  flex: none;
+  color: var(--ink-dim);
+  transition: color 160ms var(--ease);
+}
+
+.libraryCta:hover .ctaFlag,
+.libraryCta:focus-visible .ctaFlag {
+  color: var(--ink);
 }
 
 .ctaLabel {
@@ -357,26 +404,6 @@
   }
 }
 
-/* The underline draws itself from the left on hover. Absolute, so the bar's
-   line box never learns it is there. */
-.libraryCta::after {
-  content: "";
-  position: absolute;
-  right: 0;
-  bottom: -3px;
-  left: 0;
-  height: 1px;
-  background: var(--ink);
-  transform: scaleX(0);
-  transform-origin: left center;
-  transition: transform 220ms var(--ease);
-}
-
-.libraryCta:hover::after,
-.libraryCta:focus-visible::after {
-  transform: scaleX(1);
-}
-
 .ctaArrow {
   flex: none;
   width: 12px;
@@ -384,15 +411,18 @@
   transition: transform 160ms var(--ease);
 }
 
-.libraryCta:hover .ctaArrow {
-  transform: translateX(3px);
+.libraryCta:hover .ctaArrow,
+.libraryCta:focus-visible .ctaArrow {
+  transform: translateX(5px);
+  color: var(--ink);
 }
 
-/* Static for a viewer who asked for less motion: no sweep, no draw, no nudge.
-   Focus still lands as the shell's registration box, which is instant paint on
-   every focusable thing on the page. */
+/* Static for a viewer who asked for less motion: no sweep, no fill fade, no
+   nudge. Focus still lands as the shell's registration box, which is instant
+   paint on every focusable thing on the page. */
 @media (prefers-reduced-motion: reduce) {
-  .libraryCta::after,
+  .libraryCta,
+  .ctaFlag,
   .ctaArrow {
     transition: none;
   }
