@@ -66,8 +66,7 @@
    x=164, not the 148px the box edge sits at. */
 .head,
 .headRow,
-.row,
-.foot {
+.row {
   padding-inline: max(16px, calc((100% - 1088px) / 2));
 }
 
@@ -86,31 +85,27 @@
 /* No max-width. The 16ch that used to sit here existed to break a 25 character
    heading after "starts"; a two word heading sets its own line.
 
-   The size is set by ink, not by font-size. bar.md M1 passed at 4.00x on
-   font-size while the heading was still the largest object in the section:
-   Pangram at "wght" 680 lays down far more ink per line than Martian Mono at
-   400, so at the old 78px this heading painted 14,701 bright pixels against the
-   countdown's 5,669. Measured at 1440 with luminance above 90: 56px is 7,766,
-   48px is 5,792, 44px is 4,932. 44 is the largest size at which the countdown
-   is the inkiest thing in the section, which is the whole point of it. */
+   THE SIZE IS THE NOTES SECTION'S, ON PURPOSE, and it is the one place this
+   section answers to the page rather than to its own bar. NotesSection.module.css
+   line 23 is the same clamp, so "Layline Races" and "Performance" are one
+   heading level read down the page.
+
+   The cost is stated rather than hidden: bar.md M1 asked the countdown to be
+   the inkiest object in the section, and at this size it is not. Pangram at
+   "wght" 680 lays down far more ink per line than Martian Mono at 400, so 78px
+   here paints about 14,700 bright pixels against the countdown's 5,669, and 44
+   was the largest size that kept the numeral in front. M1's font-size multiple
+   still holds, because the heading is exempt from it and the 20px race name
+   sets the floor either way. */
 .heading {
-  margin: 0 0 14px;
+  margin: 0 0 24px;
   color: var(--ink);
   font-family: var(--font-pangram);
-  font-size: clamp(40px, 5vw, 44px);
+  font-size: clamp(48px, 7.5vw, 78px);
   font-weight: 400;
   font-variation-settings: "wdth" 110, "wght" 680;
   letter-spacing: 0.01em;
   line-height: 1.05;
-}
-
-.lead {
-  max-width: 68ch;
-  margin: 0 0 44px;
-  color: var(--ink-dim);
-  font-family: Verdana, Geneva, sans-serif;
-  font-size: 17px;
-  line-height: 28px;
 }
 
 /* ---- the board ---- */
@@ -447,13 +442,13 @@
   transform-origin: left center;
 }
 
-/* ---- the foot ---- */
+/* ---- the way in ---- */
 
-.foot {
-  padding-top: 40px;
-}
-
+/* It sits in the head now, under the heading, where the old standfirst was.
+   44px of air under it is the gap that paragraph used to hold, so the board
+   still starts where it did relative to the type above it. */
 .cta {
+  margin-bottom: 44px;
   display: inline-flex;
   gap: 10px;
   align-items: center;
@@ -875,16 +870,6 @@
     --flag-drop: 68px;
   }
 
-  /* The heading comes down with the countdown, and further. Pangram at "wght"
-     680 lays down far more ink per pixel of size than Martian Mono at 400, so
-     the 44px heading painted 4,932 bright pixels here against a 64px
-     countdown's 3,708 and read as the largest object in the section. Measured
-     at 900 with luminance above 90: 34px is 3,028, and the numeral is back in
-     front. */
-  .heading {
-    font-size: 34px;
-  }
-
   /* The labels leave with the columns they were labelling. */
   .headRow {
     display: none;
@@ -966,13 +951,10 @@
     line-height: 20px;
   }
 
-  /* The lead comes down with the name, and for the same arithmetic: at 17 it
-     was the largest run in the section after the countdown and it alone held
-     M1's multiple at 3.76x. */
-  .lead {
-    margin-bottom: 32px;
-    font-size: 16px;
-    line-height: 26px;
+  /* Less air under the button than the wide tier gives it: the board's first
+     row is already 20px of padding away from it here. */
+  .cta {
+    margin-bottom: 28px;
   }
 }
 
