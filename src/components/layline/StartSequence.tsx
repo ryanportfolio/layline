@@ -47,7 +47,7 @@ interface BoardRow {
  * page and the analyst read, so a figure here can only disagree with a figure
  * there if the seed does.
  */
-function buildBoard(): { rows: BoardRow[]; steps: number } {
+function buildBoard(): BoardRow[] {
   /* One prestart window for the whole board, read off the lead race rather
      than assumed, and shared by every row. Every shipped race opens at -10 and
      tests/layline-races.test.ts pins that on the built race, so a fourth race
@@ -93,7 +93,7 @@ function buildBoard(): { rows: BoardRow[]; steps: number } {
       poster: index === 0,
     };
   });
-  return { rows, steps };
+  return rows;
 }
 
 /** The bar's chevron, drawn the same way in both places it points from here. */
@@ -141,7 +141,7 @@ function Flag() {
 }
 
 export function StartSequence() {
-  const { rows, steps } = buildBoard();
+  const rows = buildBoard();
 
   return (
     <section
@@ -150,15 +150,21 @@ export function StartSequence() {
       aria-label="Race library"
       data-leg="Race library"
     >
+      {/* The way in sits under the heading rather than under the board. A
+          reader who has understood the section from its first two lines should
+          not have to scroll past three races to act on it, and the rows are
+          each their own link into the same library anyway. */}
       <div className={styles.head}>
         <p className={styles.kicker}>Race library</p>
         <h2 className={styles.heading}>Layline Races</h2>
-        <p className={styles.lead}>
-          The clock runs negative through the prestart and reaches zero at the gun. The library
-          holds {RACES.length} seeded races, each one caught here in its last {steps} seconds. Open
-          any of them and the workspace comes up on that race, replay in the middle and the analyst
-          beside it.
-        </p>
+        <Link
+          className={styles.cta}
+          href="/races"
+          aria-label="See how they finished in the race library"
+        >
+          <span>See how they finished</span>
+          <Chevron className={styles.arrow} />
+        </Link>
       </div>
 
       <div className={styles.board}>
@@ -242,17 +248,6 @@ export function StartSequence() {
             <span className={styles.fill} aria-hidden="true" />
           </Link>
         ))}
-      </div>
-
-      <div className={styles.foot}>
-        <Link
-          className={styles.cta}
-          href="/races"
-          aria-label="See how they finished in the race library"
-        >
-          <span>See how they finished</span>
-          <Chevron className={styles.arrow} />
-        </Link>
       </div>
 
       <StartSequenceCapture />
