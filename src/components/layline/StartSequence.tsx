@@ -144,12 +144,12 @@ export function StartSequence() {
   const rows = buildBoard();
 
   return (
-    <section
-      id="race-library"
-      className={styles.section}
-      aria-label="Race library"
-      data-leg="Race library"
-    >
+    /* No data-leg. The course rail marks legs by document position and letters
+       whichever one the reader is inside, so a mark here, nested in the notes
+       section, would take the interpolation lab and the production path with it
+       and letter them the race library. The section still names itself for a
+       screen reader. */
+    <section id="race-library" className={styles.section} aria-label="Race library">
       {/* The way in sits under the heading rather than under the board. A
           reader who has understood the section from its first two lines should
           not have to scroll past three races to act on it, and the rows are
@@ -160,9 +160,9 @@ export function StartSequence() {
         <Link
           className={styles.cta}
           href="/races"
-          aria-label="See how they finished in the race library"
+          aria-label="Interact with the seeded races in the library"
         >
-          <span>See how they finished</span>
+          <span>Interact</span>
           <Chevron className={styles.arrow} />
         </Link>
       </div>

@@ -56,19 +56,17 @@
      28 units. */
   --staff-h: 128px;
   --flag-drop: 100px;
-  padding: 72px 0 80px;
-  border-top: 1px solid var(--rule);
+  /* A block inside the notes section, not a band across the page. The rule
+     above it is the same hairline the section's other dividers use, and the
+     air around it is the gap between the performance cards and the lab. */
+  padding: 40px 0 8px;
 }
 
-/* One expression puts every full-bleed child's content on the notes column at
-   every width. The notes section is a 1120px box carrying 16px of its own
-   padding, so its text starts 1088px wide and centred, measured live at 1440:
-   x=164, not the 148px the box edge sits at. */
-.head,
-.headRow,
-.row {
-  padding-inline: max(16px, calc((100% - 1088px) / 2));
-}
+/* The board sits inside the notes section now, between the performance cards
+   and the interpolation lab, so the 1120px box around it already puts its
+   children on the notes column and the expression that used to reproduce that
+   from full bleed would inset them a second 16px. Nothing here pads sideways;
+   the column is the parent's. */
 
 /* ---- type block ---- */
 
@@ -405,6 +403,13 @@
   transition: transform 200ms var(--ease);
 }
 
+/* The button doubled, so its mark doubles with it; the row chevrons keep the
+   12x8 they share with the top bar. */
+.cta .arrow {
+  width: 24px;
+  height: 16px;
+}
+
 .row:hover .arrowCell,
 .row:focus-visible .arrowCell {
   color: var(--ink);
@@ -447,22 +452,24 @@
 /* It sits in the head now, under the heading, where the old standfirst was.
    44px of air under it is the gap that paragraph used to hold, so the board
    still starts where it did relative to the type above it. */
+/* Twice the size it opened at, on every measure that makes a control bigger:
+   the type, both paddings and the gap all doubled, and .ctaArrow doubles the
+   chevron to match so the mark does not shrink against its own label. */
 .cta {
   margin-bottom: 44px;
   display: inline-flex;
-  gap: 10px;
+  gap: 20px;
   align-items: center;
-  padding: 14px 20px;
+  padding: 28px 40px;
   border: 1px solid var(--rule);
   background: transparent;
   color: var(--ink);
   cursor: var(--house-cursor);
   font-family: var(--font-archivo), sans-serif;
-  /* 15px, not the spec's 14px, for M2's reason: see .venue. */
-  font-size: 15px;
+  font-size: 30px;
   font-variation-settings: "wdth" 105, "wght" 650;
   letter-spacing: 0.04em;
-  line-height: 20px;
+  line-height: 40px;
   text-decoration: none;
   transition: border-color 200ms var(--ease);
 }
@@ -854,16 +861,22 @@
 
 @media (max-width: 900px) {
   .section {
-    /* 64, not the 56 this tier used to run. M1 wants the numeral at 4x the
-       largest other run, and the lead and the race name below both sit at 16,
-       so 64 is the arithmetic rather than a taste call. "-0:10" runs 3.5px of
-       width for every 1px of size, so 224px here: the three column row spends
-       48 + 12 + 224 + 12 + 69 = 365 against the 358px of content a 390 viewport
-       gives it, and the clock window's own overflow: hidden absorbs the
-       remainder without the row scrolling. 360 cannot absorb it, which is what
-       the sub-390 tier at the foot of this file is for. */
-    --clock: 64px;
-    --step: 68px;
+    /* 64 is what M1 asks for: the numeral at 4x the largest other run, and the
+       race name below sits at 16. It is a cap rather than a size, because the
+       row has to fit inside whatever the notes column gives it.
+
+       The row spends 48 on the flag, 12 and 12 on its gaps and 69 on the wind
+       cell, and the notes box keeps 16 either side, so the odometer gets the
+       viewport minus 173px; 3px of that is held back against rounding. "-0:10"
+       runs 3.5px of width for every 1px of size, so this is the largest numeral
+       that fits without the row scrolling sideways. It reaches the 64px cap at
+       400 and falls below it under that: 62px at 390, 52 at 360, 41 at 320.
+
+       Stated rather than hidden: M1's 4x multiple therefore holds from 400 up
+       and falls to 2.6x at 320, because the labels around the clock cannot
+       shrink with it and still clear the 4.5:1 contrast floor. */
+    --clock: min(64px, calc((100vw - 176px) / 3.5));
+    --step: calc(var(--clock) + 4px);
     /* The narrow figure keeps the wide one's proportions: 96 of 128 units of
        staff, the flag struck at 96 minus its own 28. */
     --staff-h: 96px;
@@ -882,7 +895,6 @@
     align-items: start;
     height: auto;
     padding-block: 18px 20px;
-    padding-inline: 16px;
   }
 
   /* The staff runs the length of the clock line and the race line rather than
@@ -961,22 +973,6 @@
 @media (max-width: 760px) {
   .section {
     padding: 48px 0 56px;
-  }
-}
-
-/* Below 390 the three column row runs out of width before the countdown does.
-   The row spends 48 on the flag, 12 and 12 on its gaps, 69 on the wind cell and
-   32 on its own padding, so the odometer gets the viewport minus 173px.
-   "-0:10" measures 3.5px of width for every 1px of size, which makes 13vw the
-   largest numeral that fits without the row scrolling sideways: 45.5vw of
-   string against 100vw minus 173px of room, that holds down to 320. Stated as a
-   residual rather than hidden: M1's 4x multiple holds from 390 up and falls to
-   2.6x at 320, because the labels around the clock cannot shrink with it and
-   still clear the 4.5:1 contrast floor. */
-@media (max-width: 389px) {
-  .section {
-    --clock: 13vw;
-    --step: calc(13vw + 4px);
   }
 }
 

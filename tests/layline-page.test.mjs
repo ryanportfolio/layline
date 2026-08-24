@@ -270,20 +270,42 @@ test('the 2D view replaces camera choices with one clear return to 3D', async ()
 });
 
 test('the race library CTA counts a real prestart down to the gun', async () => {
-  const [page, board, css, bridge] = await Promise.all([
+  const [page, board, css, bridge, notes] = await Promise.all([
     read('src/app/page.tsx'),
     read('src/components/layline/StartSequence.tsx'),
     read('src/components/layline/StartSequence.module.css'),
     read('src/components/layline/StartSequenceCapture.tsx'),
+    read('src/components/layline/NotesSection.tsx'),
   ]);
 
   /* The section is the page's way into the library for a reader who scrolled,
      and it links at this repo's own route, not the fullbuild prefix. */
-  assert.match(page, /<StartSequence \/>/);
   assert.match(board, /id="race-library"/);
   assert.match(board, /href="\/races"/);
   assert.match(board, /href=\{`\/races\?race=\$\{row\.id\}`\}/);
   assert.doesNotMatch(board, /prototype\/layline/);
+
+  /* It lives in the notes section, between the performance cards and the
+     interpolation lab, rather than closing the page. The order is asserted
+     because it is the point of where it sits. */
+  assert.doesNotMatch(page, /<StartSequence \/>/);
+  assert.match(notes, /import \{ StartSequence \} from "\.\/StartSequence";/);
+  assert.match(notes, /<StartSequence \/>/);
+  assert.ok(
+    notes.indexOf('<StartSequence />') > notes.indexOf('notes.gridTwo'),
+    'the board moved above the performance cards',
+  );
+  assert.ok(
+    notes.indexOf('<StartSequence />') < notes.indexOf('notes.engineProof'),
+    'the board moved below the interpolation lab',
+  );
+
+  /* And no leg mark of its own: the course rail letters whichever leg the
+     reader is inside, so a second mark nested in the notes section would take
+     the lab and the production path with it. Counted on code, not on prose,
+     because the component explains that at the spot it would have gone. */
+  assert.doesNotMatch(board.replace(/\/\*[\s\S]*?\*\//g, ''), /data-leg/);
+  assert.match(board, /aria-label="Race library"/);
 
   /* THE NUMBERS ARE THE RACE'S OWN. Every rung is read off the built race
      through the same helpers the console uses, so the odometer walks values
