@@ -10,6 +10,7 @@ import { IntroOverlay } from "@/components/layline/intro/IntroOverlay";
 import { LaylineApp } from "@/components/layline/LaylineApp";
 import { NotesSection } from "@/components/layline/NotesSection";
 import { PageGround } from "@/components/layline/PageGround";
+import { StartSequence } from "@/components/layline/StartSequence";
 import { TrackChart } from "@/components/layline/svg/TrackChart";
 import RailLogo from "@/components/chrome/RailLogo";
 import { BindShippedRace } from "./BindShippedRace";
@@ -76,6 +77,23 @@ export default function LaylinePage() {
           href="/races"
           aria-label={libraryLabel}
         >
+          {/* Staff and flag, so the way through carries the same signal the
+              sequence board strikes at the foot of the page. The board draws a
+              rectangle flush with the head of its staff, so this does too: a
+              pennant here and a rectangle there would read as two different
+              flags. Decoration only, the anchor's aria-label already names
+              where this goes. */}
+          <svg
+            className={styles.ctaFlag}
+            viewBox="0 0 10 12"
+            width="10"
+            height="12"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path d="M1.5 0.5v11" fill="none" stroke="currentColor" strokeWidth="1" />
+            <rect x="2.5" y="0.5" width="7" height="5" fill="currentColor" />
+          </svg>
           <strong className={styles.ctaLabel} data-label={libraryLabel}>
             {libraryLabel}
           </strong>
@@ -169,6 +187,8 @@ export default function LaylinePage() {
         ) : null}
 
         <NotesSection race={race} />
+
+        <StartSequence />
       </main>
 
       <footer className={styles.colophon}>

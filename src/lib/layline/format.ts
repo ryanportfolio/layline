@@ -32,6 +32,17 @@ export function meters(m: number): string {
   return s === "-0.0" ? "0.0" : s;
 }
 
+/**
+ * A short elapsed, two decimals. Margins at a start line live in hundredths:
+ * the three shipped races put their first hull across 0.10 s, 0.15 s and
+ * 0.23 s after the gun, and clock() rounds all three to 0:00.
+ */
+export function seconds(s: number): string {
+  if (!Number.isFinite(s)) return MISSING;
+  const v = s.toFixed(2);
+  return v === "-0.00" ? "0.00" : v;
+}
+
 /** Degrees to the nearest whole degree, signed for twa, unsigned for bearings. */
 export function deg(a: number): string {
   if (!Number.isFinite(a)) return MISSING;
