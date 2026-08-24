@@ -26,8 +26,9 @@
  * play-through does, and the hot path never builds one.
  */
 import { knots } from "./format";
-import { legAt, poseAt } from "./interpolate";
-import type { Course, LegName, Pose, RaceData, Vec2 } from "./types";
+import { legAt, poseAt, windAt } from "./interpolate";
+import { polarFrac } from "./sim";
+import type { Course, LegName, Pose, RaceData, Vec2, WindSample } from "./types";
 
 const DEG = Math.PI / 180;
 
@@ -43,6 +44,12 @@ export interface Maneuver {
    * and four seconds past the flip, in knots.
    */
   lossKnots: string;
+  /**
+   * The same drawdown in m/s, which is what a mean over several turns has to
+   * be taken in. Averaging the formatted strings would round every turn to a
+   * tenth of a knot first and then average the rounding.
+   */
+  loss: number;
 }
 
 /* Merge window from the analyst tool, kept the same so the markers on the
@@ -102,6 +109,7 @@ function detect(race: RaceData, boatId: string): Maneuver[] {
           t: Math.round(tFlip * 100) / 100,
           kind: width < 90 ? "tack" : "gybe",
           lossKnots: knots(entry - slowest),
+          loss: entry - slowest,
         });
       }
       lastFlipT = tFlip;
@@ -276,4 +284,232 @@ export function startReadingAt(
   out.toLine = toLine;
   out.early = distance <= 0 || (Number.isFinite(toLine) && t + toLine < 0);
   return out;
+}
+
+/* ------------------------------------------------------------------ */
+/* Polar and target speed                                              */
+
+/**
+ * Seconds either side of a turn that are not steady sailing.
+ *
+ * The same three seconds the detector merges flips across, and deliberately:
+ * a window that called two flips one maneuver and then counted the water
+ * between them as sailing would be arguing with itself.
+ *
+ * Not a taste setting. A boat swinging through head to wind passes through a
+ * target speed of nearly nothing, so its speed as a fraction of target goes to
+ * infinity there. Measured on the shipped race with no window at all, the
+ * fleet's mean beat performance came out between 257 and 864 per cent; with
+ * this window it is 87.5 to 90.4. The excluded seconds are not thrown away,
+ * they are accounted separately as the speed each turn cost.
+ */
+export const STEADY_WINDOW = MERGE_SECONDS;
+
+/**
+ * The speed the polar says a boat should be making at this wind angle in this
+ * breeze, m/s.
+ *
+ * The same curve the engine sails the fleet along, so a review cannot hold the
+ * boats to a standard the simulation never used.
+ */
+export function targetSpeed(twaAbs: number, tws: number): number {
+  return polarFrac(twaAbs) * tws;
+}
+
+export interface PolarSample {
+  t: number;
+  /** Signed degrees off the breeze. Positive is wind over starboard. */
+  twa: number;
+  /**
+   * Speed through the water scaled to the race's mean breeze, m/s.
+   *
+   * The breeze runs 12.1 to 16.2 knots across the shipped race, so a plot of
+   * raw speed against one polar curve would read a boat's puff as pace. Every
+   * sample is scaled by mean over its own TWS instead, which leaves the ratio
+   * to target untouched: a dot's distance past the curve drawn at the mean
+   * breeze is exactly `fraction`, whatever the wind was doing at the time.
+   */
+  speed: number;
+  /** That distance stated as a number: speed over target, 1 is on the polar. */
+  fraction: number;
+  /** Signed degrees. Positive leans the mast to the boat's own starboard. */
+  heel: number;
+  leg: "beat" | "run";
+}
+
+export interface BoatPerformance {
+  boatId: string;
+  /** Steady-sailing samples behind every mean on this row. */
+  steady: number;
+  /** Mean speed over target, 1 is sailing the polar. NaN with no samples. */
+  beatFraction: number;
+  runFraction: number;
+  /** Mean speed made good toward the mark, m/s, steady sailing only. */
+  beatVmg: number;
+  runVmg: number;
+  tacks: number;
+  gybes: number;
+  /** Mean speed each turn cost, m/s. NaN if the boat never turned. */
+  lossPerTurn: number;
+  samples: PolarSample[];
+}
+
+export interface FleetPerformance {
+  /** Median of the fleet, column by column. */
+  beatFraction: number;
+  runFraction: number;
+  beatVmg: number;
+  runVmg: number;
+  lossPerTurn: number;
+  /** Totals, which a median would say nothing useful about. */
+  turns: number;
+  steady: number;
+}
+
+export interface PolarReview {
+  /** The breeze the plot is normalized to, m/s, and what it ran between. */
+  meanTws: number;
+  twsMin: number;
+  twsMax: number;
+  boats: BoatPerformance[];
+  fleet: FleetPerformance;
+}
+
+function median(values: number[]): number {
+  const kept = values.filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
+  if (kept.length === 0) return Number.NaN;
+  const mid = kept.length >> 1;
+  return kept.length % 2 === 1 ? kept[mid] : (kept[mid - 1] + kept[mid]) / 2;
+}
+
+const reviewCache = new WeakMap<RaceData, PolarReview>();
+
+function review(race: RaceData): PolarReview {
+  let twsSum = 0;
+  let twsMin = Infinity;
+  let twsMax = -Infinity;
+  for (const sample of race.wind) {
+    twsSum += sample.tws;
+    if (sample.tws < twsMin) twsMin = sample.tws;
+    if (sample.tws > twsMax) twsMax = sample.tws;
+  }
+  const meanTws = race.wind.length > 0 ? twsSum / race.wind.length : 0;
+  if (!Number.isFinite(twsMin)) twsMin = 0;
+  if (!Number.isFinite(twsMax)) twsMax = 0;
+
+  const wind: WindSample = { t: 0, twd: 0, tws: 0 };
+  const boats: BoatPerformance[] = race.boats.map((boat) => {
+    /* Racing turns only. `maneuversOf` reports every wind-angle flip in the
+     * feed, which is right for the timeline: a marker belongs wherever the
+     * boat turned. It is wrong for this row three times over.
+     *
+     * NZL 7 finishes Kestrel Sound at 55.512 s and gybes at 56.13 s, luffing
+     * out its way. Counted, that turn made the boat read four turns instead of
+     * three, carried its own drawdown into a mean of what a racing turn cost
+     * (4.74 knots against 4.23), and took eleven samples of real racing out of
+     * the cloud through STEADY_WINDOW, since the window reaches back 3 s from
+     * a turn that happened after the finish. A prestart turn would do the same
+     * at the other end; no shipped seed has one, and the rule covers it. */
+    const moves = maneuversOf(race, boat.id).filter((move) => {
+      const leg = legAt(race, boat.id, move.t);
+      return leg === "beat" || leg === "run";
+    });
+    const samples: PolarSample[] = [];
+    let beatSum = 0;
+    let beatN = 0;
+    let beatVmg = 0;
+    let runSum = 0;
+    let runN = 0;
+    let runVmg = 0;
+
+    for (const fix of race.fixes[boat.id] ?? []) {
+      const leg = legAt(race, boat.id, fix.t);
+      /* Before the gun there is no mark to sail to and no reason to sail
+       * fast: a boat killing time to arrive at the line on the second is
+       * doing its job at half of target. After the finish it is luffing out
+       * its way. Neither is performance. */
+      if (leg !== "beat" && leg !== "run") continue;
+      let turning = false;
+      for (const move of moves) {
+        if (Math.abs(fix.t - move.t) <= STEADY_WINDOW) {
+          turning = true;
+          break;
+        }
+      }
+      if (turning) continue;
+      windAt(race, fix.t, wind);
+      const target = targetSpeed(Math.abs(fix.twa), wind.tws);
+      if (!(target > 0) || !(wind.tws > 0)) continue;
+      const speed = (fix.sog * meanTws) / wind.tws;
+      const fraction = fix.sog / target;
+      const made = vmgToMark(fix.sog, fix.cog, leg);
+      samples.push({ t: fix.t, twa: fix.twa, speed, fraction, heel: fix.heel, leg });
+      if (leg === "beat") {
+        beatSum += fraction;
+        beatVmg += made;
+        beatN += 1;
+      } else {
+        runSum += fraction;
+        runVmg += made;
+        runN += 1;
+      }
+    }
+
+    let lossSum = 0;
+    let tacks = 0;
+    let gybes = 0;
+    for (const move of moves) {
+      lossSum += move.loss;
+      if (move.kind === "tack") tacks += 1;
+      else gybes += 1;
+    }
+
+    return {
+      boatId: boat.id,
+      steady: samples.length,
+      beatFraction: beatN > 0 ? beatSum / beatN : Number.NaN,
+      runFraction: runN > 0 ? runSum / runN : Number.NaN,
+      beatVmg: beatN > 0 ? beatVmg / beatN : Number.NaN,
+      runVmg: runN > 0 ? runVmg / runN : Number.NaN,
+      tacks,
+      gybes,
+      lossPerTurn: moves.length > 0 ? lossSum / moves.length : Number.NaN,
+      samples,
+    };
+  });
+
+  return {
+    meanTws,
+    twsMin,
+    twsMax,
+    boats,
+    fleet: {
+      beatFraction: median(boats.map((b) => b.beatFraction)),
+      runFraction: median(boats.map((b) => b.runFraction)),
+      beatVmg: median(boats.map((b) => b.beatVmg)),
+      runVmg: median(boats.map((b) => b.runVmg)),
+      lossPerTurn: median(boats.map((b) => b.lossPerTurn)),
+      turns: boats.reduce((sum, b) => sum + b.tacks + b.gybes, 0),
+      steady: boats.reduce((sum, b) => sum + b.steady, 0),
+    },
+  };
+}
+
+/**
+ * The fleet's race against its own polar, built once and cached against the
+ * race the way every other series here is.
+ *
+ * Steady sailing only, on the legs only, and that holds for the turns as well
+ * as for the samples: a boat that gybes after it has finished has not made a
+ * racing turn. What the figures leave out is stated on screen, because a
+ * performance figure whose exclusions are not stated is a figure a reader
+ * cannot check.
+ */
+export function polarReview(race: RaceData): PolarReview {
+  let found = reviewCache.get(race);
+  if (found === undefined) {
+    found = review(race);
+    reviewCache.set(race, found);
+  }
+  return found;
 }

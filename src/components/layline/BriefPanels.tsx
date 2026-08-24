@@ -27,15 +27,10 @@ import { useReplay } from "./store";
  * and the replay's autoplay waits on that release rather than running the
  * prestart off behind a cover.
  *
- * It writes its live readings straight into the DOM off one loop, the way the
- * instrument dock does: a countdown that re-rendered a fleet list sixty times
- * a second would cost more than it reports.
+ * It writes its live readings straight into the DOM off the shell's clock, the
+ * way the instrument dock does: a countdown that re-rendered a fleet list sixty
+ * times a second would cost more than it reports.
  */
-
-/* One turn of the prestart in the dial, in wall-clock ms. The prestart itself
- * is ten race seconds; nine wall seconds is slow enough that the needle reads
- * as weather rather than as a sweep. */
-const PRESTART_LOOP_MS = 9000;
 
 /* Points in the wind trace under the dial. Six a second across the prestart,
  * which draws the curve between the 1 Hz samples rather than the samples. */
@@ -108,10 +103,9 @@ const BAND = `M ${DIAL_C} ${DIAL_C} L ${rim(-SURVEY_DEG, DIAL_R)} A ${DIAL_R} ${
  * dial with its trace, and what the line is worth in it, read as three
  * separate plates side by side.
  *
- * One of the two views RaceBrief switches between. It owns its own drawing,
- * its own paint and its own prestart loop, because only one view is mounted at
- * a time and each seeks the same store clock; the shell owns the header, the
- * footer, the gate and the switch itself.
+ * One of the two views RaceBrief switches between, and the one the cover opens
+ * on. It owns its own drawing and its own paint; the shell owns the prestart
+ * clock, the header, the footer, the gate and the switch itself.
  */
 export function BriefPanels({
   race,
@@ -176,17 +170,28 @@ export function BriefPanels({
   );
 
   /**
-   * The prestart, run on the replay's own clock.
+   * The prestart, read off the replay's own clock.
    *
-   * The loop seeks the store rather than keeping a clock of its own, so the
-   * dial and the scene warming underneath it are reading the same instant and
-   * the brief's wind is the replay's wind by construction rather than by two
-   * formulas agreeing. It stops writing while the capture hold is on, which is
-   * what lets a screenshot state its own time.
+   * This view paints; it never drives. RaceBrief runs the loop that seeks the
+   * store, so the dial and the scene warming underneath it are reading the same
+   * instant and the brief's wind is the replay's wind by construction rather
+   * than by two formulas agreeing. The loop used to live here, and the moment
+   * the cover grew a second view it had to move: only one view is mounted at a
+   * time, so a reader who opened the other tab stopped the countdown and the
+   * scene behind it with the same press.
    *
-   * Reduced motion never runs it at all. The brief holds the first fix in the
-   * feed, and the store's clock stays where it opened, at the mid-beat moment
-   * the store picks for a viewer who asked for less motion.
+   * A subscription rather than a frame loop, because there is nothing to paint
+   * between seeks. That also covers the capture hold: freezing and then seeking
+   * to a stated time is a store change like any other, and this repaints on it.
+   *
+   * Painting stops at the release, not at the unmount. The cover has a 900ms
+   * fade left and the replay is already running the gun off behind it, so a
+   * brief that kept reading the clock would spend its last second swinging its
+   * needle through the start of the race. What dissolves is the brief the
+   * reader was reading.
+   *
+   * Reduced motion holds the first fix in the feed and never subscribes: with
+   * no loop running there is nothing for a subscription to hear.
    */
   useEffect(() => {
     if (reduced) {
@@ -194,49 +199,12 @@ export function BriefPanels({
       return;
     }
     const store = useReplay;
-    const span = 0 - race.tMin;
-    let frame = 0;
-    let origin = 0;
-    const step = (stamp: number): void => {
-      const state = store.getState();
-      /* Released. The replay owns the clock from here, and the cover has a fade
-       * left to live through: another second of this loop seeking behind it
-       * would fight the autoplay for the same clock. */
-      if (state.briefDone) return;
-      frame = requestAnimationFrame(step);
-      if (state.frozen) {
-        paint(state.t);
-        return;
-      }
-      if (origin === 0) origin = stamp;
-      const phase = ((stamp - origin) % PRESTART_LOOP_MS) / PRESTART_LOOP_MS;
-      state.seek(race.tMin + phase * span);
-    };
-    /* Open the replay on the prestart before the first painted frame, so the
-     * scene coming up behind the brief is at the moment the brief describes.
-     *
-     * Only if it is not already there. The two views share this clock and
-     * only one of them is mounted, so an unconditional seek here fired again
-     * every time the reader pressed the switch: the fleet jumped back to the
-     * top of the prestart on a swap, and a held capture left its stated time.
-     * Measured before the guard: switching at t = -6 put the clock at -10. */
-    const opened = store.getState();
-    if (!opened.frozen && !(opened.t >= race.tMin && opened.t < 0)) opened.seek(race.tMin);
-    /* Painting stops at the release, not at the unmount. The cover has a 900ms
-     * fade left and the replay is already running the gun off behind it, so a
-     * brief that kept reading the clock would spend its last second swinging
-     * its needle through the start of the race. What dissolves is the brief
-     * the reader was reading. */
     const stop = store.subscribe((state) => {
       if (state.briefDone) return;
       paint(state.t);
     });
     paint(store.getState().t);
-    frame = requestAnimationFrame(step);
-    return () => {
-      cancelAnimationFrame(frame);
-      stop();
-    };
+    return stop;
   }, [race, paint, reduced]);
   const tracePoints = trace
     .map((point, index) => `${((index / TRACE_STEPS) * 100).toFixed(1)},${traceY(point.tws).toFixed(1)}`)
