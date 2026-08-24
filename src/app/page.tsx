@@ -10,7 +10,6 @@ import { IntroOverlay } from "@/components/layline/intro/IntroOverlay";
 import { LaylineApp } from "@/components/layline/LaylineApp";
 import { NotesSection } from "@/components/layline/NotesSection";
 import { PageGround } from "@/components/layline/PageGround";
-import { StartSequence } from "@/components/layline/StartSequence";
 import { TrackChart } from "@/components/layline/svg/TrackChart";
 import RailLogo from "@/components/chrome/RailLogo";
 import { BindShippedRace } from "./BindShippedRace";
@@ -187,8 +186,6 @@ export default function LaylinePage() {
         ) : null}
 
         <NotesSection race={race} />
-
-        <StartSequence />
       </main>
 
       <footer className={styles.colophon}>

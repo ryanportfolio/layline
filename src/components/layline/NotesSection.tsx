@@ -4,6 +4,7 @@ import notes from "./NotesSection.module.css";
 import { BoatMark } from "./BoatMark";
 import { EngineRoom } from "./engine/EngineRoom";
 import { TelemetryPipeline } from "./TelemetryPipeline";
+import { StartSequence } from "./StartSequence";
 
 function BoatBullet() {
   return <BoatMark className={notes.boatBullet} />;
@@ -101,6 +102,15 @@ export function NotesSection({ race }: { race: RaceData }) {
             </p>
           </article>
         </div>
+        {/* The way into the library sits between the performance cards and
+            the interpolation lab: a reader who has just been told what the
+            engine costs is the one to ask which race to open. It is a block
+            inside this section rather than a section of its own, so it takes
+            the notes column and carries no data-leg of its own; the rail marks
+            legs by document position, and a second mark in here would letter
+            everything below it the race library. */}
+        <StartSequence />
+
         <div className={notes.engineProof}>
           <p className={notes.kicker}>Interactive</p>
           <h3 className={notes.labHeading}>Interpolation</h3>
