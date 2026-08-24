@@ -56,6 +56,12 @@
      28 units. */
   --staff-h: 128px;
   --flag-drop: 100px;
+  /* So the narrow countdown can size itself against the room the board actually
+     has. 100vw counts the scrollbar and this page keeps the platform's own bar
+     below 901, so a vw sum over-measured by exactly its width, 10px here, and
+     the row ran 7px past its box at 390 with the wind unit cut off the end.
+     100cqw is this element's content width, scrollbar already gone. */
+  container-type: inline-size;
   /* A block inside the notes section, not a band across the page. The rule
      above it is the same hairline the section's other dividers use, and the
      air around it is the gap between the performance cards and the lab. */
@@ -866,16 +872,19 @@
        row has to fit inside whatever the notes column gives it.
 
        The row spends 48 on the flag, 12 and 12 on its gaps and 69 on the wind
-       cell, and the notes box keeps 16 either side, so the odometer gets the
-       viewport minus 173px; 3px of that is held back against rounding. "-0:10"
+       cell, which is 141px; 3px more is held back against rounding. "-0:10"
        runs 3.5px of width for every 1px of size, so this is the largest numeral
-       that fits without the row scrolling sideways. It reaches the 64px cap at
-       400 and falls below it under that: 62px at 390, 52 at 360, 41 at 320.
+       that fits without the row running past its box.
 
-       Stated rather than hidden: M1's 4x multiple therefore holds from 400 up
-       and falls to 2.6x at 320, because the labels around the clock cannot
-       shrink with it and still clear the 4.5:1 contrast floor. */
-    --clock: min(64px, calc((100vw - 176px) / 3.5));
+       Measured against 100cqw and not 100vw on purpose: the scrollbar is inside
+       the viewport and outside the container, and counting it as room is what
+       cut the wind unit off the end of the row at 390.
+
+       Stated rather than hidden: M1's 4x multiple holds wherever the cap is
+       reached and falls under it on the narrowest screens, because the labels
+       around the clock cannot shrink with it and still clear the 4.5:1 contrast
+       floor. */
+    --clock: min(64px, calc((100cqw - 144px) / 3.5));
     --step: calc(var(--clock) + 4px);
     /* The narrow figure keeps the wide one's proportions: 96 of 128 units of
        staff, the flag struck at 96 minus its own 28. */
