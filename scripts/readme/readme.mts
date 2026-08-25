@@ -115,11 +115,16 @@ The route limits requests to the same origin, ${facts.debrief.maxTurns} turns of
 
 ## Performance
 
+The bar is a flat frame budget: 1,000 consecutive frames during playback with the camera moving, none over 25 ms. Median frame time cannot see stutter. One 80 ms task per second reads as a 10 ms median and a visible hitch, so frame health is judged by long tasks and worst frames, profiled in a real GPU browser session.
+
 - Per-frame code reuses pose objects, search cursors, and the standings array.
 - Instrument text updates only when a value changes.
 - The water uses 27,009 vertices. A uniform grid at the same detail would use 1,640,961.
 - The fleet shares 2 hull materials. Spray and raw telemetry dots use instancing.
 - Sustained frame misses lower the pixel ratio one step at a time.
+- The element that owns the canvas never re-renders during playback. Re-rendering it re-runs the renderer reconfigure pass, which re-applies the pixel ratio, undoes the shed step, and forces two full drawing-buffer resizes. Analysis results reach the scene through the store instead of props.
+- Hot loops allocate nothing. A layline trace runs up to 132,000 candidate evaluations, so validation verdicts are cached per model object and vector math writes into module scratch instead of building objects.
+- Heavy analysis leaves the main thread. While the replay plays, the layline trace builds in a Web Worker from a clone of the same race data and lands a few frames later, byte-identical to the synchronous result. Paused and frozen replays build in place, so captures and scrubbing see the surface the instant the clock settles.
 
 ## Controls
 
