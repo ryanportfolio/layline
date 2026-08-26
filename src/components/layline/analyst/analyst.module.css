@@ -1779,16 +1779,15 @@
   border-bottom-color: color-mix(in srgb, var(--wind) 40%, var(--rule));
 }
 
-/* Between one question and the next the hint fades out over 420ms and then
-   unmounts for 260ms, and the base rule holds the real placeholder transparent
-   for the whole run, so the field reads as an empty dark box in the gap. In
-   the rail the placeholder comes back the moment no hint line is mounted:
-   --ink-dim on the field's ground measures 9.8:1, against 1.0:1 for the box
-   with nothing in it. Scoped to the rail, so the story page keeps the dark
-   beat its composer was tuned with. */
-.dock .field[data-hint="true"]:not(:has(.typedLine)) .input::placeholder {
-  color: var(--ink-dim);
-}
+/* The hint line stays mounted for the whole active run: in the warmup and the
+   260ms between questions it is a lone blinking caret, so the box never sits
+   truly empty and the real placeholder never has a gap to flash through. The
+   base rule holding the placeholder transparent under data-hint therefore has
+   no exceptions; a rail rule that restored it whenever no .typedLine was
+   mounted lived here and read as a glitch, the full placeholder popping in
+   for a split second between questions. Placeholder contrast still holds
+   where it matters: reduced motion and a focused or filled field never set
+   data-hint at all. */
 
 /* Stacked under the library page's three-column threshold: the rail is full
    width with the page scrolling past it, so the thread takes a ceiling again
