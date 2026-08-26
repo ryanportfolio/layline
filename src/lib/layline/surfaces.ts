@@ -12,6 +12,12 @@ import type { Pose, RaceData, ReplayMode, Vec2, WindSample } from "./types";
 import { velocityFromComponents, type DerivedVelocity } from "./velocity";
 
 export const CURRENT_FIELD_PROVENANCE = "Seeded current field";
+/* The one value the current field is drawn in, stated here rather than in the
+ * scene, because the key on the story page has to name the same colour the
+ * water carries and a second literal is a key that can go quietly wrong. It
+ * lives in this module rather than the scene one so a server component can
+ * read it without pulling three.js into its bundle. */
+export const CURRENT_FIELD_INK = "#7dd9e8";
 export const CURRENT_FIELD_3D_MAX_GLYPHS = 48;
 export const CURRENT_FIELD_SVG_MAX_GLYPHS = 24;
 export const INSPECTION_PAUSED_SETTLE_MS = 80;

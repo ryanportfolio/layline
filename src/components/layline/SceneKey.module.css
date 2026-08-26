@@ -1,0 +1,125 @@
+/* The key under the console. Deliberately the quietest section on the page:
+   it is a reference a reader consults once and then stops seeing, so it takes
+   the notes section's kicker and body sizes but a heading two steps down from
+   theirs. A key set at chapter size would announce itself louder than the
+   thing it explains. */
+
+.block {
+  padding: 44px 0;
+  border-top: 1px solid var(--rule);
+}
+
+/* The notes kicker, stated: mono because it labels a reference rather than
+   speaking, amber because that is what a kicker is set in on this page. */
+.kicker {
+  margin: 0 0 4px;
+  color: var(--wind);
+  font-family: var(--font-martian), monospace;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  line-height: 16px;
+  text-transform: uppercase;
+}
+
+.heading {
+  margin: 0 0 10px;
+  font-family: var(--font-pangram);
+  font-size: clamp(28px, 3.4vw, 40px);
+  font-weight: 400;
+  font-variation-settings: "wdth" 110, "wght" 680;
+  letter-spacing: 0.01em;
+  line-height: 1.06;
+}
+
+.lead {
+  max-width: 68ch;
+  margin: 0 0 26px;
+  color: var(--ink-dim);
+  font-family: Verdana, Geneva, sans-serif;
+  font-size: 15px;
+  line-height: 25px;
+}
+
+/* Two columns where there is room and one where there is not. 420 and not the
+   320 this started at because three columns leave a ninth cell empty against
+   eight entries, and an empty bordered box reads as a key with something
+   missing from it. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 1px;
+  margin: 0;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+}
+
+.entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 3px;
+  padding: 12px 14px;
+  background: var(--hud-ground);
+}
+
+.term {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  font-family: var(--font-archivo), sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 16px;
+  text-transform: uppercase;
+}
+
+/* One width for every swatch, so the terms line up down the column and the
+   drawings are compared against each other rather than against the text. */
+.swatch {
+  flex: none;
+  width: 56px;
+  height: 16px;
+  overflow: visible;
+}
+
+.chips {
+  display: flex;
+  flex: none;
+  gap: 3px;
+  width: 56px;
+}
+
+.chip {
+  width: 6px;
+  height: 12px;
+  border: 1px solid color-mix(in srgb, var(--ink) 26%, transparent);
+}
+
+.meaning {
+  margin: 0;
+  color: var(--ink-dim);
+  font-family: Verdana, Geneva, sans-serif;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+/* Measured values stay in the mono face wherever they appear, including inside
+   a sentence: the console's rule is that a number set in Archivo is a number
+   nobody measured. */
+.figure {
+  color: var(--ink);
+  font-family: var(--font-martian), monospace;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 900px) {
+  .block {
+    padding: 32px 0;
+  }
+
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

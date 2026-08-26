@@ -14,6 +14,11 @@
               the start line before the gun. Nothing else may borrow it
      raw      violet, and violet is raw telemetry. Fix ticks, the raw-mode chip,
               raw trail dots. It is not a wind colour and not a warning colour
+     current  cyan, and cyan is the water moving under the fleet. The 3D field
+              darts and their 2D chart equivalent, nothing else. Stated twice
+              by necessity, here for the chart and as CURRENT_FIELD_INK in
+              lib/layline/surfaces for the GL material, which cannot read a
+              custom property; the two are one value and move together
      hues     one per nation, carried across chip, label, trail, gennaker and
               livery so a boat is the same colour everywhere it appears
 
@@ -107,6 +112,10 @@
 
   --wind: #ffb648;
   --raw: #b48cff;
+  /* Kept in step with CURRENT_FIELD_INK in lib/layline/surfaces by hand: the
+     GL material cannot read a custom property and this stylesheet cannot read
+     a module export. */
+  --current: #7dd9e8;
 
   --hue-fra: #3b74ff;
   --hue-usa: #e4353f;
@@ -462,6 +471,22 @@
   text-transform: uppercase;
 }
 
+/* Pushed to the end of the banner rather than sat beside the sentence: it is
+   the one thing on that line a reader can act on, and the rule under it is
+   what separates it from the water. */
+.bannerKeyLink {
+  margin-left: auto;
+  color: var(--ink);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--rule);
+}
+
+.bannerKeyLink:hover {
+  text-decoration-color: var(--ink);
+}
+
 /* ---- console ---- */
 
 .main {
@@ -793,7 +818,7 @@
 }
 
 .chartCurrentGlyph {
-  color: #7dd9e8;
+  color: var(--current);
   opacity: 0.58;
 }
 

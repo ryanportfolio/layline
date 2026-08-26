@@ -12,6 +12,7 @@ import {
 } from "three";
 import {
   CURRENT_FIELD_3D_MAX_GLYPHS,
+  CURRENT_FIELD_INK,
   CURRENT_FIELD_PROVENANCE,
   createCurrentFieldGrid,
   sampleCurrentFieldGrid,
@@ -35,7 +36,11 @@ interface CurrentFieldKit {
 function buildCurrentField(race: RaceData): CurrentFieldKit {
   return {
     geometry: new ConeGeometry(0.34, 1, 4, 1, false),
-    material: new MeshBasicMaterial({ color: "#7dd9e8", transparent: true, opacity: 0.58 }),
+    material: new MeshBasicMaterial({
+      color: CURRENT_FIELD_INK,
+      transparent: true,
+      opacity: 0.58,
+    }),
     grid: createCurrentFieldGrid(race, CURRENT_FIELD_3D_MAX_GLYPHS),
     transform: new Object3D(),
     up: new Vector3(0, 1, 0),
