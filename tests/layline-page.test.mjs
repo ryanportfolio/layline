@@ -369,3 +369,57 @@ test('the race library CTA counts a real prestart down to the gun', async () => 
   assert.match(bridge, /new IntersectionObserver/);
   assert.match(bridge, /for \(const animation of animations\(\)\) animation\.cancel\(\);/);
 });
+
+test('the key names every value the water is drawn in, and names it once', async () => {
+  const [page, key, keyCss, css, course, surfaces, field] = await Promise.all([
+    read('src/app/page.tsx'),
+    read('src/components/layline/SceneKey.tsx'),
+    read('src/components/layline/SceneKey.module.css'),
+    read('src/app/layline.module.css'),
+    read('src/components/layline/scene/course.ts'),
+    read('src/lib/layline/surfaces.ts'),
+    read('src/components/layline/scene/CurrentField.tsx'),
+  ]);
+
+  /* Between the console and the debrief, with a way in from the banner above
+     it: the console is a viewport tall, so anywhere later is a key found after
+     the thing it explains. */
+  const keyAt = page.indexOf('<SceneKey race={race} />');
+  assert.ok(keyAt > 0, 'the page stopped rendering the key');
+  assert.ok(keyAt > page.indexOf('id="replay-console"'));
+  assert.ok(keyAt < page.indexOf('<AnalystSection />'));
+  assert.match(page, /href="#scene-key"/);
+  assert.match(key, /id="scene-key"/);
+
+  /* One entry per thing the water draws, each carrying a drawing rather than a
+     colour named in prose. */
+  assert.equal((key.match(/className=\{key\.entry\}/g) ?? []).length, 8);
+
+  /* The swatches are drawn at the strength the scene fades its lines to, so
+     what a reader matches against the water is what the water paints. */
+  for (const name of ['LAYLINE', 'RUNG', 'ZONE', 'START']) {
+    const scene = course.match(new RegExp(`export const ${name}_FADE = ([0-9.]+);`));
+    const stated = key.match(new RegExp(`const ${name}_FADE = ([0-9]+);`));
+    assert.ok(scene, `${name}_FADE left scene/course.ts`);
+    assert.ok(stated, `the key stopped stating ${name}_FADE`);
+    assert.equal(Number(stated[1]), Math.round(Number(scene[1]) * 100));
+  }
+
+  /* The current field's cyan is stated once for the GL material and once for
+     the stylesheet, and the key reads the first rather than adding a third. */
+  assert.match(surfaces, /export const CURRENT_FIELD_INK = "#7dd9e8";/);
+  assert.match(css, /--current: #7dd9e8;/);
+  assert.match(field, /color: CURRENT_FIELD_INK,/);
+  assert.match(key, /import \{ CURRENT_FIELD_INK \}/);
+  assert.doesNotMatch(key, /#7dd9e8/);
+
+  /* The key reads its own stylesheet through this repo's path, not the one it
+     was copied from. */
+  assert.match(key, /from "@\/app\/layline\.module\.css"/);
+  assert.doesNotMatch(key, /prototype\/layline/);
+
+  /* Measured values keep the mono face inside a sentence. */
+  assert.match(key, /\{FIX_HZ\} Hz/);
+  assert.match(key, /race\.course\.zoneRadius/);
+  assert.match(keyCss, /\.figure \{[^}]*--font-martian/s);
+});

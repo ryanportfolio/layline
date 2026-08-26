@@ -10,6 +10,7 @@ import { IntroOverlay } from "@/components/layline/intro/IntroOverlay";
 import { LaylineApp } from "@/components/layline/LaylineApp";
 import { NotesSection } from "@/components/layline/NotesSection";
 import { PageGround } from "@/components/layline/PageGround";
+import { SceneKey } from "@/components/layline/SceneKey";
 import { TrackChart } from "@/components/layline/svg/TrackChart";
 import RailLogo from "@/components/chrome/RailLogo";
 import { BindShippedRace } from "./BindShippedRace";
@@ -122,6 +123,12 @@ export default function LaylinePage() {
       <div className={styles.statusBanner}>
         <strong>Telemetry in, race replay out</strong>
         <span>Playback, analytics, and post-race review in 1 browser experience</span>
+        {/* The way from the water to what it is drawn in. The console is a
+            viewport tall, so without this the key is something a reader finds
+            after scrolling past the thing it explains. */}
+        <a className={styles.bannerKeyLink} href="#scene-key">
+          What the colours mean
+        </a>
       </div>
 
       <main className={styles.main}>
@@ -180,6 +187,12 @@ export default function LaylinePage() {
             </div>
           </LaylineApp>
         </section>
+
+        {/* Directly under the console, which is the first thing a reader
+            reaches on leaving it: the console is a viewport tall, so this is
+            the answer waiting at the end of the first scroll rather than a
+            reference buried under the project notes. */}
+        <SceneKey race={race} />
 
         {process.env.OPENROUTER_API_KEY || process.env.LAYLINE_ANALYST_MOCK === "1" ? (
           <AnalystSection />
