@@ -127,7 +127,7 @@ The bar is a flat frame budget: 1,000 consecutive frames during playback with th
 npm test
 ```
 
-The 128 tests cover seeded race output, exact samples, interpolation, compass wrapping, turn-rate limits, sail bounds, standings, frame stepping, and display formatting.
+The 129 tests cover seeded race output, exact samples, interpolation, compass wrapping, turn-rate limits, sail bounds, standings, frame stepping, and display formatting.
 
 Debrief tests cover tool output, maneuver detection, moment markers, glossary lookup, request validation, and mock streaming.
 

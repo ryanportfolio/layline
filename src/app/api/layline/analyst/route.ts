@@ -28,6 +28,7 @@ import {
   SSE_STATUS,
   normalizeAnswerShape,
   serializeChip,
+  stripPlanTalk,
 } from "@/lib/layline/analyst/protocol";
 import type { AnalystMessage } from "@/lib/layline/analyst/protocol";
 import {
@@ -539,38 +540,6 @@ class UpstreamError extends Error {
   constructor(readonly status: number) {
     super(`upstream ${status}`);
   }
-}
-
-/* Small models open their final answer with plan talk ("Let me check the
- * downwind legs.") despite the prompt. The answer shape is one sentence per
- * line, so plan talk arrives as leading lines, not leading paragraphs.
- * Leading lines that read as planning are dropped, but only while a real
- * line remains after them, so an answer can never strip to nothing. */
-const PLAN_TALK = /^(let me|i'll|i will|i am going to|i'm going to|first,? let me|now let me|okay,? let|i need to)/i;
-
-/**
- * A model's own tool-call markup, written out as prose.
- *
- * Withholding the tools does not stop every model from wanting one: the
- * shipped deepseek answers a tools-withheld round by typing its native call
- * format as text, opening with a control token no sailing answer contains.
- * Everything from that token on is markup, and a block truncated by the token
- * cap has no closing tag to match, so the cut runs to the end.
- */
-const CONTROL_MARKUP = /<[|｜][\s\S]*$/;
-
-function stripPlanTalk(text: string): string {
-  const lines = text.replace(CONTROL_MARKUP, "").split("\n");
-  while (lines.length > 1) {
-    const first = lines[0].trim();
-    const restHasWords = lines.slice(1).some((line) => line.trim() !== "");
-    if (first === "" || (PLAN_TALK.test(first) && restHasWords)) {
-      lines.shift();
-      continue;
-    }
-    break;
-  }
-  return lines.join("\n");
 }
 
 function liveResponse(

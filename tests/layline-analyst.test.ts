@@ -11,6 +11,7 @@ import {
   normalizeAnswerShape,
   parseChips,
   serializeChip,
+  stripPlanTalk,
   SUGGESTED_QUESTIONS,
 } from "../src/lib/layline/analyst/protocol";
 import { boatState, detectManeuvers, runTool, standingsAt } from "../src/lib/layline/analyst/tools";
@@ -202,6 +203,33 @@ test("a long paragraph keeps every sentence within five scannable lines", () => 
   for (let index = 1; index <= 9; index += 1) {
     assert.match(normalized, new RegExp(`Sentence ${index}\\.`));
   }
+});
+
+test("plan-talk sentences are stripped wherever they sit, evidence survives", () => {
+  /* The shape of the live regression: a flooded model narrating its analysis
+   * as the answer, plan talk leading and mid-paragraph, no chips. */
+  const wall =
+    "Looking at the downwind leg data, I need to compare each boat's downwind performance. " +
+    "The key metric for downwind speed is the ground speed over the run. " +
+    "Let me look at the average SOG and toMark values from the compare results. " +
+    "GBR has the highest average SOG at 14.4 knots. " +
+    "Let me look at the individual boat states to compare speeds at similar points. " +
+    "At t=45, GBR shows SOG 14.3 knots and toMark 13.9 knots.";
+  const stripped = stripPlanTalk(wall);
+  assert.doesNotMatch(stripped, /Let me|I need to/);
+  assert.match(stripped, /14\.4 knots/);
+  assert.match(stripped, /At t=45, GBR shows SOG 14\.3/);
+
+  const leading = "Let me check the downwind legs.\nGBR 30 was fastest downwind. [[t=45|gbr]]";
+  assert.equal(stripPlanTalk(leading), "GBR 30 was fastest downwind. [[t=45|gbr]]");
+
+  /* "Looking at" opens real answers too; only a declared plan strips it. */
+  const lead = "Looking at the run, GBR 30 was the fastest boat.";
+  assert.equal(stripPlanTalk(lead), lead);
+
+  /* An answer that is all plan talk keeps its words rather than vanishing. */
+  const allPlan = "Let me check the start report.";
+  assert.equal(stripPlanTalk(allPlan), allPlan);
 });
 
 /* ------------------------------------------------------------------ */
