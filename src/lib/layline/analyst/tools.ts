@@ -11,7 +11,9 @@ import {
   raceAnalysisValidity,
   type BoatRangeFacts,
   type ComparisonRequest,
+  type ManeuverRangeFact,
   type RangeComparison,
+  type RangeCoverage,
   type ReferenceRangeFacts,
 } from "@/lib/layline/comparison";
 import { MISSING, clock, deg, knots } from "@/lib/layline/format";
@@ -323,7 +325,10 @@ function finiteRounded(value: number | null): number | null {
   return Object.is(rounded, -0) ? 0 : rounded;
 }
 
-/** Exact analyst adapter. Canonical arithmetic is returned unchanged. */
+/**
+ * Exact analyst adapter. Canonical arithmetic is returned unchanged for
+ * in-process callers; the model wire gets compareWireView of this instead.
+ */
 export function compareRangeForAnalyst(
   race: RaceData,
   request: ComparisonRequest,
@@ -361,6 +366,77 @@ export function compareRangeForAnalyst(
       componentResidualMeters: result.componentResidualMeters,
       provenance: result.componentProvenance,
     },
+  };
+}
+
+/**
+ * What compare_boats actually puts on the model wire. CompareOut carries the
+ * canonical RangeComparison for in-process callers and tests, but serializing
+ * it verbatim buries the model: coverage.bins alone is one JSON entry per
+ * 250ms telemetry bin (72 entries for an 18s range, ~4.6KB of "included"),
+ * and boats/primary/referenceFacts restate what a/b already summarize.
+ * Measured before this view existed, one compare result ran 9.9KB and a
+ * fleet-median one 13.8KB; a fleet-wide question then blew the round budget
+ * and the forced answer arrived as an unscannable wall. The wire keeps every
+ * fact the system prompt tells the analyst to state (status, coverage and
+ * exclusions in seconds, cohort ids, in-range maneuvers with their null
+ * costs, both equations) and drops the rest.
+ */
+export interface CompareWireComparisonOut {
+  status: RangeComparison["status"];
+  boundaryFactsStatus: RangeComparison["boundaryFactsStatus"];
+  invalidReason: string | null;
+  reference: RangeComparison["reference"];
+  coverage: {
+    coverageSeconds: number;
+    excludedByReasonSeconds: RangeCoverage["excludedByReasonSeconds"];
+  };
+  primaryManeuverCount: number;
+  primaryManeuvers: Omit<ManeuverRangeFact, "window">[];
+  referenceNonlinearityMeters: number | null;
+  progressResidualMeters: number | null;
+}
+
+export interface CompareWireOut {
+  fromClock: string;
+  toClock: string;
+  a: CompareSideOut;
+  b: CompareSideOut;
+  aAheadByMetersAtStart: number | null;
+  aAheadByMetersAtEnd: number | null;
+  comparison: CompareWireComparisonOut;
+  equation: CompareEquationOut;
+}
+
+export function compareWireView(out: CompareOut | AnalystError): CompareWireOut | AnalystError {
+  if ("error" in out) return out;
+  const full = out.comparison;
+  return {
+    fromClock: out.fromClock,
+    toClock: out.toClock,
+    a: out.a,
+    b: out.b,
+    aAheadByMetersAtStart: out.aAheadByMetersAtStart,
+    aAheadByMetersAtEnd: out.aAheadByMetersAtEnd,
+    comparison: {
+      status: full.status,
+      boundaryFactsStatus: full.boundaryFactsStatus,
+      invalidReason: full.invalidReason,
+      reference: full.reference,
+      coverage: {
+        coverageSeconds: full.coverage.coverageSeconds,
+        excludedByReasonSeconds: full.coverage.excludedByReasonSeconds,
+      },
+      primaryManeuverCount: full.primary?.maneuverCount ?? 0,
+      primaryManeuvers: (full.primary?.maneuvers ?? []).map((fact) => {
+        const { window: dropped, ...wire } = fact;
+        void dropped;
+        return wire;
+      }),
+      referenceNonlinearityMeters: full.referenceNonlinearityMeters,
+      progressResidualMeters: full.progressResidualMeters,
+    },
+    equation: out.equation,
   };
 }
 
@@ -584,7 +660,7 @@ export const ANALYST_TOOLS: AnalystTool[] = [
   {
     name: "compare_boats",
     description:
-      "Compare one selected boat with either a named rival or a fixed fleet median over an exact race-time range. Returns compareRange unchanged under comparison: exact cohort IDs, status and disjoint coverage, ground progress/distance/VMG, detected maneuver observations with unsupported costs left null, the straight plus maneuver-window equation, and the alternative water plus current equation. Water and current are reconstructed fix components, ground is their derived sum, and current contribution is descriptive rather than a tactical cause. Positive advantage means the selected boat is ahead; positive gain means it improved over the range. Legacy avgVmgKnots remains null because wind-axis dock VMG is distinct from ground-to-mark VMG.",
+      "Compare one selected boat with either a named rival or a fixed fleet median over an exact race-time range: per-side average sog and speed to the mark in knots with distance sailed, the along-course advantage at both range ends, comparison status with coverage seconds and exclusions, cohort ids, the selected boat's in-range maneuvers with unsupported costs left null, the straight plus maneuver-window equation, and the alternative water plus current equation. Water and current are reconstructed fix components, ground is their derived sum, and current contribution is descriptive rather than a tactical cause. Positive advantage means the selected boat is ahead; positive gain means it improved over the range. Legacy avgVmgKnots remains null because wind-axis dock VMG is distinct from ground-to-mark VMG.",
     strict: true,
     input_schema: {
       type: "object",
@@ -713,7 +789,7 @@ export function runTool(race: RaceData, name: string, input: unknown): string {
     case "boat_state":
       return JSON.stringify(boatState(race, str(args.boatId), num(args.t)));
     case "compare_boats":
-      return JSON.stringify(compareRangeForAnalyst(race, comparisonRequest(args)));
+      return JSON.stringify(compareWireView(compareRangeForAnalyst(race, comparisonRequest(args))));
     case "maneuvers": {
       const boatId = typeof args.boatId === "string" && args.boatId.length > 0 ? args.boatId : undefined;
       if (boatId !== undefined && boatById(race, boatId) === undefined) {

@@ -89,6 +89,49 @@ export function serializeChip(t: number, boatId?: string): string {
   return boatId === undefined ? `[[t=${stamp}]]` : `[[t=${stamp}|${boatId}]]`;
 }
 
+/* Small models write plan talk ("Let me check the downwind legs.") into their
+ * final answer despite the prompt, and a flooded model writes it mid-answer,
+ * not only as an opening line. Sentences that read as planning are dropped
+ * wherever they sit; the openers here state intent without carrying a fact,
+ * so dropping the sentence never drops evidence. A sentence like "Looking at
+ * the run, GBR 30 was fastest" is the answer itself, which is why "looking
+ * at" only strips when the sentence then declares a plan. */
+const PLAN_TALK =
+  /^(let me|let's|i'll|i will|i am going to|i'm going to|first,? let me|now let me|okay,? let|i need to|looking at [^.]*?, (?:i need to|i'll|i will|let me))/i;
+
+/**
+ * A model's own tool-call markup, written out as prose.
+ *
+ * Withholding the tools does not stop every model from wanting one: the
+ * shipped deepseek answers a tools-withheld round by typing its native call
+ * format as text, opening with a control token no sailing answer contains.
+ * Everything from that token on is markup, and a block truncated by the token
+ * cap has no closing tag to match, so the cut runs to the end.
+ */
+const CONTROL_MARKUP = /<[|｜][\s\S]*$/;
+
+/** Drop control markup and plan-talk sentences from a live model's answer. */
+export function stripPlanTalk(text: string): string {
+  const lines = text
+    .replace(CONTROL_MARKUP, "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+  const segmenter = new Intl.Segmenter("en", { granularity: "sentence" });
+  const kept: string[] = [];
+  for (const line of lines) {
+    const surviving: string[] = [];
+    for (const { segment } of segmenter.segment(line)) {
+      const sentence = segment.trim();
+      if (sentence !== "" && !PLAN_TALK.test(sentence)) surviving.push(sentence);
+    }
+    if (surviving.length > 0) kept.push(surviving.join(" "));
+  }
+  /* An answer that was all plan talk keeps its words: stripping to nothing
+   * would turn a bad answer into a fake dropped connection. */
+  return kept.length === 0 ? lines.join("\n") : kept.join("\n");
+}
+
 const MAX_ANSWER_LINES = 5;
 const CHIP_ONLY_RE = /^(?:\[\[t=-?\d+(?:\.\d+)?(?:\|[a-z][a-z0-9]*)?\]\]\s*)+$/;
 
