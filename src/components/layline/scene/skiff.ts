@@ -78,7 +78,12 @@ const WELL_FROM = 0.34;
 const WELL_TO = 0.9;
 const WELL_RAMP = 0.045;
 const WELL_HALF = 0.42;
-const WELL_DROP = 0.24;
+/* Shallow enough that the sole clears the sea at every sailing heel. At 0.24
+ * the floor sat ~0.15 m over the resting waterline and the Gerstner field
+ * broke through it past ~12 degrees of heel, so the well showed open water
+ * where its floor should be. 0.18 keeps +0.039 m of clearance at the 14
+ * degree hiking cap and clears every heel to 20 degrees. */
+const WELL_DROP = 0.18;
 /* Where the chine falls in the section parameter. Below it the bottom panel,
  * above it the topside, and the crease between them is the chine itself. */
 const CHINE_U = 0.55;
@@ -122,6 +127,10 @@ export interface Livery {
 /* Hull family per nation, trim second. Two hulls in this fleet cannot carry a
  * white stripe: the white boat and the black one both take the red. */
 const COCKPIT = "#252c33";
+/* The footwell floor, a step lighter than its walls. A recess drawn in one
+ * value has no floor in it from above: the near black sat within a few percent
+ * of the shaded sea and the well read as a hole through the hull. */
+const SOLE = "#39424c";
 /* Blue enough to stay blue. The netting is the largest flat panel on the boat
  * in a wide, so whatever it returns is what a reviewer reads the rack as. */
 const TRAMP = "#1c242d";
@@ -572,6 +581,7 @@ export function matteGeometry(livery: Livery): BufferGeometry {
   const s = shell();
   const tramp = new Color(livery.tramp);
   const cockpit = new Color(livery.cockpit);
+  const sole = new Color(SOLE);
   const panel = new Color(livery.panel);
 
   /* Deck in three surfaces rather than one sheet across the beam: side decks
@@ -637,7 +647,7 @@ export function matteGeometry(livery: Livery): BufferGeometry {
     const open = wellAt(st);
     for (let k = 0; k <= SOLE_SPAN; k++) {
       const across = WELL_HALF * open * ((k / SOLE_SPAN) * 2 - 1);
-      put(s, across * half, y + camber(across) - WELL_DROP * open, z, cockpit);
+      put(s, across * half, y + camber(across) - WELL_DROP * open, z, sole);
     }
   }
   for (let j = 0; j < STATIONS - 1; j++) {
@@ -676,6 +686,39 @@ export function matteGeometry(livery: Livery): BufferGeometry {
         const b = a + RACK_COLS + 1;
         if (side > 0) quad(s, a, b, b + 1, a + 1);
         else quad(s, a, a + 1, b + 1, b);
+      }
+    }
+    /* The same sheet wound the other way, so the tramp is there from below:
+     * a heeled boat shows its windward rack's underside to a low leeward
+     * camera, and a single-sided sheet vanished from that view. Its own
+     * vertex copies, not the grid above: finish() averages normals over
+     * shared vertices, and a vertex on both faces would sum to zero. The
+     * copies are coplanar on purpose; the material culls back faces, so
+     * exactly one of the pair draws from any camera and they cannot fight. */
+    const under = s.pos.length / 3;
+    for (let j = 0; j <= RACK_STEPS; j++) {
+      const st = RACK_FROM + (RACK_TO - RACK_FROM) * (j / RACK_STEPS);
+      const z = stationZ(st);
+      const y = deckY(st);
+      const inner = curveAt(SHEER_HALF, st);
+      const outer = SKIFF.rack - 0.06;
+      for (let c = 0; c <= RACK_COLS; c++) {
+        const w = c / RACK_COLS;
+        put(
+          s,
+          side * (inner + (outer - inner) * w),
+          y - 0.005 + 0.011 * w - 0.035 * Math.sin(Math.PI * w),
+          z,
+          tramp,
+        );
+      }
+    }
+    for (let j = 0; j < RACK_STEPS; j++) {
+      for (let c = 0; c < RACK_COLS; c++) {
+        const a = under + j * (RACK_COLS + 1) + c;
+        const b = a + RACK_COLS + 1;
+        if (side > 0) quad(s, a, a + 1, b + 1, b);
+        else quad(s, a, b, b + 1, a + 1);
       }
     }
   }

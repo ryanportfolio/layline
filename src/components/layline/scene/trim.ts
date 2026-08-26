@@ -12,7 +12,7 @@
  * scene poses from, which is what keeps the answer a pure function of the
  * clock: seeking to an instant and playing into it draw the same rig.
  */
-import { poseAt } from "@/lib/layline/interpolate";
+import { createPose, poseAt } from "@/lib/layline/interpolate";
 import type { Pose, RaceData } from "@/lib/layline/types";
 
 /* Half the time the cloth takes to change sides, in seconds. Read off the
@@ -44,7 +44,7 @@ interface Swings {
 }
 
 const tables = new WeakMap<RaceData, Map<string, Swings>>();
-const probe: Pose = { x: 0, y: 0, hdg: 0, heel: 0, twa: 0, sog: 0, cog: 0, kite: 0 };
+const probe: Pose = createPose();
 
 /* Leeward is where the cloth goes: to port with the wind over starboard. */
 function leeOf(twa: number): number {

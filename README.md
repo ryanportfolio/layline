@@ -70,7 +70,7 @@ A tracker sends 1 GPS point every 250 ms. A 60 Hz screen draws 15 frames during 
 
 The same evaluator supplies the 3D scene, instruments, standings, and 2D course. Every view gets the same result for the same race time.
 
-The simulator runs at 20 Hz, then keeps only the data a 4 Hz tracker would send. The current seed produces 1,711 telemetry samples across 6 boats and 73 seconds.
+The simulator runs at 20 Hz, then keeps only the data a 4 Hz tracker would send. The current seed produces 1,713 telemetry samples across 6 boats and 75 seconds.
 
 ## Debrief
 
@@ -127,7 +127,7 @@ The bar is a flat frame budget: 1,000 consecutive frames during playback with th
 npm test
 ```
 
-The 112 tests cover seeded race output, exact samples, interpolation, compass wrapping, turn-rate limits, sail bounds, standings, frame stepping, and display formatting.
+The 127 tests cover seeded race output, exact samples, interpolation, compass wrapping, turn-rate limits, sail bounds, standings, frame stepping, and display formatting.
 
 Debrief tests cover tool output, maneuver detection, moment markers, glossary lookup, request validation, and mock streaming.
 

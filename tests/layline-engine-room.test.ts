@@ -43,8 +43,8 @@ const window = benchWindow(race, BENCH_BOAT);
 const pair = northPair(race, window);
 
 test("the bench window is the beat's second tack, six seconds either side", () => {
-  assert.equal(secondTack(race, BENCH_BOAT), 27.25);
-  assert.deepEqual([window.from, window.to, window.span], [21, 33, 12]);
+  assert.equal(secondTack(race, BENCH_BOAT), 30.5);
+  assert.deepEqual([window.from, window.to, window.span], [25, 37, 12]);
   assert.equal(window.fixes.length, 49);
   /* Every fix sits on the 1/FIX_HZ grid the sim wrote them on. */
   for (const fix of window.fixes) {
@@ -52,27 +52,27 @@ test("the bench window is the beat's second tack, six seconds either side", () =
   }
   /* The tack sits inside the window. The rounding no longer does: the sim now
      takes a hull's mark time at its closest approach measured through the run
-     leg as well as the arc, which moved USA 4's rounding from 32.85 to 33.70,
-     seven tenths past the window's end. The transport draws its rounding
+     leg as well as the arc. USA 4's 38.819 s rounding sits beyond this window.
+     The transport draws its rounding
      marker only when the event is inside the window, so on this seed the
      marker stays undrawn and the scrub rail carries the tack tick alone. */
   assert.ok(window.tack > window.from && window.tack < window.to);
   const rounding = roundingTime(race, BENCH_BOAT);
-  assert.equal(rounding, 33.7);
+  assert.equal(rounding, 38.819);
   assert.ok(rounding !== null && rounding > window.to);
 });
 
 test("dot spacing over the window is the range the chips print", () => {
   const gaps = gapRange(window.fixes);
-  assert.equal(gaps.min.toFixed(2), "0.70");
-  assert.equal(gaps.max.toFixed(2), "1.27");
+  assert.equal(gaps.min.toFixed(2), "0.74");
+  assert.equal(gaps.max.toFixed(2), "1.54");
 });
 
 test("the north pair is one second apart and straddles the top of the circle", () => {
   assert.equal(pair.b.t - pair.a.t, 1);
   assert.ok(pair.a.t >= window.from && pair.b.t <= window.to);
-  assert.equal(pair.a.hdg.toFixed(1), "21.5");
-  assert.equal(pair.b.hdg.toFixed(1), "353.5");
+  assert.equal(pair.a.hdg.toFixed(1), "25.0");
+  assert.equal(pair.b.hdg.toFixed(1), "357.0");
   assert.equal(pair.plain.toFixed(1), "332.0");
   assert.equal(Math.abs(pair.short).toFixed(1), "28.0");
   /* The plain-number reading is the wrong way round the circle by exactly the
@@ -83,23 +83,24 @@ test("the north pair is one second apart and straddles the top of the circle", (
 test("the park frame holds the raw and smooth boats visibly apart", () => {
   const crossing = crossingInstant(race, BENCH_BOAT, pair);
   assert.ok(crossing > pair.a.t && crossing < pair.b.t, "crossing outside the pair");
-  assert.equal(crossing.toFixed(2), "27.02");
+  assert.equal(crossing.toFixed(2), "30.39");
   const park = parkTime(race, BENCH_BOAT, pair);
   assert.ok(park >= pair.a.t && park <= pair.b.t, "park outside the pair");
-  assert.equal(park.toFixed(2), "26.48");
+  assert.equal(park.toFixed(2), "30.39");
   /* Three pixels at ten pixels per metre is the floor for a parked frame that
-   * still shows two boats. The crossing itself misses it on this seed, so the
-   * widest-divergence fallback is the rule that fired here. */
-  assert.ok(divergenceAt(race, BENCH_BOAT, crossing) < 0.3);
+   * still shows two boats. The crossing clears it on this seed, so it remains
+   * the exact parked evidence time. */
+  assert.equal(park, crossing);
+  assert.ok(divergenceAt(race, BENCH_BOAT, crossing) >= 0.3);
   assert.ok(divergenceAt(race, BENCH_BOAT, park) >= 0.3);
-  assert.equal(divergenceAt(race, BENCH_BOAT, park).toFixed(2), "1.03");
+  assert.equal(divergenceAt(race, BENCH_BOAT, park).toFixed(2), "0.61");
 });
 
 test("the straight-line track is the number CAM 02 prints, and it is not drawable", () => {
   const points = chordPath(race.fixes[BENCH_BOAT], window.from, window.to);
   assert.equal(points.length, 241);
-  assert.equal(points[0].t, 21);
-  assert.equal(points[points.length - 1].t, 33);
+  assert.equal(points[0].t, 25);
+  assert.equal(points[points.length - 1].t, 37);
   const drift = chordDrift(race, BENCH_BOAT, window);
   assert.equal(drift.toFixed(2), "0.02");
   /* Every sample lands off the curve, so the number is a real separation and
@@ -124,36 +125,36 @@ test("the finish strip prints the results the race already holds", () => {
   const order = finishGaps(race);
   assert.deepEqual(
     order.map((entry) => entry.boatId),
-    ["usa", "jpn", "gbr", "nzl", "aus", "fra"],
+    ["jpn", "fra", "nzl", "gbr", "usa", "aus"],
   );
   /* These are the strings the strip prints, because the strip prints the
    * server's numbers: NotesSection builds them in Node from the race page.tsx
    * already generated and hands them down as props. Left to the browser they
-   * come out up to fifteen milliseconds different, which moved +3.63 to +3.64
-   * and 0.04 to 0.05 on screen while this file stayed green. */
-  assert.equal(order[0].elapsed.toFixed(2), "51.52");
+   * are now stabilized at the shared simulation boundary before either engine
+   * serializes them. */
+  assert.equal(order[0].elapsed.toFixed(2), "50.14");
   assert.deepEqual(
     order.map((entry) => entry.delta.toFixed(2)),
-    ["0.00", "1.42", "3.63", "5.44", "5.48", "5.97"],
+    ["0.00", "2.94", "4.46", "6.45", "7.83", "8.58"],
   );
-  assert.equal(finishGap45(order).toFixed(2), "0.04");
+  assert.equal(finishGap45(order).toFixed(2), "1.38");
   /* The bar per boat is elapsed over the last boat home. */
   assert.deepEqual(
     order.map((entry) => ((entry.elapsed / order[5].elapsed) * 100).toFixed(1)),
-    ["89.6", "92.1", "95.9", "99.1", "99.1", "100.0"],
+    ["85.4", "90.4", "93.0", "96.4", "98.7", "100.0"],
   );
   /* GBR's near-white and NZL's near-black are the two that need an outline. */
   assert.deepEqual(
     order.filter((entry) => entry.dark).map((entry) => entry.boatId),
-    ["gbr", "nzl"],
+    ["nzl", "gbr"],
   );
 });
 
 /* The engine ident counts the bench window, not the fleet. The fleet total is
    back on the page in the build board's "Samples generated" row, and the
    Debrief panel above prints it too. */
-test("the seed writes 1711 fixes across the fleet", () => {
-  assert.equal(totalFixes(race), 1711);
+test("the seed writes 1713 fixes across the fleet", () => {
+  assert.equal(totalFixes(race), 1713);
 });
 
 /* ------------------------------------------------------------------ */
@@ -179,16 +180,16 @@ test("the build board renders these rows, in this order, in these states", () =>
     [
       [
         "Boats in the seeded fleet|6||running",
-        "Samples generated|1711||running",
-        "Wind readings under the laylines|75||running",
+        "Samples generated|1713||running",
+        "Wind readings under the laylines|76||running",
         "Gun, roundings and finishes|13||running",
         "Hulls, wake, spray, water and sky|||running",
         "Chart stand-in without WebGL|||running",
       ],
       [
-        "Race clock the transport scrubs|73.25|s|running",
+        "Race clock the transport scrubs|74.75|s|running",
         "Start line counts down from|10.00|s|running",
-        "Turns marked under the scrub track|3||running",
+        "Turns marked under the scrub track|4||running",
         "Speed made good, 1 sample every|0.50|s|running",
         "Chart mode on the same clock|||running",
         "Heel and trim on the instrument dock|||landing",

@@ -25,7 +25,7 @@ export const DEFAULT_WORKSPACE_PREFERENCES: WorkspacePreferences = {
   railWidth: null,
   analystWidth: null,
   railSide: "left",
-  railCollapsed: false,
+  railCollapsed: true,
 };
 
 export function raceMatchesSearch(
@@ -93,8 +93,42 @@ export function parseWorkspacePreferences(
   }
 }
 
+/**
+ * Reconcile the server's cookie-backed preference with the browser copy.
+ * A local value wins only when it exists and parses. Missing or blocked local
+ * storage leaves the server value intact, including its rail preference.
+ */
+export function hydrateWorkspacePreferences(
+  serverPreferences: WorkspacePreferences,
+  localRaw: string | undefined | null,
+  validIds: ReadonlySet<string>,
+): WorkspacePreferences {
+  const server = sanitizeWorkspacePreferences(serverPreferences, validIds);
+  if (localRaw === undefined || localRaw === null || localRaw === "") return server;
+  try {
+    return sanitizeWorkspacePreferences(JSON.parse(localRaw), validIds);
+  } catch {
+    return server;
+  }
+}
+
+export function libraryOpenFromPreferences(preferences: WorkspacePreferences): boolean {
+  return !preferences.railCollapsed;
+}
+
+export function toggleLibraryPreference(
+  preferences: WorkspacePreferences,
+): WorkspacePreferences {
+  return {
+    ...preferences,
+    railCollapsed: !preferences.railCollapsed,
+  };
+}
+
+/* The race list opens at its floor on every viewport: the replay owns the
+   width, and a wider rail is a stored choice, never a default. */
 export function defaultPaneWidth(pane: "rail" | "analyst", viewportWidth: number): number {
-  if (pane === "rail") return viewportWidth >= 1600 ? 280 : 220;
+  if (pane === "rail") return RAIL_MIN;
   return viewportWidth >= 1600 ? 380 : 340;
 }
 

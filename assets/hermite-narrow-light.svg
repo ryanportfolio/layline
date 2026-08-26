@@ -6,29 +6,29 @@
 </style>
 
 <text x="30" y="34" font-family="ui-monospace,'SF Mono','Cascadia Mono',Menlo,Consolas,'Liberation Mono',monospace" font-size="13" letter-spacing="3" fill="#59636e">BETWEEN SAMPLES</text>
-<path d="M30.0 65.4L35.9 71.5L41.7 77.6L47.6 83.7L53.4 89.8L59.2 95.9L65.1 101.9L70.9 108.0L76.8 114.0L82.6 120.0L88.4 126.1L94.1 132.2L99.8 138.3L105.5 144.4L111.1 150.6L116.7 156.8L122.4 162.8L128.3 168.7L134.3 174.4L140.4 180.0L146.6 185.5L152.9 190.8L159.3 195.9L165.8 200.8L172.4 205.6L179.0 210.2L185.6 214.7L192.3 218.9L199.0 222.8L205.7 226.7L212.4 230.3L219.1 233.8L225.8 237.0L232.5 240.0L239.2 242.9L245.8 245.6L252.4 248.1L259.0 250.4L265.6 252.5L272.1 254.4L278.6 256.2L285.1 257.8L291.5 259.1L297.8 260.2L304.1 261.1L310.4 261.8L316.6 262.3L322.7 262.6L328.7 262.6L334.6 262.4L340.5 262.2L346.3 261.7L351.9 261.0L357.4 260.1L362.9 259.1L368.2 257.9L373.5 256.6L378.6 255.1L383.5 253.5L388.4 251.7L393.2 249.9L397.9 248.0L402.5 246.0L407.0 243.9L411.3 241.7L415.6 239.4L419.8 237.1L423.9 234.8L427.8 232.3L431.7 229.8L435.5 227.2L439.2 224.6L442.9 221.8L446.5 218.9L450.0 216.0L453.5 213.0L456.9 210.0L460.3 206.8L463.6 203.6L466.8 200.3L470.0 197.0" fill="none" stroke="#1f2328" stroke-width="2" class="track" pathLength="1000"/>
-<circle cx="30.0" cy="65.4" r="3.2" fill="#8250df"/>
-<circle cx="59.2" cy="95.9" r="3.2" fill="#8250df"/>
-<circle cx="88.4" cy="126.1" r="3.2" fill="#8250df"/>
-<circle cx="116.7" cy="156.8" r="3.2" fill="#8250df"/>
-<circle cx="146.6" cy="185.5" r="3.2" fill="#8250df"/>
-<circle cx="179.0" cy="210.2" r="3.2" fill="#8250df"/>
-<circle cx="212.4" cy="230.3" r="3.2" fill="#8250df"/>
-<circle cx="245.8" cy="245.6" r="3.2" fill="#8250df"/>
-<circle cx="278.6" cy="256.2" r="3.2" fill="#8250df"/>
-<circle cx="310.4" cy="261.8" r="3.2" fill="#8250df"/>
-<circle cx="340.5" cy="262.2" r="3.2" fill="#8250df"/>
-<circle cx="368.2" cy="257.9" r="3.2" fill="#8250df"/>
-<circle cx="393.2" cy="249.9" r="3.2" fill="#8250df"/>
-<circle cx="415.6" cy="239.4" r="3.2" fill="#8250df"/>
-<circle cx="435.5" cy="227.2" r="3.2" fill="#8250df"/>
-<circle cx="453.5" cy="213.0" r="3.2" fill="#8250df"/>
-<circle cx="470.0" cy="197.0" r="3.2" fill="#8250df"/>
-<line x1="30.0" y1="65.4" x2="100.3" y2="139.1" stroke="#bc4c00" stroke-width="1.6"/><polygon points="100.3,139.1 97.3,130.9 92.3,135.7" fill="#bc4c00"/>
-<line x1="116.7" y1="156.8" x2="184.1" y2="230.7" stroke="#bc4c00" stroke-width="1.6"/><polygon points="184.1,230.7 181.3,222.5 176.1,227.2" fill="#bc4c00"/>
-<line x1="212.4" y1="230.3" x2="292.9" y2="273.8" stroke="#bc4c00" stroke-width="1.6"/><polygon points="292.9,273.8 287.5,267.0 284.2,273.1" fill="#bc4c00"/>
-<line x1="310.4" y1="261.8" x2="385.3" y2="270.0" stroke="#bc4c00" stroke-width="1.6"/><polygon points="385.3,270.0 377.8,265.7 377.0,272.6" fill="#bc4c00"/>
-<line x1="393.2" y1="249.9" x2="450.7" y2="227.9" stroke="#bc4c00" stroke-width="1.6"/><polygon points="450.7,227.9 441.9,227.5 444.4,234.1" fill="#bc4c00"/>
-<line x1="453.5" y1="213.0" x2="495.3" y2="177.1" stroke="#bc4c00" stroke-width="1.6"/><polygon points="495.3,177.1 486.9,179.7 491.5,185.0" fill="#bc4c00"/>
+<path d="M30.0 81.7L35.6 89.3L41.3 96.8L47.1 104.3L53.1 111.5L59.3 118.6L65.7 125.5L72.1 132.4L78.7 139.1L85.3 145.6L92.2 151.8L99.1 157.9L106.1 163.9L113.1 169.7L120.2 175.3L127.4 180.6L134.6 185.7L141.9 190.7L149.1 195.5L156.4 200.0L163.6 204.3L170.9 208.4L178.1 212.3L185.3 216.0L192.5 219.5L199.7 222.8L206.8 225.8L214.0 228.7L221.0 231.4L228.1 233.9L235.1 236.2L242.0 238.2L248.9 240.0L255.7 241.6L262.5 243.0L269.2 244.1L275.8 244.9L282.4 245.6L288.8 246.0L295.2 246.3L301.4 246.3L307.5 246.1L313.5 245.7L319.5 245.2L325.2 244.5L330.9 243.6L336.4 242.5L341.8 241.3L347.2 240.0L352.3 238.5L357.4 237.0L362.3 235.3L367.2 233.5L371.9 231.7L376.5 229.8L381.0 227.8L385.4 225.7L389.7 223.6L393.8 221.4L397.9 219.2L401.9 216.8L405.8 214.3L409.7 211.8L413.5 209.2L417.2 206.5L420.9 203.7L424.4 200.8L427.9 197.9L431.4 194.8L434.8 191.7L438.2 188.5L441.6 185.3L444.9 182.0L448.2 178.6L451.4 175.1L454.6 171.5L457.8 167.8L460.9 164.1L464.0 160.3L467.0 156.4L470.0 152.4" fill="none" stroke="#1f2328" stroke-width="2" class="track" pathLength="1000"/>
+<circle cx="30.0" cy="81.7" r="3.2" fill="#8250df"/>
+<circle cx="59.3" cy="118.6" r="3.2" fill="#8250df"/>
+<circle cx="92.2" cy="151.8" r="3.2" fill="#8250df"/>
+<circle cx="127.4" cy="180.6" r="3.2" fill="#8250df"/>
+<circle cx="163.6" cy="204.3" r="3.2" fill="#8250df"/>
+<circle cx="199.7" cy="222.8" r="3.2" fill="#8250df"/>
+<circle cx="235.1" cy="236.2" r="3.2" fill="#8250df"/>
+<circle cx="269.2" cy="244.1" r="3.2" fill="#8250df"/>
+<circle cx="301.4" cy="246.3" r="3.2" fill="#8250df"/>
+<circle cx="330.9" cy="243.6" r="3.2" fill="#8250df"/>
+<circle cx="357.4" cy="237.0" r="3.2" fill="#8250df"/>
+<circle cx="381.0" cy="227.8" r="3.2" fill="#8250df"/>
+<circle cx="401.9" cy="216.8" r="3.2" fill="#8250df"/>
+<circle cx="420.9" cy="203.7" r="3.2" fill="#8250df"/>
+<circle cx="438.2" cy="188.5" r="3.2" fill="#8250df"/>
+<circle cx="454.6" cy="171.5" r="3.2" fill="#8250df"/>
+<circle cx="470.0" cy="152.4" r="3.2" fill="#8250df"/>
+<line x1="30.0" y1="81.7" x2="NaN" y2="NaN" stroke="#bc4c00" stroke-width="1.6"/><polygon points="NaN,NaN NaN,NaN NaN,NaN" fill="#bc4c00"/>
+<line x1="127.4" y1="180.6" x2="NaN" y2="NaN" stroke="#bc4c00" stroke-width="1.6"/><polygon points="NaN,NaN NaN,NaN NaN,NaN" fill="#bc4c00"/>
+<line x1="235.1" y1="236.2" x2="NaN" y2="NaN" stroke="#bc4c00" stroke-width="1.6"/><polygon points="NaN,NaN NaN,NaN NaN,NaN" fill="#bc4c00"/>
+<line x1="330.9" y1="243.6" x2="NaN" y2="NaN" stroke="#bc4c00" stroke-width="1.6"/><polygon points="NaN,NaN NaN,NaN NaN,NaN" fill="#bc4c00"/>
+<line x1="401.9" y1="216.8" x2="NaN" y2="NaN" stroke="#bc4c00" stroke-width="1.6"/><polygon points="NaN,NaN NaN,NaN NaN,NaN" fill="#bc4c00"/>
+<line x1="454.6" y1="171.5" x2="NaN" y2="NaN" stroke="#bc4c00" stroke-width="1.6"/><polygon points="NaN,NaN NaN,NaN NaN,NaN" fill="#bc4c00"/>
 <text x="30" y="312" font-family="ui-monospace,'SF Mono','Cascadia Mono',Menlo,Consolas,'Liberation Mono',monospace" font-size="13" fill="#59636e">17 SAMPLES · 4 S · TANGENTS = REPORTED SOG/COG</text>
 </svg>

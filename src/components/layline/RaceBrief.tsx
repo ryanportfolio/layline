@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { briefFacts, type BriefFacts } from "@/lib/layline/brief";
 import type { RaceData } from "@/lib/layline/types";
-import { BriefPanels } from "./BriefPanels";
+import { BriefPanels, setText, signed } from "./BriefPanels";
 import { BriefPerformance } from "./BriefPerformance";
 import styles from "./bootSea.module.css";
 import { AUTOPLAY_FROM, OPEN_AT, useReplay } from "./store";
@@ -25,7 +25,7 @@ import { AUTOPLAY_FROM, OPEN_AT, useReplay } from "./store";
  * from.
  *
  * This file is the shell the two views hang in: the header, the switch between
- * them, the prestart clock, the status line and the way through. The clock is
+ * them, the prestart clock and the way through. The clock is
  * here rather than in a view because only one view is mounted at a time and
  * Performance does not move: a loop that lived in Panels would stop the
  * countdown, and the scene warming behind the cover with it, the moment a
@@ -49,15 +49,12 @@ export function RaceBrief({
   name,
   venue,
   dateLabel,
-  live,
   reduced,
 }: {
   race: RaceData;
   name: string;
   venue: string;
   dateLabel: string;
-  /** True once the renderer has a frame up. Only the status line reads it. */
-  live: boolean;
   reduced: boolean;
 }) {
   const facts: BriefFacts = useMemo(() => briefFacts(race), [race]);
@@ -73,10 +70,7 @@ export function RaceBrief({
   const root = useRef<HTMLDivElement>(null);
   const title = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
-  const statusFill = useRef<HTMLElement>(null);
-  const statusBar = useRef<HTMLSpanElement>(null);
-  const statusWarming = useRef<HTMLSpanElement>(null);
-  const statusUp = useRef<HTMLSpanElement>(null);
+  const gunIn = useRef<HTMLSpanElement>(null);
 
   /* The race name is capped at two lines: measured, then stepped down a pixel
    * at a time until it fits. Container units alone cannot do it, because what
@@ -117,75 +111,24 @@ export function RaceBrief({
     button.current?.focus({ preventScroll: true });
   }, []);
 
-  /* The two strings crossfade rather than swap, so the renderer arriving is one
-     settle instead of a text cut and a bar jump in the same frame. */
+  /* The countdown on the header rule, written straight onto the element off
+   * the replay clock, the same way the views write their readings and the
+   * button writes its band. It moved up here from the fleet plate's foot, so
+   * the shell owns it now: it must keep counting while the reader is on the
+   * Performance tab and the fleet plate is unmounted. Reduced motion holds the
+   * top of the prestart, matching the readings the views hold. */
   useEffect(() => {
-    const words = (): void => {
-      if (statusWarming.current !== null) statusWarming.current.style.opacity = live ? "0" : "1";
-      if (statusUp.current !== null) statusUp.current.style.opacity = live ? "1" : "0";
-    };
+    const write = (t: number): void =>
+      setText(gunIn.current, `gun in ${Math.max(0, -t).toFixed(1)} s`);
     if (reduced) {
-      words();
+      write(race.tMin);
       return;
     }
-    const frame = requestAnimationFrame(words);
-    return () => window.cancelAnimationFrame(frame);
-  }, [live, reduced]);
-
-  /**
-   * The hairline only exists if there is a wait to describe.
-   *
-   * On a machine that puts a frame up in a few hundred milliseconds, a bar that
-   * appears, ramps and completes inside a second is the whole of what a viewer
-   * sees of it, and what they see is a sweep with no information in it. So it
-   * stays off the layer until the renderer has been slow for long enough that
-   * saying so is worth a hairline, and a fast boot never draws one at all.
-   *
-   * When it does earn its place it is transitioned rather than keyframed. The
-   * first version killed a running animation to complete it, which drops the
-   * element to its base width before the new one applies, so the bar snapped to
-   * full from wherever the ramp had reached. A transition interpolates from the
-   * current computed width instead, so the renderer arriving is one settle.
-   *
-   * The ramp itself is a wait and not a measurement: nothing here knows how long
-   * a renderer will take, so it eases toward a value short of full and only
-   * completes when there is a frame on screen to complete it.
-   */
-  const SLOW_ENOUGH_TO_SAY_SO = 600;
-  const COMPLETE_MS = 900;
-  useEffect(() => {
-    if (live) return;
-    const timer = window.setTimeout(() => {
-      const bar = statusBar.current;
-      const fill = statusFill.current;
-      if (bar === null || fill === null) return;
-      bar.style.opacity = "1";
-      if (reduced) {
-        fill.style.width = "88%";
-        return;
-      }
-      window.requestAnimationFrame(() => {
-        fill.style.setProperty("--status-ease", "5400ms");
-        fill.style.width = "88%";
-      });
-    }, SLOW_ENOUGH_TO_SAY_SO);
-    return () => window.clearTimeout(timer);
-  }, [live, reduced]);
-
-  useEffect(() => {
-    const bar = statusBar.current;
-    const fill = statusFill.current;
-    if (!live || bar === null || fill === null) return;
-    /* Never shown, so there is nothing to complete: a bar that appeared only to
-     * announce that it was finished would be the sweep this avoids. */
-    if (bar.style.opacity !== "1") return;
-    if (reduced) {
-      fill.style.width = "100%";
-      return;
-    }
-    fill.style.setProperty("--status-ease", `${COMPLETE_MS}ms`);
-    fill.style.width = "100%";
-  }, [live, reduced]);
+    write(useReplay.getState().t);
+    return useReplay.subscribe((state) => {
+      if (!state.briefDone) write(state.t);
+    });
+  }, [race, reduced]);
 
   /**
    * The prestart, run on the replay's own clock.
@@ -338,6 +281,18 @@ export function RaceBrief({
               Performance
             </button>
           </div>
+          {/* The start facts, stated once for both views on the rule that
+              already carries the race's own meta line. The countdown span is
+              written by the shell's clock subscription above. */}
+          <p className={styles.headFacts}>
+            <span ref={gunIn}>{`gun in ${Math.max(0, -race.tMin).toFixed(1)} s`}</span>
+            <span>
+              {facts.first === null
+                ? "no boat crossed"
+                : `${facts.first.sail} ${signed(facts.first.t, 2)} s first cross`}
+            </span>
+            <span>{`line ${Math.round(facts.lineLength)} m`}</span>
+          </p>
         </div>
       </header>
 
@@ -348,22 +303,6 @@ export function RaceBrief({
       )}
 
       <div className={styles.briefFoot}>
-        {/* Both strings are rendered and crossfaded rather than swapped, so the
-            renderer arriving is one settle rather than a text cut and a bar jump
-            in the same frame. The warming line is the one a screen reader gets:
-            it is the state the layer opens in, and a renderer coming up is not
-            news worth announcing. */}
-        <p className={styles.status}>
-          <span className={styles.statusStack}>
-            <span ref={statusWarming}>renderer warming, the race is already loaded</span>
-            <span ref={statusUp} style={{ opacity: 0 }} aria-hidden="true">
-              renderer up, the race is already loaded
-            </span>
-          </span>
-          <span className={styles.statusBar} ref={statusBar} style={{ opacity: 0 }} aria-hidden="true">
-            <i ref={statusFill} className={styles.statusFill} />
-          </span>
-        </p>
         {/* Named the way the console names its own controls, because the layer
             carries three buttons now and "the button on the cover" stopped
             being a way to find this one. */}

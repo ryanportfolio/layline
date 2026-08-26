@@ -26,11 +26,14 @@
  * play-through does, and the hot path never builds one.
  */
 import { knots } from "./format";
-import { legAt, poseAt, windAt } from "./interpolate";
-import { polarFrac } from "./sim";
+import { createPose, legAt, poseAt, windAt } from "./interpolate";
+import { FICTIONAL_ONE_DESIGN_POLAR, targetBoatSpeed } from "./polar";
 import type { Course, LegName, Pose, RaceData, Vec2, WindSample } from "./types";
-
-const DEG = Math.PI / 180;
+import {
+  projectVelocityOntoBearing,
+  vectorFromSpeedCourse,
+  velocityFromComponents,
+} from "./velocity";
 
 /* ------------------------------------------------------------------ */
 /* Maneuvers                                                           */
@@ -38,18 +41,20 @@ const DEG = Math.PI / 180;
 export interface Maneuver {
   t: number;
   kind: "tack" | "gybe";
+  /** Unrounded observed speed drawdown in m/s for range comparison. */
+  lossMps: number | null;
   /**
    * The drawdown off the speed the boat carried in: the fastest reading in the
    * four seconds up to the flip, minus the slowest reading between that peak
    * and four seconds past the flip, in knots.
    */
-  lossKnots: string;
+  lossKnots: string | null;
   /**
    * The same drawdown in m/s, which is what a mean over several turns has to
    * be taken in. Averaging the formatted strings would round every turn to a
    * tenth of a knot first and then average the rounding.
    */
-  loss: number;
+  loss: number | null;
 }
 
 /* Merge window from the analyst tool, kept the same so the markers on the
@@ -59,6 +64,14 @@ const MERGE_SECONDS = 3;
 const LOSS_WINDOW = 4;
 
 const maneuverCache = new WeakMap<RaceData, Map<string, Maneuver[]>>();
+
+/** Finite speed drawdown in m/s. Overflow is unavailable, never clamped. */
+export function maneuverLoss(entryMps: number, slowestMps: number): number | null {
+  if (!Number.isFinite(entryMps) || !Number.isFinite(slowestMps)) return null;
+  const loss = entryMps - slowestMps;
+  if (!Number.isFinite(loss)) return null;
+  return Object.is(loss, -0) ? 0 : loss;
+}
 
 function detect(race: RaceData, boatId: string): Maneuver[] {
   const out: Maneuver[] = [];
@@ -87,8 +100,9 @@ function detect(race: RaceData, boatId: string): Maneuver[] {
           const fix = fixes[k];
           if (fix.t < tFlip - LOSS_WINDOW) continue;
           if (fix.t > tFlip) break;
-          if (fix.sog > entry) {
-            entry = fix.sog;
+          const sog = velocityFromComponents(fix.waterX, fix.waterY, fix.currentX, fix.currentY, {}).sog;
+          if (sog > entry) {
+            entry = sog;
             entryT = fix.t;
           }
         }
@@ -101,15 +115,18 @@ function detect(race: RaceData, boatId: string): Maneuver[] {
           const fix = fixes[k];
           if (fix.t < entryT) continue;
           if (fix.t > tFlip + LOSS_WINDOW) break;
-          if (fix.sog < slowest) slowest = fix.sog;
+          const sog = velocityFromComponents(fix.waterX, fix.waterY, fix.currentX, fix.currentY, {}).sog;
+          if (sog < slowest) slowest = sog;
         }
+        const loss = maneuverLoss(entry, slowest);
         out.push({
           /* Rounded the way the analyst tool rounds it, so a marker and the
            * row Debrief reads back name the same instant. */
           t: Math.round(tFlip * 100) / 100,
           kind: width < 90 ? "tack" : "gybe",
-          lossKnots: knots(entry - slowest),
-          loss: entry - slowest,
+          lossMps: loss,
+          lossKnots: loss === null ? null : knots(loss),
+          loss,
         });
       }
       lastFlipT = tFlip;
@@ -149,9 +166,46 @@ export function maneuversOf(race: RaceData, boatId: string): Maneuver[] {
  * axis. The wind shifts through the race and the course does not, so the two
  * disagree in size as well as in sign.
  */
-export function vmgToMark(sog: number, cog: number, leg: LegName): number {
-  const along = sog * Math.cos(cog * DEG);
-  return leg === "run" || leg === "finished" ? -along : along;
+export function componentMadeGoodToMark(x: number, y: number, leg: LegName): number | null {
+  const bearing = leg === "run" || leg === "finished" ? 180 : 0;
+  return projectVelocityOntoBearing(x, y, bearing);
+}
+
+export function waterMadeGoodToMark(
+  pose: Pick<Pose, "waterX" | "waterY">,
+  leg: LegName,
+): number | null {
+  return componentMadeGoodToMark(pose.waterX, pose.waterY, leg);
+}
+
+export function currentMadeGoodToMark(
+  pose: Pick<Pose, "currentX" | "currentY">,
+  leg: LegName,
+): number | null {
+  return componentMadeGoodToMark(pose.currentX, pose.currentY, leg);
+}
+
+export function groundMadeGoodToMark(
+  pose: Pick<Pose, "waterX" | "waterY" | "currentX" | "currentY">,
+  leg: LegName,
+): number | null {
+  return componentMadeGoodToMark(
+    pose.waterX + pose.currentX,
+    pose.waterY + pose.currentY,
+    leg,
+  );
+}
+
+export function vmgToMark(sog: number, cog: number | null, leg: LegName): number | null {
+  if (!Number.isFinite(sog) || sog < 0) return null;
+  if (cog === null) return sog <= 1e-12 ? 0 : null;
+  if (!Number.isFinite(cog)) return null;
+  try {
+    const velocity = vectorFromSpeedCourse(sog, cog, {});
+    return componentMadeGoodToMark(velocity.x, velocity.y, leg);
+  } catch {
+    return null;
+  }
 }
 
 /* Half a second between samples. The whole race runs a little over a minute,
@@ -176,7 +230,7 @@ export interface VmgSeries {
 
 const seriesCache = new WeakMap<RaceData, VmgSeries>();
 
-const scratch: Pose = { x: 0, y: 0, hdg: 0, heel: 0, twa: 0, sog: 0, cog: 0, kite: 0 };
+const scratch: Pose = createPose();
 
 function build(race: RaceData): VmgSeries {
   const t0 = race.tMin;
@@ -200,7 +254,7 @@ function build(race: RaceData): VmgSeries {
         continue;
       }
       poseAt(race, boat.id, t, "smooth", scratch);
-      const value = vmgToMark(scratch.sog, scratch.cog, leg);
+      const value = groundMadeGoodToMark(scratch, leg) ?? Number.NaN;
       byBoat[boat.id][i] = value;
       if (value > peak) peak = value;
       if (value < floor) floor = value;
@@ -274,8 +328,7 @@ export function startReadingAt(
 ): StartReading {
   const distance =
     -((pose.x - line.pin.x) * line.nx + (pose.y - line.pin.y) * line.ny);
-  const heading = pose.cog * DEG;
-  const closing = pose.sog * Math.sin(heading) * line.nx + pose.sog * Math.cos(heading) * line.ny;
+  const closing = pose.groundX * line.nx + pose.groundY * line.ny;
   /* A boat already across is early with nothing left to predict; a boat
    * backing off or stopped never gets there on this reading. */
   const toLine = distance <= 0 ? 0 : closing > 0 ? distance / closing : Number.NaN;
@@ -313,7 +366,7 @@ export const STEADY_WINDOW = MERGE_SECONDS;
  * boats to a standard the simulation never used.
  */
 export function targetSpeed(twaAbs: number, tws: number): number {
-  return polarFrac(twaAbs) * tws;
+  return targetBoatSpeed(FICTIONAL_ONE_DESIGN_POLAR, tws, twaAbs) ?? Number.NaN;
 }
 
 export interface PolarSample {
@@ -403,13 +456,10 @@ function review(race: RaceData): PolarReview {
      * feed, which is right for the timeline: a marker belongs wherever the
      * boat turned. It is wrong for this row three times over.
      *
-     * NZL 7 finishes Kestrel Sound at 55.512 s and gybes at 56.13 s, luffing
-     * out its way. Counted, that turn made the boat read four turns instead of
-     * three, carried its own drawdown into a mean of what a racing turn cost
-     * (4.74 knots against 4.23), and took eleven samples of real racing out of
-     * the cloud through STEADY_WINDOW, since the window reaches back 3 s from
-     * a turn that happened after the finish. A prestart turn would do the same
-     * at the other end; no shipped seed has one, and the rule covers it. */
+     * Run-out fixes can contain a turn after a boat has finished. Counting it
+     * would add a non-racing maneuver, pull its drawdown into the mean, and
+     * delete real racing samples through STEADY_WINDOW. A prestart turn would
+     * do the same at the other end, so both are excluded by leg. */
     const moves = maneuversOf(race, boat.id).filter((move) => {
       const leg = legAt(race, boat.id, move.t);
       return leg === "beat" || leg === "run";
@@ -440,9 +490,11 @@ function review(race: RaceData): PolarReview {
       windAt(race, fix.t, wind);
       const target = targetSpeed(Math.abs(fix.twa), wind.tws);
       if (!(target > 0) || !(wind.tws > 0)) continue;
-      const speed = (fix.sog * meanTws) / wind.tws;
-      const fraction = fix.sog / target;
-      const made = vmgToMark(fix.sog, fix.cog, leg);
+      const velocity = velocityFromComponents(fix.waterX, fix.waterY, fix.currentX, fix.currentY, {});
+      const speed = (velocity.stw * meanTws) / wind.tws;
+      const fraction = velocity.stw / target;
+      const made = waterMadeGoodToMark(fix, leg);
+      if (made === null) continue;
       samples.push({ t: fix.t, twa: fix.twa, speed, fraction, heel: fix.heel, leg });
       if (leg === "beat") {
         beatSum += fraction;
@@ -456,10 +508,14 @@ function review(race: RaceData): PolarReview {
     }
 
     let lossSum = 0;
+    let validLosses = 0;
     let tacks = 0;
     let gybes = 0;
     for (const move of moves) {
-      lossSum += move.loss;
+      if (move.loss !== null) {
+        lossSum += move.loss;
+        validLosses += 1;
+      }
       if (move.kind === "tack") tacks += 1;
       else gybes += 1;
     }
@@ -473,7 +529,10 @@ function review(race: RaceData): PolarReview {
       runVmg: runN > 0 ? runVmg / runN : Number.NaN,
       tacks,
       gybes,
-      lossPerTurn: moves.length > 0 ? lossSum / moves.length : Number.NaN,
+      lossPerTurn:
+        moves.length > 0 && validLosses === moves.length
+          ? lossSum / moves.length
+          : Number.NaN,
       samples,
     };
   });

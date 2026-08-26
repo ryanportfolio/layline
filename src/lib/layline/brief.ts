@@ -17,8 +17,8 @@
  * start-line evaluators already live.
  */
 import { startLineOf, startReadingAt, type StartReading } from "./analytics";
-import { poseAt, windAt } from "./interpolate";
-import { polarFrac } from "./sim";
+import { createPose, poseAt, windAt } from "./interpolate";
+import { FICTIONAL_ONE_DESIGN_POLAR, targetBoatSpeed } from "./polar";
 import type { Fix, Pose, RaceData, WindSample } from "./types";
 
 const DEG = Math.PI / 180;
@@ -40,7 +40,7 @@ function median(values: number[]): number {
 }
 
 function newPose(): Pose {
-  return { x: 0, y: 0, hdg: 0, heel: 0, twa: 0, sog: 0, cog: 0, kite: 0 };
+  return createPose();
 }
 
 /** The fix closest in time to `t`. Fixes are written in order at FIX_HZ. */
@@ -196,8 +196,8 @@ const scratch: WindSample = { t: 0, twd: 0, tws: 0 };
  * Bias in meters is the line's length across the wind, `lineLength *
  * sin(|twd|)`, which is how much further up the beat the favored end already
  * sits. Bias in seconds divides that by the speed the fleet makes at its beat
- * angle, `beatSpeed = polarFrac(beatTwa) * tws`, off the same polar the sim
- * sails (POLAR_TWA / POLAR_FRAC in lib/layline/sim.ts). At the shipped race's
+ * angle, `beatSpeed = targetBoatSpeed(model, tws, beatTwa)`, off the same polar
+ * the simulator sails. At the shipped race's
  * 46.3 degree beat and 7.2 m/s mean that is 0.846 of the breeze, 6.09 m/s. The
  * two are one quantity in two units and the layer states each of them once.
  *
@@ -217,7 +217,7 @@ export function windReadingAt(
   windAt(race, t, scratch);
   const twd = wrapSigned(scratch.twd);
   const tws = scratch.tws;
-  const beatSpeed = polarFrac(facts.beatTwa) * tws;
+  const beatSpeed = targetBoatSpeed(FICTIONAL_ONE_DESIGN_POLAR, tws, facts.beatTwa) ?? 0;
   out.t = t;
   out.twd = twd;
   out.tws = tws;

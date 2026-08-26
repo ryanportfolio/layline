@@ -16,7 +16,19 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { generateRace } from "../src/lib/layline/sim";
-import { clock } from "../src/lib/layline/format";
+import { briefFacts, windReading, windReadingAt } from "../src/lib/layline/brief";
+import {
+  STEADY_WINDOW,
+  maneuversOf,
+  polarReview,
+  startLineOf,
+  startReadingAt,
+  targetSpeed,
+} from "../src/lib/layline/analytics";
+import { createPose, legAt, poseAt, windAt } from "../src/lib/layline/interpolate";
+import { FICTIONAL_ONE_DESIGN_POLAR, polarFraction } from "../src/lib/layline/polar";
+import { startReport } from "../src/lib/layline/analyst/tools";
+import { MISSING, clock, knots, seconds } from "../src/lib/layline/format";
 import { DEFAULT_RACE_ID, RACES, isRaceId, raceMeta } from "../src/lib/layline/races";
 import { SUGGESTED_QUESTIONS, parseChips } from "../src/lib/layline/analyst/protocol";
 import { FIX_HZ, PROGRESS_HZ, RACE_SEED } from "../src/lib/layline/types";
@@ -30,17 +42,23 @@ import {
   raceMatchesSearch,
   sortPinnedRows,
 } from "../src/app/races/workspaceState";
-import { OPEN_AT, pointAtRace, raceData, useReplay } from "../src/components/layline/store";
+import {
+  AUTOPLAY_FROM,
+  OPEN_AT,
+  pointAtRace,
+  raceData,
+  useReplay,
+} from "../src/components/layline/store";
 
 /* ------------------------------------------------------------------ */
 /* Audit thresholds                                                    */
 
 /* The winner's own elapsed, not race.tMax: tMax is the replay window and runs
- * past the last finisher, 63.25 s on the shipped seed against a 51.52 s win.
- * The registry lands at 47.30, 51.38 and 51.52. */
+ * past the last finisher, 64.50 s on the shipped seed against a 50.16 s win.
+ * The registry lands at 47.65, 50.16 and 50.87. */
 const WIN_MIN_S = 45;
 const WIN_MAX_S = 60;
-/* Registry observed 4.35 to 8.21 s. */
+/* Registry observed 5.35 to 8.49 s. */
 const SPREAD_MIN_S = 2;
 const SPREAD_MAX_S = 35;
 /* Worst continuous loss of ground observed anywhere in the hunt is 1.0 s. */
@@ -409,6 +427,86 @@ test("the registry ships three races with the shipped race first", () => {
   assert.equal(raceMeta("no-such-race"), undefined);
 });
 
+test("every shipped race opens its prestart ten seconds before the gun", async () => {
+  /* The sequence board on the story page is a 30s loop carrying three 10s
+     prestarts, its odometers are eleven rungs tall, and its
+     animation-timing-function is a hardcoded steps(10, end). None of that is
+     read off the race at run time, so a fourth race opening anywhere but -10
+     has to fail here rather than walk its own digits out of step with its own
+     clock on a page nobody is watching that closely. */
+  const { raceFor } = await import("../src/lib/layline/analyst/data");
+  for (const meta of RACES) {
+    const race = raceFor(meta.id);
+    assert.ok(race !== null, `${meta.id} is not in the registry`);
+    assert.equal(race.tMin, -10, `${meta.id} does not open ten seconds out`);
+  }
+});
+
+test("a start line margin reads in hundredths, not as another 0:00", () => {
+  /* clock() rounds all three first crossings to 0:00, so the best number on
+     the board had no formatter to cross and the doctrine says every numeral
+     crosses exactly one. seconds() is that formatter. It returns a bare figure
+     like the rest of them: the + is a sign the cell prints, the way gap() does. */
+  const margins = RACES.map((meta) => {
+    const first = briefFacts(generateRace(meta.seed)).first;
+    assert.ok(first !== null, `${meta.id} has no first crossing`);
+    assert.equal(clock(first.t), "0:00", `${meta.id} no longer needs the second decimal`);
+    return seconds(first.t);
+  });
+  assert.deepEqual(margins, ["0.16", "0.11", "0.24"]);
+  /* Negative zero is normalised and a non-finite value is MISSING, the two
+     rules every other formatter in that file keeps. */
+  assert.equal(seconds(-0.001), "0.00");
+  assert.equal(seconds(Number.NaN), MISSING);
+  assert.equal(seconds(Number.POSITIVE_INFINITY), MISSING);
+});
+
+test("a board row's spoken label is a sentence and never ends in a period", async () => {
+  /* The .mjs suite can only see the token `aria-label={row.label}`, so it can
+     never see the string a screen reader is handed. This builds the same string
+     the component builds, from the same registry and the same formatter, and
+     pins the template it was built from so the two cannot drift apart in
+     silence. */
+  const source = readFileSync("src/components/layline/StartSequence.tsx", "utf8");
+  const template =
+    "label: `${meta.name}, ${meta.venue}, ${meta.dateLabel}${crossing}, open in the race library`,";
+  assert.ok(
+    source.includes(template),
+    "StartSequence.tsx no longer builds the row label the way this test does",
+  );
+  assert.ok(
+    source.includes(
+      ": `, first across the line ${first.sail} at plus ${seconds(first.t)} seconds`;",
+    ),
+    "StartSequence.tsx no longer builds the crossing clause the way this test does",
+  );
+
+  const { raceFor } = await import("../src/lib/layline/analyst/data");
+  const labels = RACES.map((meta) => {
+    const race = raceFor(meta.id);
+    assert.ok(race !== null, `${meta.id} is not in the registry`);
+    const first = briefFacts(race).first;
+    const crossing =
+      first === null
+        ? ""
+        : `, first across the line ${first.sail} at plus ${seconds(first.t)} seconds`;
+    return `${meta.name}, ${meta.venue}, ${meta.dateLabel}${crossing}, open in the race library`;
+  });
+
+  assert.equal(labels.length, RACES.length);
+  for (const label of labels) {
+    /* Display text on this route carries no terminal period, and the label is
+       display text a screen reader speaks rather than a sentence in prose. */
+    assert.doesNotMatch(label, /\.\s*$/, `${label} ends in a period`);
+    assert.match(label, /open in the race library$/);
+    assert.doesNotMatch(label, /undefined|NaN|\[object/);
+  }
+  assert.equal(
+    labels[0],
+    "Summer fleet race, Long Beach, 26 Jul 2028, first across the line JPN 18 at plus 0.16 seconds, open in the race library",
+  );
+});
+
 test("race workspace preferences filter stale ids and clamp stored widths", () => {
   const validIds = new Set(RACES.map((race) => race.id));
   const preferences = parseWorkspacePreferences(
@@ -516,9 +614,9 @@ test("the story page's three questions are the shipped race's three", () => {
  * here. What runs here is the reading it agreed on, pinned so that changing a
  * seed fails this test and sends whoever changed it back through the audit. */
 const FINISH_CLOCKS: Record<string, string[]> = {
-  "long-beach": ["USA 4 0:51", "JPN 18 0:52", "GBR 21 0:55", "NZL 7 0:56", "AUS 33 0:57", "FRA 12 0:57"],
-  "kestrel-sound": ["GBR 21 0:47", "FRA 12 0:51", "USA 4 0:53", "AUS 33 0:53", "JPN 18 0:55", "NZL 7 0:55"],
-  "sable-reach": ["FRA 12 0:51", "AUS 33 0:51", "USA 4 0:52", "NZL 7 0:53", "JPN 18 0:55", "GBR 21 0:55"],
+  "long-beach": ["JPN 18 0:50", "FRA 12 0:53", "NZL 7 0:54", "GBR 21 0:56", "USA 4 0:57", "AUS 33 0:58"],
+  "kestrel-sound": ["GBR 21 0:47", "FRA 12 0:51", "NZL 7 0:53", "AUS 33 0:54", "JPN 18 0:56", "USA 4 0:56"],
+  "sable-reach": ["NZL 7 0:50", "GBR 21 0:53", "FRA 12 0:53", "AUS 33 0:54", "USA 4 0:55", "JPN 18 0:56"],
 };
 
 test("every race finishes in the order the cross engine audit cleared", () => {
@@ -537,9 +635,9 @@ test("every race finishes in the order the cross engine audit cleared", () => {
 /* Lead changes, the input mockLeadChange has to agree with            */
 
 const LEAD_CHANGES: Record<string, { changes: number; sail: string; t: number; leg: LegName }> = {
-  "long-beach": { changes: 5, sail: "USA 4", t: 28, leg: "beat" },
-  "kestrel-sound": { changes: 7, sail: "GBR 21", t: 18, leg: "beat" },
-  "sable-reach": { changes: 3, sail: "FRA 12", t: 36.5, leg: "run" },
+  "long-beach": { changes: 4, sail: "JPN 18", t: 20, leg: "beat" },
+  "kestrel-sound": { changes: 4, sail: "GBR 21", t: 9, leg: "beat" },
+  "sable-reach": { changes: 6, sail: "NZL 7", t: 34.5, leg: "run" },
 };
 
 test("each race's leader timeline holds its pinned changes and decisive pass", () => {
@@ -559,12 +657,12 @@ test("each race's leader timeline holds its pinned changes and decisive pass", (
   }
 });
 
-test("kestrel sound keeps its single sample lead", () => {
+test("kestrel sound keeps its decisive beat pass", () => {
   const segments = leaderSegments(generateRace(raceMeta("kestrel-sound")!.seed));
-  const flicker = segments.find((segment) => segment.from === segment.to);
-  assert.ok(flicker !== undefined, "expected a one sample segment");
-  assert.equal(flicker.sail, "JPN 18");
-  assert.equal(flicker.from, 9);
+  const decisive = segments[segments.length - 1];
+  assert.equal(decisive.sail, "GBR 21");
+  assert.equal(decisive.from, 9);
+  assert.equal(decisive.leg, "beat");
 });
 
 /* ------------------------------------------------------------------ */
@@ -609,14 +707,14 @@ test("the route refuses a raceId that is not a string", async () => {
 test("a request with no raceId still answers about the shipped race", async () => {
   process.env.LAYLINE_ANALYST_MOCK = "1";
   const res = await post({
-    messages: [{ role: "user", content: RACES[0].suggestedQuestions[1] }],
+    messages: [{ role: "user", content: `${RACES[0].suggestedQuestions[1]} with the decisive evidence` }],
   });
   assert.equal(res.status, 200);
   const answer = await answerOf(res);
-  assert.match(answer, /USA 4/);
+  assert.match(answer, /JPN 18/);
   assert.ok(
-    parseChips(answer).some((segment) => segment.kind === "chip" && segment.t === 28),
-    `expected the shipped race's decisive pass at 0:28 in: ${answer}`,
+    parseChips(answer).some((segment) => segment.kind === "chip" && segment.t === 20),
+    `expected the shipped race's decisive pass at 0:20 in: ${answer}`,
   );
 });
 
@@ -837,6 +935,10 @@ test("the library starts playback on its own mount, never on the story's intro l
   assert.ok(reduced > 0 && starts > reduced, "an autoplay mode is read before reduced motion is");
 });
 
+
+/* ------------------------------------------------------------------ */
+/* The boot cover's race brief                                         */
+
 test("the library covers the renderer's boot with the sea, the story page with its intro", () => {
   const workspace = source("src/app/races/RaceWorkspace.tsx");
   assert.ok(
@@ -855,7 +957,10 @@ test("the library covers the renderer's boot with the sea, the story page with i
   );
 
   const css = source("src/app/layline.module.css");
-  assert.ok(css.includes('.stage[data-boot="sea"] .canvasLayer'), "the scene fades instead of the cover");
+  assert.ok(
+    css.includes('.stage[data-boot="sea"] .canvasLayer'),
+    "the scene fades instead of the cover",
+  );
   assert.ok(css.includes('.stage[data-boot="sea"] .dockLeft'), "the docks still pop in");
   /* The chart is the no-WebGL answer, so it must still arrive on its own when
      no renderer ever does. */
@@ -871,64 +976,793 @@ test("the library covers the renderer's boot with the sea, the story page with i
   const cover = source("src/components/layline/bootSea.module.css");
   assert.match(cover, /linear-gradient/);
   assert.ok(cover.includes("container-type: inline-size"), "the brief stopped sizing to the pane");
+  assert.match(cover, /transition:\s*opacity 900ms/);
+  assert.match(cover, /\.out \{\s*opacity: 0;/);
+});
 
-  /* The cover used to name the race and wait. It now spends the wait stating
-     the race in two halves that meet at the gun: the panels are the start, and
-     the performance view is the race after it, read against the polar the
-     engine sails the fleet along. A switch swaps them. It is still the race the
-     rail names, and the page still preloads the display face the name is set
-     in, which is declared font-display: block. */
+test("the sea cover briefs the race it is loading", () => {
+  const workspace = source("src/app/races/RaceWorkspace.tsx");
+  /* What the registry knows and a simulation cannot: the name, the venue and
+     the date. Everything else on the brief is read off the RaceData. */
   assert.ok(
     workspace.includes("{ name: meta.name, venue: meta.venue, dateLabel: meta.dateLabel }"),
     "the cover stopped briefing the race the rail names",
   );
+
+  /* The shell and its two views. Which of the three a rule lands in is a
+     question of who owns the drawing; the house rules apply to the layer. */
+  const shell = source("src/components/layline/RaceBrief.tsx");
+  const panels = source("src/components/layline/BriefPanels.tsx");
+  const performance = source("src/components/layline/BriefPerformance.tsx");
+  const brief = shell + panels + performance;
+  const cover = source("src/components/layline/bootSea.module.css");
+
+  /* The title card face, still preloaded by the page for the same reason: the
+     face is font-display: block and the brief is what fills the wait. */
   assert.ok(cover.includes("var(--font-pangram)"), "the race name left the display face");
+  assert.ok(cover.includes("font-weight: 400"), "the race name left the display face's book weight");
+  assert.ok(cover.includes("letter-spacing: -0.025em"), "the race name lost its tracking");
+  /* The console divides its three faces by job, and says why: "a number set in
+     Archivo is a number nobody measured, and a button set in mono is a lie
+     about where the data is". So Martian is quarantined to measured values,
+     Archivo carries the labels and the button, and every numeral is tabular so
+     a countdown never reflows the row it sits in. */
+  assert.ok(cover.includes("var(--font-martian), monospace"), "the brief left the console's mono");
+  assert.ok(cover.includes("var(--font-archivo), sans-serif"), "the brief left the console's sans");
+  const goBtn = cover.slice(cover.indexOf(".goBtn {"), cover.indexOf(".goArrow {"));
+  assert.ok(goBtn.includes("var(--brief-sans)"), "the way through went back to mono");
+  assert.ok(!goBtn.includes("var(--brief-mono)"), "the way through went back to mono");
+  for (const measured of [
+    ".readValue {",
+    ".fleetRow {",
+    ".panelCount {",
+    ".favored {",
+    ".polarTick {",
+    ".polarCap {",
+    ".perfNote {",
+  ]) {
+    const block = cover.slice(cover.indexOf(measured));
+    assert.ok(
+      block.slice(0, block.indexOf("}")).includes("var(--brief-mono)"),
+      `${measured} stopped setting its figures in the measured face`,
+    );
+  }
+  assert.ok(
+    cover.includes("font-variant-numeric: tabular-nums"),
+    "the brief's numerals stopped being tabular",
+  );
+  /* The console's standing bans. A 1px dim rule does what a shadow would. */
+  assert.ok(!cover.includes("box-shadow"), "a drop shadow arrived on the cover");
+  /* Exactly one accent, stated once and reaching exactly three things, all of
+     them the favored end: the mark over it, the seconds it is worth, and the
+     fill on the status hairline. Anything else on this layer taking it makes
+     the mark stop meaning anything. The focus ring is not one of them: the
+     console rings its own focusable things and this layer does not offer a
+     second opinion. */
+  assert.ok(
+    cover.includes("--brief-accent: var(--wind);"),
+    "the accent left the console's own wind token for a hex of this layer's own",
+  );
+  assert.equal((cover.match(/#ffd166/g) ?? []).length, 0, "the invented accent hex came back");
+  /* Seven users, and every one of them is the wind or what the wind decides:
+     the arrow lying across the start-line diagram and its head; the mark over
+     the end the line favors and the seconds that end is worth; and the dial's
+     needle, its head and the survey band behind it. The status hairline is a
+     wait, not weather, and does not take it. Neither does a boat, a rule, a
+     label or the view switch.
+
+     All seven are on the start. Nothing on the performance view is weather: a
+     boat's speed against its polar and its VMG toward a mark are the boat, so
+     the target curve, the six clouds, the six traces and every rule under them
+     are drawn in ink and hue instead. */
+  const accentUsers = [
+    ".windStroke",
+    ".windFill",
+    ".favMark",
+    ".favSec",
+    ".dialBand",
+    ".dialNeedle",
+    ".dialHead",
+  ];
+  assert.equal(
+    (cover.match(/var\(--brief-accent\)/g) ?? []).length,
+    accentUsers.length,
+    "something that is not the wind took the wind's colour",
+  );
+  for (const rule of accentUsers) {
+    assert.ok(cover.includes(rule), `${rule} left the cover, so the accent's users moved`);
+  }
+  const statusFill = cover.slice(cover.indexOf(".statusFill {"));
+  assert.ok(
+    !statusFill.slice(0, statusFill.indexOf("}")).includes("--brief-accent"),
+    "the status hairline went back to borrowing the wind's colour",
+  );
+
+  /* Nothing on this layer is rounded. The console's registration box states
+     border-radius: 0 on whatever it rings (layline.module.css), so a rounded
+     control here was a control that changed shape the moment it took focus,
+     which is the class of pop the boot cover exists to prevent. */
+  const coverRules = cover.replace(/\/\*[\s\S]*?\*\//g, "");
+  assert.ok(!coverRules.includes("border-radius"), "a rounded corner came back to the cover");
+  assert.ok(!brief.includes('rx="'), "a rounded corner came back to the brief's drawings");
+
+  /* The race name owns its own line. Sharing the header row with the meta line
+     left its width budget swinging with the viewport, so no stated size fit
+     every case and the measured fit had to correct the server's guess after
+     hydration, in full view. */
+  /* Matched line by line rather than across the break: this repo checks out
+     CRLF, so a pattern pinning a bare newline against source text fails on a
+     fresh clone while passing here. */
+  const head = cover.slice(cover.indexOf(".briefHead {"), cover.indexOf(".raceName {"));
+  assert.ok(head.includes("flex-direction: column;"), "the race name shares its row again");
+  assert.ok(head.includes("align-items: flex-start;"), "the header stopped ranging its two lines left");
+  assert.ok(!head.includes("align-items: baseline;"), "the header went back to a baseline row");
+
   const racesPage = source("src/app/races/page.tsx");
   assert.ok(
     racesPage.includes('href="/assets/fonts/pangram-display.woff2"'),
-    "the library stopped preloading the face its title card is set in",
+    "the library stopped preloading the face its brief is set in",
   );
 
-  /* Both views, one switch, one gate. The shell owns the prestart clock, the
-     header, the footer and the way through, and it has to: only one view is
-     mounted at a time and the performance view does not move, so a loop living
-     in a view stopped the countdown the moment a reader opened the other tab.
-     Neither view may release the brief. */
+  /* The name is capped at two line boxes by measurement, because what overflows
+     is the number of words and container units cannot see that. */
+  assert.ok(
+    brief.includes("node.scrollHeight <= Math.ceil(2 * size * 1.02) + 2"),
+    "the two-line cap left",
+  );
+  assert.ok(brief.includes("size > 9"), "the fit lost its floor");
+
+  /* The motion switch a test can drive, and the state the cover publishes. */
+  assert.ok(brief.includes("if (reduced) {"), "the brief lost its static path");
+  const app = source("src/components/layline/LaylineApp.tsx");
+  assert.ok(
+    app.includes('data-brief-motion={briefed ? (reducedMotion ? "off" : "on") : undefined}'),
+    "the cover stopped stating whether the brief is moving",
+  );
+  /* The capture hold stops this layer's entrance as well as the replay clock.
+     Two screenshots of the same stated race time a tenth of a second apart
+     otherwise catch the plates at two points of one 420ms fade, which is what
+     check 1 of .tmp/verify.mjs measures. */
+  assert.ok(
+    app.includes('data-brief-still={briefed && frozen ? "" : undefined}'),
+    "the cover stopped publishing the capture hold",
+  );
+  assert.match(cover, /\[data-brief-still\] \.panel,\s*\[data-brief-still\] \.briefFoot \{\s*animation: none;/);
+  /* The renderer status line left the footer at the owner's direction. It was
+     the one part of this layer driven by wall time rather than by the replay
+     clock, so its whole apparatus (sentence, crossfade, hairline) must stay
+     gone rather than come back as a new capture-hold hazard. */
+  assert.ok(
+    !cover.includes(".statusFill") && !cover.includes(".statusBar") && !cover.includes(".statusStack"),
+    "the wall-time status apparatus came back to the footer",
+  );
+
+  /* Hairlines stay hairlines through the stretch, which is what
+     non-scaling-stroke is for and what the console's own VMG strip already
+     states on every stroke it draws.
+
+     The layer could not always use it. While the cover drew the fleet's
+     approach tracks, a dash was the reveal: how far a boat had sailed was one
+     prefix of its own path, cut out of stroke-dasharray. Chrome reads that
+     dasharray in device pixels the moment the stroke is non-scaling, so the
+     reveal repeated down the track instead of drawing a prefix of it, and the
+     drawing scaled its widths by a measured metres-per-pixel instead. Nothing
+     on the cover reveals a path with a dash now, so the workaround left with
+     the drawing that needed it. */
+  assert.ok(
+    !cover.includes("--plot-px"),
+    "the metres-per-pixel scale factor came back without a drawing that needs it",
+  );
+  for (const stretched of [".polarGrid", ".polarTarget", ".vmgRule", ".vmgTrace"]) {
+    const block = cover.slice(cover.indexOf(stretched + " {"));
+    assert.ok(
+      block.slice(0, block.indexOf("}")).includes("vector-effect: non-scaling-stroke"),
+      `${stretched} thickens with the plate it is drawn on`,
+    );
+  }
+
+  /* Briefed, the cover carries the only control on the layer, so it cannot be
+     hidden from a screen reader the way the bare sea was. */
+  assert.ok(
+    app.includes('aria-hidden={briefed ? undefined : "true"}'),
+    "the briefed cover is hidden from a screen reader",
+  );
+});
+
+test("the brief reads its fleet, its line and its first crossing off the race", () => {
+  for (const meta of RACES) {
+    const race = generateRace(meta.seed);
+    const facts = briefFacts(race);
+
+    /* The line comes from the course endpoints, never from a literal. */
+    assert.equal(
+      facts.lineLength,
+      Math.hypot(
+        race.course.startBoat.x - race.course.startPin.x,
+        race.course.startBoat.y - race.course.startPin.y,
+      ),
+      `${meta.id} line length stopped coming off the course`,
+    );
+    assert.equal(facts.lineHalf, facts.lineLength / 2);
+    assert.equal(facts.tMin, race.tMin);
+
+    /* One row per boat, in the order the rail and the docks use, and each
+       hull's place on the line is its own fix nearest the gun. */
+    assert.deepEqual(
+      facts.boats.map((boat) => boat.id),
+      race.boats.map((boat) => boat.id),
+      `${meta.id} fleet order left race.boats order`,
+    );
+    for (const boat of facts.boats) {
+      const fixes = race.fixes[boat.id];
+      const nearest = fixes.reduce((best, fix) => (Math.abs(fix.t) < Math.abs(best.t) ? fix : best));
+      assert.equal(boat.gunX, nearest.x, `${meta.id} ${boat.sail} is not at its own gun fix`);
+      assert.ok(
+        Math.abs(boat.gunX) <= facts.lineHalf + 6,
+        `${meta.id} ${boat.sail} sits off the end of its own line`,
+      );
+    }
+
+    /* The fleet's tacking half-angle, measured off the beat rather than
+       repeated from sim.ts. */
+    assert.ok(
+      facts.beatTwa >= BEAT_TWA_MIN_DEG && facts.beatTwa <= BEAT_TWA_MAX_DEG,
+      `${meta.id} beat angle ${facts.beatTwa.toFixed(1)} outside the audited band`,
+    );
+
+    /* The first hull to the line after the gun, and the same one the analyst's
+       start report names: two surfaces, one crossing. */
+    const report = startReport(race);
+    const leader = report.rows[0];
+    const first = facts.first;
+    assert.ok(first !== null, `${meta.id} has no first crossing`);
+    assert.equal(first.sail, leader.sail, `${meta.id} brief and analyst name different hulls`);
+    assert.ok(
+      Math.abs(first.t - (leader.crossedAfterGunSeconds ?? Number.NaN)) < 0.005,
+      `${meta.id} brief and analyst disagree on when ${leader.sail} crossed`,
+    );
+    assert.ok(first.t > 0, `${meta.id} first crossing is not after the gun`);
+  }
+});
+
+test("the brief's wind is the replay's wind, and the favored end is the one nearer the breeze", () => {
+  const race = generateRace(RACE_SEED);
+  const facts = briefFacts(race);
+  const read = windReading();
+  const sample = { t: 0, twd: 0, tws: 0 };
+
+  let sawPin = false;
+  let sawBoat = false;
+
+  for (let step = 0; step <= 40; step += 1) {
+    const t = race.tMin + (step / 40) * (0 - race.tMin);
+    windReadingAt(race, facts, t, read);
+    windAt(race, t, sample);
+
+    /* Same series, same interpolation: the dial can only differ from the
+       instrument dock by being asked about a different instant. */
+    const signedTwd = ((((sample.twd % 360) + 360) % 360) + 180) % 360 - 180;
+    assert.ok(
+      Math.abs(read.twd - signedTwd) < 1e-9,
+      `the brief's twd left windAt at t=${t.toFixed(2)}`,
+    );
+    assert.equal(read.tws, sample.tws, `the brief's tws left windAt at t=${t.toFixed(2)}`);
+
+    /* Bias in seconds: the line's length across the wind over the speed the
+       fleet makes at its own beat angle, off the sim's own polar. */
+    const beatSpeed = (polarFraction(FICTIONAL_ONE_DESIGN_POLAR, facts.beatTwa) ?? 0) * read.tws;
+    const expected = (facts.lineLength * Math.sin(Math.abs(read.twd) * (Math.PI / 180))) / beatSpeed;
+    assert.ok(
+      Math.abs(read.biasSeconds - expected) < 1e-9,
+      `the bias formula moved at t=${t.toFixed(2)}`,
+    );
+    assert.ok(read.biasSeconds >= 0, "a favored end can never be worth negative time");
+
+    /* Favored is the end sitting closer to the wind, which is the shorter road
+       up the beat (knowledge.ts, start-bias). Course angles grow clockwise
+       from +y, so upwind is (sin twd, cos twd) and the projection settles it.
+       The pin is the port end at -x, the committee boat the starboard end. */
+    const upwindX = Math.sin(read.twd * (Math.PI / 180));
+    const pinGain = race.course.startPin.x * upwindX;
+    const boatGain = race.course.startBoat.x * upwindX;
+    if (read.favored === "pin") {
+      sawPin = true;
+      assert.ok(pinGain > boatGain, `pin called favored while it sits downwind at t=${t.toFixed(2)}`);
+      assert.ok(read.twd < 0, "the pin is favored by a wind off the port side of the course");
+    } else if (read.favored === "boat") {
+      sawBoat = true;
+      assert.ok(
+        boatGain > pinGain,
+        `committee boat called favored while it sits downwind at t=${t.toFixed(2)}`,
+      );
+      assert.ok(read.twd > 0, "the committee boat is favored by a wind off the starboard side");
+    } else {
+      assert.ok(Math.abs(read.twd) <= 0.05, "a square line has to actually be square");
+    }
+  }
+
+  /* The shipped prestart swings through the axis, so both ends come up: a
+     brief that only ever named one end would pass the checks above while
+     saying nothing. */
+  assert.ok(sawPin && sawBoat, "the shipped prestart no longer shows both ends favored");
+
+  /* It also passes through square, which is why the sentence has to be able to
+     stop at the end rather than trailing a "by" with nothing after it. Two of
+     the three seeds reach it; sable-reach never does. */
+  let squares = 0;
+  for (let step = 0; step <= 4000; step += 1) {
+    const t = race.tMin + (step / 4000) * (0 - race.tMin);
+    windReadingAt(race, facts, t, read);
+    if (read.favored === "square") squares += 1;
+  }
+  assert.ok(squares > 0, "the shipped prestart no longer passes through a square line");
+  /* The start carries the sentence, so it has to be able to close it. */
+  const start = source("src/components/layline/BriefPanels.tsx");
+  assert.ok(
+    start.includes('display: seed.favored === "square" ? "none" : undefined'),
+    "the start leaves the favored sentence open on a dangling by",
+  );
+  assert.ok(
+    start.includes('const by = read.favored === "square" ? "none" : "";'),
+    "the start's live paint stopped closing the favored sentence on a square line",
+  );
+});
+
+test("the brief's performance view measures the fleet against the engine's own polar", () => {
+  for (const meta of RACES) {
+    const race = generateRace(meta.seed);
+    const review = polarReview(race);
+    const sample = { t: 0, twd: 0, tws: 0 };
+    const pose = createPose();
+
+    /* One row per boat, in race.boats order, so the table and the drawing
+       beside it are the same six things in the same order. */
+    assert.deepEqual(
+      review.boats.map((boat) => boat.boatId),
+      race.boats.map((boat) => boat.id),
+      `${meta.id} lost a boat off the review`,
+    );
+
+    /* The breeze the plot is normalized to is the feed's own mean, and the
+       range it ran is the feed's own range. A drawing that picked its own
+       reference could put a boat past its target on a lull. */
+    let sum = 0;
+    for (const wind of race.wind) sum += wind.tws;
+    assert.ok(
+      Math.abs(review.meanTws - sum / race.wind.length) < 1e-9,
+      `${meta.id} left the feed's own mean breeze`,
+    );
+    assert.ok(review.twsMin <= review.meanTws && review.meanTws <= review.twsMax);
+    assert.ok(review.twsMax - review.twsMin > 0.5, `${meta.id} stopped shifting gears`);
+
+    let turns = 0;
+    for (const boat of review.boats) {
+      /* Racing turns only, and the filter is half the assertion: `maneuversOf`
+         reports every wind-angle flip in the feed, which is right for a
+         timeline marker and wrong for this row. A count taken straight off it
+         reads a boat that gybed after finishing as having made one more racing
+         turn than it did. */
+      const moves = maneuversOf(race, boat.boatId).filter((move) => {
+        const leg = legAt(race, boat.boatId, move.t);
+        return leg === "beat" || leg === "run";
+      });
+      turns += moves.length;
+      assert.equal(boat.tacks + boat.gybes, moves.length, `${meta.id} miscounted racing turns`);
+      assert.ok(boat.tacks > 0 && boat.gybes > 0, `${meta.id} ${boat.boatId} never turned`);
+
+      /* The per-turn cost is the mean of the detector's own drawdowns, taken
+         in m/s rather than off the formatted knots: averaging the strings
+         would round every turn to a tenth of a knot and then average the
+         rounding. */
+      let loss = 0;
+      for (const move of moves) {
+        if (move.loss === null) assert.fail("normal seeded maneuver loss became unavailable");
+        loss += move.loss;
+        assert.equal(move.lossKnots, knots(move.loss), "the two loss readings parted");
+      }
+      assert.ok(Math.abs(boat.lossPerTurn - loss / moves.length) < 1e-9);
+
+      /* Every sample the plot draws is a fix the feed published, on a leg,
+         clear of a turn, with the fraction it plots being its own speed over
+         the polar's at its own wind. */
+      assert.ok(boat.samples.length > 60, `${meta.id} ${boat.boatId} has nothing to plot`);
+      assert.equal(boat.steady, boat.samples.length);
+      let beatSum = 0;
+      let beatN = 0;
+      let runSum = 0;
+      let runN = 0;
+      for (const point of boat.samples) {
+        const leg = legAt(race, boat.boatId, point.t);
+        assert.equal(leg, point.leg, `${meta.id} plotted a sample off its own leg`);
+        for (const move of moves) {
+          assert.ok(
+            Math.abs(point.t - move.t) > STEADY_WINDOW,
+            `${meta.id} plotted a boat mid-turn at t=${point.t}`,
+          );
+        }
+        poseAt(race, boat.boatId, point.t, "raw", pose);
+        windAt(race, point.t, sample);
+        assert.ok(Math.abs(point.twa - pose.twa) < 1e-6, "the plot left the published wind angle");
+        assert.ok(Math.abs(point.heel - pose.heel) < 1e-6, "the plot left the published heel");
+        const target = targetSpeed(Math.abs(point.twa), sample.tws);
+        assert.ok(Math.abs(point.fraction - pose.stw / target) < 1e-9);
+        /* Normalizing to the mean breeze must leave the ratio alone: the dot's
+           distance past the curve drawn at that breeze is the fraction, which
+           is the only reason one curve can stand for a shifting wind. */
+        assert.ok(
+          Math.abs(point.speed / targetSpeed(Math.abs(point.twa), review.meanTws) - point.fraction) <
+            1e-9,
+          "the normalized speed stopped agreeing with the fraction",
+        );
+        if (point.leg === "beat") {
+          beatSum += point.fraction;
+          beatN += 1;
+        } else {
+          runSum += point.fraction;
+          runN += 1;
+        }
+      }
+      assert.ok(Math.abs(boat.beatFraction - beatSum / beatN) < 1e-9);
+      assert.ok(Math.abs(boat.runFraction - runSum / runN) < 1e-9);
+
+      /* The window is what makes the figure readable at all. Without it a boat
+         swinging through head to wind divides by a target of nearly nothing:
+         on the shipped race the fleet's mean beat performance came out between
+         257 and 864 per cent. Held to steady sailing it lands where a fleet
+         race actually lands. */
+      for (const held of [boat.beatFraction, boat.runFraction]) {
+        assert.ok(held > 0.8 && held < 1.05, `${meta.id} ${boat.boatId} read ${held} of target`);
+      }
+    }
+    assert.equal(review.fleet.turns, turns, `${meta.id} lost a turn out of the total`);
+    assert.equal(
+      review.fleet.steady,
+      review.boats.reduce((count, boat) => count + boat.steady, 0),
+    );
+
+    /* The fleet row is a median, so it is one of the six or the midpoint of the
+       middle two, and never outside them. */
+    for (const [held, column] of [
+      [review.fleet.beatFraction, review.boats.map((boat) => boat.beatFraction)],
+      [review.fleet.runFraction, review.boats.map((boat) => boat.runFraction)],
+      [review.fleet.beatVmg, review.boats.map((boat) => boat.beatVmg)],
+      [review.fleet.runVmg, review.boats.map((boat) => boat.runVmg)],
+      [review.fleet.lossPerTurn, review.boats.map((boat) => boat.lossPerTurn)],
+    ] as const) {
+      assert.ok(held >= Math.min(...column) && held <= Math.max(...column));
+    }
+
+    /* Built once and handed back, the way every other series here is. */
+    assert.equal(polarReview(race), review, `${meta.id} rebuilt the review`);
+  }
+});
+
+test("finished boats never contribute a post-finish turn", () => {
+  const expectedTurns: Record<string, number> = {
+    "long-beach": 22,
+    "kestrel-sound": 18,
+    "sable-reach": 20,
+  };
+
+  for (const meta of RACES) {
+    const race = generateRace(meta.seed);
+    const review = polarReview(race);
+    let racingCount = 0;
+    for (const boat of race.boats) {
+      const finish = race.results.find((result) => result.boatId === boat.id);
+      assert.ok(finish !== undefined, `${meta.id} ${boat.id} has no finish`);
+      const moves = maneuversOf(race, boat.id);
+      for (const move of moves) {
+        const leg = legAt(race, boat.id, move.t);
+        assert.ok(leg === "beat" || leg === "run", `${meta.id} ${boat.id} emitted a ${leg} turn`);
+        assert.ok(move.t <= finish.elapsed, `${meta.id} ${boat.id} turned at ${move.t} after ${finish.elapsed}`);
+      }
+      racingCount += moves.length;
+      const row = review.boats.find((entry) => entry.boatId === boat.id);
+      assert.ok(row !== undefined);
+      assert.equal(row.tacks, moves.filter((move) => move.kind === "tack").length);
+      assert.equal(row.gybes, moves.filter((move) => move.kind === "gybe").length);
+    }
+    assert.equal(racingCount, expectedTurns[meta.id], `${meta.id} turn golden moved`);
+    assert.equal(review.fleet.turns, racingCount, `${meta.id} review included a non-racing turn`);
+  }
+});
+
+test("the polar the review measures against is the polar the engine sails", () => {
+  const race = generateRace(RACE_SEED);
+  const review = polarReview(race);
+  for (const twa of [0, 30, 45, 60, 90, 120, 135, 150, 180]) {
+    assert.equal(
+      targetSpeed(twa, review.meanTws),
+      (polarFraction(FICTIONAL_ONE_DESIGN_POLAR, twa) ?? 0) * review.meanTws,
+    );
+  }
+  /* Nothing to sail at head to wind, which is the pinch the drawing labels
+     "no-go" and the reason the target curve closes through the middle. */
+  assert.equal(targetSpeed(0, review.meanTws), 0);
+
+  /* The drawing's radial ceiling has to clear both the polar's own peak at the
+     mean breeze and the fastest normalized sample any shipped race holds, or a
+     dot lands outside the frame with nothing saying so. */
+  const view = source("src/components/layline/BriefPerformance.tsx");
+  const ceiling = Number(/const RMAX_KN = (\d+);/.exec(view)?.[1]);
+  assert.ok(Number.isFinite(ceiling), "the polar lost its radial ceiling");
+  for (const meta of RACES) {
+    const held = polarReview(generateRace(meta.seed));
+    let peak = 0;
+    for (let twa = 0; twa <= 180; twa += 1) {
+      peak = Math.max(peak, targetSpeed(twa, held.meanTws));
+    }
+    for (const boat of held.boats) {
+      for (const point of boat.samples) peak = Math.max(peak, point.speed);
+    }
+    assert.ok(
+      peak * (3600 / 1852) < ceiling,
+      `${meta.id} draws ${(peak * (3600 / 1852)).toFixed(1)} kn past a ${ceiling} kn frame`,
+    );
+  }
+});
+
+test("the performance view states what it left out, and takes no accent for it", () => {
+  const view = source("src/components/layline/BriefPerformance.tsx");
+  const cover = source("src/components/layline/bootSea.module.css");
+
+  /* A performance figure whose exclusions are not on screen is a figure a
+     reader cannot check. Both the window and the normalization are printed
+     under the drawing they apply to, and the window is the one the code
+     actually uses rather than a number retyped into prose. */
+  assert.ok(
+    view.includes("${STEADY_WINDOW} s either side are left out and counted as turn cost"),
+    "the plot stopped saying which seconds it dropped",
+  );
+  assert.ok(
+    view.includes("Speed scaled to the ${meanKn.toFixed(1)} kn race mean"),
+    "the plot stopped naming the breeze it normalized to",
+  );
+  assert.ok(view.includes("Port tack left, starboard right"), "the plot stopped saying which side is which");
+  assert.ok(view.includes("dot size is heel"), "the plot stopped naming its third channel");
+
+  /* Amber is the wind and nothing else. Nothing on this view is weather, so
+     nothing on it may borrow the accent: not the target curve, not a trace,
+     not a rule. */
+  const section = cover.slice(
+    cover.indexOf("/* ---- the performance view ----"),
+    cover.indexOf("/* ---- footer ---- */"),
+  );
+  assert.ok(section.length > 800, "the performance view lost its stylesheet");
+  assert.ok(
+    !section.includes("--brief-accent"),
+    "the performance view took the wind's colour for something that is not wind",
+  );
+
+  /* The strip is the dock's own series rather than a second pass over the same
+     fixes, and it is cut to the racing: on the shipped race the feed's own ends
+     are 22 per cent of the width with nothing on them. */
+  assert.ok(view.includes("vmgSeries(race)"), "the strip stopped reading the dock's series");
+  assert.ok(view.includes("stripFrame(vmg)"), "the strip stopped cutting itself to the racing");
+});
+
+test("the brief's ledger reads each hull's distance off the line the console's own way", () => {
+  for (const meta of RACES) {
+    const race = generateRace(meta.seed);
+    const facts = briefFacts(race);
+    const line = startLineOf(race.course);
+    const pose = createPose();
+    const out = { distance: 0, closing: 0, toLine: 0, early: false };
+    for (const boat of facts.boats) {
+      poseAt(race, boat.id, 0, "smooth", pose);
+      startReadingAt(line, pose, 0, out);
+      assert.equal(
+        boat.offLine,
+        out.distance,
+        `${meta.id} ${boat.sail} off-the-line reading left startReadingAt`,
+      );
+      /* Nobody is over at the gun on these seeds, and nobody is a boat length
+         from a line they spent ten seconds lining up on. */
+      assert.ok(
+        boat.offLine > 0 && boat.offLine < 8,
+        `${meta.id} ${boat.sail} is ${boat.offLine.toFixed(1)} m off its own line`,
+      );
+    }
+  }
+});
+
+test("the brief gates the replay, and re-arms with the race", () => {
+  pointAtRace(DEFAULT_RACE_ID);
+  const store = useReplay;
+  store.setState({ raceId: DEFAULT_RACE_ID, briefDone: false, playing: false, t: OPEN_AT });
+
+  assert.equal(store.getState().briefDone, false, "the brief opens already released");
+  store.getState().releaseBrief();
+  assert.equal(store.getState().briefDone, true, "releasing the brief did not latch");
+
+  /* One way only: a second press of a button already fading out must not
+     restart what the first one triggered. */
+  store.setState({ playing: true });
+  store.getState().releaseBrief();
+  assert.equal(store.getState().playing, true, "a second release reset the replay");
+
+  /* A rail selection is a new race, so it is a new brief. */
+  store.getState().selectRace(RACES[1].id);
+  assert.equal(store.getState().briefDone, false, "the brief did not re-arm with the race");
+  assert.equal(store.getState().t, OPEN_AT, "selecting a race left the clock where it was");
+
+  pointAtRace(DEFAULT_RACE_ID);
+  store.setState({ raceId: DEFAULT_RACE_ID, briefDone: false, playing: false, t: OPEN_AT });
+
+  /* The brief hands the clock back inside the prestart, which is where the
+     library's autoplay expects to find it, and back to the mid-beat moment for
+     a viewer who asked for less motion and gets no autoplay at all. */
+  const brief = source("src/components/layline/RaceBrief.tsx");
+  assert.ok(
+    brief.includes("state.seek(state.reducedMotion ? OPEN_AT : AUTOPLAY_FROM)"),
+    "the brief stopped handing the clock back where the replay wants it",
+  );
+  assert.ok(AUTOPLAY_FROM < 0, "the autoplay no longer starts inside the prestart");
+  assert.ok(OPEN_AT > 0, "the reduced-motion open moved out of the race");
+
+  /* Enter releases it, except while a viewer is typing: the analyst's composer
+     is one Tab away. */
+  assert.ok(brief.includes('event.key !== "Enter"'), "Enter stopped releasing the brief");
+  assert.ok(
+    brief.includes('tag === "INPUT" || tag === "TEXTAREA"'),
+    "Enter now fires from inside the analyst's composer",
+  );
+  assert.ok(brief.includes("isContentEditable"), "Enter fires from a rich text field");
+  assert.ok(
+    brief.includes("button.current?.focus({ preventScroll: true })"),
+    "the brief stopped taking focus when it mounts",
+  );
+  /* The label is the whole promise of the button. */
+  assert.ok(brief.includes("Start the race"), "the way through changed its words");
+});
+
+test("a gated console is one screen tall, and Continue clears the composer", () => {
+  const app = source("src/components/layline/LaylineApp.tsx");
+  /* The gate is the stage's business as well as the cover's: stacked, the
+     console is a column of docks about 1300px tall, and a brief held to one
+     screen left 500-odd px of empty water under the button. The attribute goes
+     up while the brief is unread and comes off the moment it is released, so
+     the column is back to full height under a cover that has not faded yet. */
+  assert.ok(
+    app.includes('data-gate={briefed && !briefDone ? "brief" : undefined}'),
+    "the stage stopped saying when it is gated",
+  );
+
+  const css = source("src/app/layline.module.css");
+  const stacked = css.slice(css.indexOf("@media (max-width: 900px) {"));
+  assert.ok(stacked.includes('.stage[data-gate="brief"] {'), "the gated console stopped being capped");
+  assert.ok(
+    stacked.includes("max-height: calc(100svh - var(--composer-bar, 59px) - env(safe-area-inset-bottom));"),
+    "the cap stopped agreeing with the height the brief is held to",
+  );
+  /* Nothing under the cover may resize while it is up: the canvas states its
+     own 48vh here and the docks are pinned to their natural height, so the cap
+     clips rather than squeezes and releasing it costs no reflow. */
+  assert.ok(stacked.includes('.stage[data-gate="brief"] > * {'), "the docks went back to shrinking under the cap");
+
+  const cover = source("src/components/layline/bootSea.module.css");
+  /* The composer pins over the foot of the viewport below 1199px. The cap
+     above only holds while the brief is pinned; scrolled to where the gate is
+     simply fully in view, its bottom edge lands on the viewport foot, and a
+     footer flush with that edge lands under the composer. */
+  assert.ok(cover.includes("--brief-foot-gap: 0px;"), "the footer gap stopped being stated at full width");
+  assert.ok(
+    cover.includes("--brief-foot-gap: calc(var(--composer-bar, 59px) + env(safe-area-inset-bottom));"),
+    "the footer stopped being held off the composer's band",
+  );
+  assert.ok(
+    cover.includes("padding: 3cqw 3.2cqw calc(2.2cqw + var(--brief-foot-gap));"),
+    "the brief stopped spending the gap",
+  );
+  assert.ok(
+    cover.includes("padding: 16px 16px calc(16px + var(--brief-foot-gap));"),
+    "the stacked brief stopped spending the gap",
+  );
+});
+
+test("the brief reads the race in two halves, on one switch", () => {
   const shell = source("src/components/layline/RaceBrief.tsx");
+  const panels = source("src/components/layline/BriefPanels.tsx");
+  const performance = source("src/components/layline/BriefPerformance.tsx");
+
+  /* The console's transport already carries this gesture: a control that swaps
+     what is on screen and changes nothing else. Here it is one layer up, and
+     what it swaps is which half of the race is being described. */
   assert.ok(shell.includes('data-brief-switch="panels"'), "the switch stopped offering the start");
   assert.ok(
     shell.includes('data-brief-switch="performance"'),
     "the switch stopped offering the race after it",
   );
+  assert.ok(
+    shell.includes('aria-pressed={view === "panels"}'),
+    "the switch stopped saying which view is up",
+  );
   assert.ok(shell.includes("<BriefPanels race={race} reduced={reduced} />"), "the panels left the shell");
   assert.ok(shell.includes("<BriefPerformance race={race} />"), "the performance view left the shell");
-  assert.ok(shell.includes("Start the race"), "the way through changed its words");
+
+  /* Held in the shell rather than the store, because the store re-arms the gate
+     per race and a reader who has said which half they want should not have to
+     say it again when the rail swaps the race under them. */
+  assert.ok(shell.includes('useState<BriefView>("panels")'), "the view stopped opening on the start");
+
+  /* A button answers Enter itself. Without this the switch both changed the
+     view and released the brief on one press, which handed the reader the race
+     when they asked to see the other half. */
+  assert.ok(
+    shell.includes('if (tag === "INPUT" || tag === "TEXTAREA" || tag === "BUTTON" || tag === "A") return;'),
+    "Enter on the view switch releases the brief again",
+  );
+
+  /* The prestart clock belongs to the shell, and it has to: only one view is
+     mounted at a time and the performance view does not move, so a loop living
+     in the panels stopped the countdown, and the scene warming behind the
+     cover with it, the moment a reader looked at the other tab. */
   assert.ok(
     shell.includes("state.seek(race.tMin + phase * span)"),
     "the shell stopped driving the prestart",
   );
-  for (const name of ["BriefPanels", "BriefPerformance"]) {
-    const view = source(`src/components/layline/${name}.tsx`);
+  assert.ok(
+    shell.includes("if (!opened.frozen && !(opened.t >= race.tMin && opened.t < 0)) opened.seek(race.tMin);"),
+    "the shell stopped guarding the opening seek, so a swap resets the clock again",
+  );
+  for (const [name, view] of [["BriefPanels", panels], ["BriefPerformance", performance]] as const) {
     assert.ok(!view.includes("requestAnimationFrame"), `${name} started keeping a clock of its own`);
     assert.ok(!view.includes("releaseBrief"), `${name} took the gate off the shell`);
+    assert.ok(!view.includes("AUTOPLAY_FROM"), `${name} started deciding where the replay opens`);
   }
-  /* The start reads the race through brief.ts; the race after it reads through
-     the analytics module the instrument dock and the analyst lane share, so a
-     figure cannot mean one thing in one half and another in the other. */
+
+  /* Both views read the same race through the evaluators the console already
+     reads, so a figure cannot mean one thing in one half and another in the
+     other. The start is read through brief.ts, the race after it through the
+     analytics module the instrument dock and the analyst lane share. */
+  assert.ok(panels.includes("windReadingAt(race, facts"), "the start stopped reading the replay's wind");
   assert.ok(
-    source("src/components/layline/BriefPanels.tsx").includes("briefFacts(race)"),
-    "the start stopped reading the race's own facts",
-  );
-  assert.ok(
-    source("src/components/layline/BriefPerformance.tsx").includes("polarReview(race)"),
+    performance.includes('from "@/lib/layline/analytics"'),
     "the performance view stopped reading the console's own analytics",
   );
+  assert.ok(
+    !performance.includes('from "@/lib/layline/sim"'),
+    "the performance view reached past analytics into the engine",
+  );
+});
 
-  /* The store re-arms the gate per race, unlike the story page's intro, so a
-     second race gets its own brief. */
-  const store = source("src/components/layline/store.ts");
-  assert.ok(store.includes("briefDone: false"), "the gate stopped re-arming with the race");
-  assert.ok(cover.includes("--brief-accent: var(--wind);"), "the accent left the console's wind token");
-  assert.match(cover, /transition:\s*opacity 900ms/);
-  assert.match(cover, /\.out \{\s*opacity: 0;/);
+test("the way through is the widest thing on the footer, and it moves on the race's clock", () => {
+  const shell = source("src/components/layline/RaceBrief.tsx");
+  const cover = source("src/components/layline/bootSea.module.css");
+  const goBtn = cover.slice(cover.indexOf(".goBtn {"), cover.indexOf(".goBtn::before"));
+
+  /* It takes the footer's whole width: the status sentence that used to sit
+     beside it left at the owner's direction, and the way through owns the row. */
+  assert.ok(goBtn.includes("flex: 1;"), "the way through stopped taking the footer's spare width");
+  assert.ok(!cover.includes(".status {"), "the status line came back to the footer");
+
+  /* At the reading size, not the label size, so the layer still holds to three:
+     22 for a reading, 10 for a label, 9 inside the drawing. */
+  assert.ok(goBtn.includes("font-size: 22px;"), "the way through went back to the label size");
+
+  /* Clock-driven, which is the console's one continuous verb. Its contract:
+     "SETTLE is a UI or camera transition, 1.2s at the outside, power2.inOut,
+     never looping", so a decorative pulse to say "press me" cannot ship. What
+     moves is the countdown the button is offering. */
+  assert.ok(
+    shell.includes('node.style.setProperty("--go-run", run.toFixed(4));'),
+    "the button stopped running on the replay clock",
+  );
+  assert.ok(
+    shell.includes("const run = span > 0 ? Math.min(1, Math.max(0, (t - race.tMin) / span)) : 0;"),
+    "the button's run stopped being the ten seconds to the gun",
+  );
+  assert.ok(
+    cover.includes("transform: scaleX(var(--go-run, 0));"),
+    "the countdown band stopped being drawn from the clock",
+  );
+  /* currentColor, so it inverts with the button on hover rather than naming a
+     second fill this layer would then have to defend. */
+  const band = cover.slice(cover.indexOf(".goBtn::before"), cover.indexOf(".goArrow {"));
+  assert.ok(band.includes("background: currentColor;"), "the band picked up a fill of its own");
+  /* Nothing on the button loops on wall time. That is the banned verb, and it
+     would also take the button off the stated time a held capture draws. */
+  assert.ok(!goBtn.includes("animation:"), "the way through went back to a looping decoration");
+  assert.ok(!band.includes("animation:"), "the countdown band went back to a looping decoration");
 });

@@ -49,13 +49,26 @@ const KNOTS = 1.94384;
  * exactly, so a boat's place on the line is its own meters scaled once. */
 const LINE_SPAN = 37;
 
-function signed(value: number, digits: number): string {
+/* Shared with the shell: RaceBrief states the start facts on the header rule
+ * and writes the countdown the same way this view writes its readings. */
+export function signed(value: number, digits: number): string {
   const text = value.toFixed(digits);
   return value >= 0 && !text.startsWith("-") ? `+${text}` : text;
 }
 
-function setText(node: { textContent: string | null } | null, text: string): void {
-  if (node !== null && node.textContent !== text) node.textContent = text;
+/* In-place text-node mutation, same body as the HUD's setText in hud/live.ts
+ * and for the same reason: `textContent =` is a structural remove-and-insert,
+ * and the route's root-anchored :has() scrollbar gate makes every insertion a
+ * document-wide restyle. CharacterData.data is non-structural. */
+export function setText(node: Node | null, text: string): void {
+  if (node === null) return;
+  const first = node.firstChild;
+  if (first !== null && first === node.lastChild && first.nodeType === 3) {
+    const data = first as CharacterData;
+    if (data.data !== text) data.data = text;
+    return;
+  }
+  if (node.textContent !== text) node.textContent = text;
 }
 
 function setAttr(node: Element | null, name: string, value: string): void {
@@ -126,7 +139,6 @@ export function BriefPanels({
   );
 
   const root = useRef<HTMLDivElement>(null);
-  const gunIn = useRef<HTMLSpanElement>(null);
   const needle = useRef<SVGGElement>(null);
   const twsBig = useRef<HTMLSpanElement>(null);
   const traceDot = useRef<SVGCircleElement>(null);
@@ -164,7 +176,6 @@ export function BriefPanels({
       setAttr(windArrow.current, "transform", `rotate(${read.twd.toFixed(1)} 50 12)`);
       setText(windTag.current, `TWD ${signed(read.twd, 0)}°`);
       setText(twdTag.current, `${signed(read.twd, 0)}°`);
-      setText(gunIn.current, `gun in ${Math.max(0, -t).toFixed(1)} s`);
     },
     [race, facts],
   );
@@ -210,8 +221,6 @@ export function BriefPanels({
     .map((point, index) => `${((index / TRACE_STEPS) * 100).toFixed(1)},${traceY(point.tws).toFixed(1)}`)
     .join(" ");
 
-  const lineMeters = Math.round(facts.lineLength);
-
   return (
     <div className={styles.panelMain} ref={root}>
       <div className={styles.panel}>
@@ -231,15 +240,6 @@ export function BriefPanels({
             <span className={styles.slot}>{signed(boat.gunX, 0)} m</span>
           </div>
         ))}
-        <div className={styles.fleetFoot}>
-          <span ref={gunIn}>{`gun in ${Math.max(0, -race.tMin).toFixed(1)} s`}</span>
-          <span>
-            {facts.first === null
-              ? "no boat crossed"
-              : `${facts.first.sail} ${signed(facts.first.t, 2)} s first cross`}
-          </span>
-          <span>{`line ${lineMeters} m`}</span>
-        </div>
       </div>
 
       <div className={styles.panel}>

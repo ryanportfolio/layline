@@ -5,12 +5,20 @@
  * anything the HUD shows in display units crosses format.ts on the way out,
  * the same edge every on-screen number crosses.
  */
-import { maneuversOf } from "@/lib/layline/analytics";
-import { clock, deg, knots } from "@/lib/layline/format";
+import { groundMadeGoodToMark, maneuversOf } from "@/lib/layline/analytics";
+import {
+  compareRange,
+  raceAnalysisValidity,
+  type BoatRangeFacts,
+  type ComparisonRequest,
+  type RangeComparison,
+  type ReferenceRangeFacts,
+} from "@/lib/layline/comparison";
+import { MISSING, clock, deg, knots } from "@/lib/layline/format";
+import { windAt as interpolateWindAt } from "@/lib/layline/interpolate";
 import type { BoatMeta, Fix, LegName, RaceData } from "@/lib/layline/types";
+import { velocityFromComponents, windAxisVmgFromComponents } from "@/lib/layline/velocity";
 import { lookupTerms } from "./knowledge";
-
-const DEG = Math.PI / 180;
 
 /* The window analytics.ts measures a turn over, mirrored so the entry and exit
  * speeds this tool reports bracket the loss that detector computed. */
@@ -67,10 +75,13 @@ function racingLeg(leg: LegName): boolean {
   return leg === "beat" || leg === "run";
 }
 
+function fixVelocity(fix: Fix) {
+  return velocityFromComponents(fix.waterX, fix.waterY, fix.currentX, fix.currentY, {});
+}
+
 function toMarkOf(fix: Fix, leg: LegName): number | null {
   if (!racingLeg(leg)) return null;
-  const along = fix.sog * Math.cos(fix.cog * DEG);
-  return leg === "run" ? -along : along;
+  return groundMadeGoodToMark(fix, leg);
 }
 
 /**
@@ -80,14 +91,14 @@ function toMarkOf(fix: Fix, leg: LegName): number | null {
  * the course axis. The analyst gets both so it can quote either surface
  * without either of them being wrong.
  */
-function vmgOf(fix: Fix): number {
-  return fix.sog * Math.cos(fix.twa * DEG);
-}
-
-function mean(values: number[]): number {
-  let sum = 0;
-  for (const value of values) sum += value;
-  return values.length === 0 ? NaN : sum / values.length;
+function vmgOf(fix: Fix, twd: number): number | null {
+  return windAxisVmgFromComponents(
+    fix.waterX,
+    fix.waterY,
+    fix.currentX,
+    fix.currentY,
+    twd,
+  )?.ground ?? null;
 }
 
 function round1(value: number): number {
@@ -100,6 +111,10 @@ function round2(value: number): number {
 
 /* ------------------------------------------------------------------ */
 /* Tool implementations                                                */
+
+export interface AnalystError {
+  error: string;
+}
 
 export interface StandingsRowOut {
   rank: number;
@@ -114,9 +129,12 @@ export interface StandingsRowOut {
 export interface StandingsOut {
   raceClock: string;
   rows: StandingsRowOut[];
+  error?: string;
 }
 
 export function standingsAt(race: RaceData, tRaw: number): StandingsOut {
+  const telemetryError = analystTelemetryError(race, race.boats.map((boat) => boat.id));
+  if (telemetryError !== null) return { raceClock: MISSING, rows: [], ...telemetryError };
   const t = clampT(race, tRaw);
   const rows = race.boats.map((boat): StandingsRowOut => {
     const p = progressAt(race, boat.id, t);
@@ -168,6 +186,17 @@ export interface BoatStateOut {
   yMeters: number;
   sogKnots: string;
   cogDeg: string;
+  stwKnots: string;
+  ctwDeg: string;
+  currentDriftKnots: string;
+  currentSetDeg: string;
+  waterX: number;
+  waterY: number;
+  currentX: number;
+  currentY: number;
+  groundX: number;
+  groundY: number;
+  telemetryProvenance: "recorded-fix";
   hdgDeg: string;
   heelDeg: string;
   twaDeg: string;
@@ -179,13 +208,30 @@ export interface BoatStateOut {
   vmgKnots: string;
 }
 
-export function boatState(race: RaceData, boatId: string, tRaw: number): BoatStateOut | { error: string } {
+function analystTelemetryError(
+  race: RaceData,
+  requiredBoatIds: readonly string[],
+): AnalystError | null {
+  const validity = raceAnalysisValidity(race, requiredBoatIds);
+  return validity.status === "valid"
+    ? null
+    : { error: validity.reason ?? "race analysis preflight failed" };
+}
+
+export function boatState(race: RaceData, boatId: string, tRaw: number): BoatStateOut | AnalystError {
+  const raceError = analystTelemetryError(race, []);
+  if (raceError !== null) return raceError;
   const boat = boatById(race, boatId);
   if (boat === undefined) return { error: unknownBoat(race, boatId) };
+  const telemetryError = analystTelemetryError(race, [boat.id]);
+  if (telemetryError !== null) return telemetryError;
   const t = clampT(race, tRaw);
   const fix = fixNear(race.fixes[boat.id], t);
   const leg = progressAt(race, boat.id, fix.t).leg;
   const toMark = toMarkOf(fix, leg);
+  const velocity = fixVelocity(fix);
+  const wind = interpolateWindAt(race, fix.t, { t: 0, twd: 0, tws: 0 });
+  const vmg = vmgOf(fix, wind.twd);
   return {
     boatId: boat.id,
     sail: boat.sail,
@@ -193,14 +239,25 @@ export function boatState(race: RaceData, boatId: string, tRaw: number): BoatSta
     leg,
     xMeters: round1(fix.x),
     yMeters: round1(fix.y),
-    sogKnots: knots(fix.sog),
-    cogDeg: deg(fix.cog),
+    sogKnots: knots(velocity.sog),
+    cogDeg: velocity.cog === null ? MISSING : deg(velocity.cog),
+    stwKnots: knots(velocity.stw),
+    ctwDeg: velocity.ctw === null ? MISSING : deg(velocity.ctw),
+    currentDriftKnots: knots(velocity.currentDrift),
+    currentSetDeg: velocity.currentSet === null ? MISSING : deg(velocity.currentSet),
+    waterX: fix.waterX,
+    waterY: fix.waterY,
+    currentX: fix.currentX,
+    currentY: fix.currentY,
+    groundX: velocity.groundX,
+    groundY: velocity.groundY,
+    telemetryProvenance: "recorded-fix",
     hdgDeg: deg(fix.hdg),
     heelDeg: deg(fix.heel),
     twaDeg: deg(fix.twa),
     kite: round2(fix.kite),
     toMarkKnots: toMark === null ? null : knots(toMark),
-    vmgKnots: knots(vmgOf(fix)),
+    vmgKnots: vmg === null ? MISSING : knots(vmg),
   };
 }
 
@@ -209,8 +266,20 @@ export interface CompareSideOut {
   sail: string;
   avgSogKnots: string;
   avgToMarkKnots: string | null;
-  avgVmgKnots: string;
-  distanceSailedMeters: number;
+  avgVmgKnots: null;
+  distanceSailedMeters: number | null;
+}
+
+export interface CompareEquationOut {
+  observedGainMeters: number | null;
+  straightMadeGoodDeltaMeters: number | null;
+  maneuverWindowMadeGoodDeltaMeters: number | null;
+  residualMeters: number | null;
+  waterMadeGoodDeltaMeters: number | null;
+  currentMadeGoodDeltaMeters: number | null;
+  groundMadeGoodGainMeters: number | null;
+  componentResidualMeters: number | null;
+  provenance: RangeComparison["componentProvenance"];
 }
 
 export interface CompareOut {
@@ -218,28 +287,80 @@ export interface CompareOut {
   toClock: string;
   a: CompareSideOut;
   b: CompareSideOut;
-  aAheadByMetersAtStart: number;
-  aAheadByMetersAtEnd: number;
+  aAheadByMetersAtStart: number | null;
+  aAheadByMetersAtEnd: number | null;
+  comparison: RangeComparison;
+  equation: CompareEquationOut;
 }
 
-function compareSide(race: RaceData, boat: BoatMeta, t0: number, t1: number): CompareSideOut {
-  const fixes = race.fixes[boat.id].filter((fix) => fix.t >= t0 && fix.t <= t1);
-  /* Only the fixes with a mark to make good toward feed this average; a
-   * window that is all prestart or all post-finish has nothing to report. */
-  const toMarks = fixes
-    .map((fix) => toMarkOf(fix, progressAt(race, boat.id, fix.t).leg))
-    .filter((value): value is number => value !== null);
-  let distance = 0;
-  for (let i = 1; i < fixes.length; i++) {
-    distance += Math.hypot(fixes[i].x - fixes[i - 1].x, fixes[i].y - fixes[i - 1].y);
-  }
+type CompareSideFacts = Pick<
+  BoatRangeFacts | ReferenceRangeFacts,
+  "meanSogMps" | "meanVmgMps" | "sailedDistanceMeters"
+>;
+
+function compareSide(
+  boat: Pick<BoatMeta, "id" | "sail"> | null,
+  facts: CompareSideFacts | null,
+): CompareSideOut {
   return {
-    boatId: boat.id,
-    sail: boat.sail,
-    avgSogKnots: knots(mean(fixes.map((fix) => fix.sog))),
-    avgToMarkKnots: toMarks.length === 0 ? null : knots(mean(toMarks)),
-    avgVmgKnots: knots(mean(fixes.map(vmgOf))),
-    distanceSailedMeters: Math.round(distance),
+    boatId: boat?.id ?? "fleet-median",
+    sail: boat?.sail ?? "Fixed fleet median",
+    avgSogKnots: facts?.meanSogMps == null ? MISSING : knots(facts.meanSogMps),
+    avgToMarkKnots: facts?.meanVmgMps == null ? null : knots(facts.meanVmgMps),
+    /* Legacy dock-VMG key stays present, but compareRange does not compute the
+     * distinct wind-axis quantity. Null is honest; copying mark VMG here would
+     * collapse two different reference frames. */
+    avgVmgKnots: null,
+    distanceSailedMeters:
+      facts?.sailedDistanceMeters == null ? null : finiteRounded(facts.sailedDistanceMeters),
+  };
+}
+
+function finiteRounded(value: number | null): number | null {
+  if (!Number.isFinite(value)) return null;
+  const rounded = Math.round(value as number);
+  if (!Number.isFinite(rounded)) return null;
+  return Object.is(rounded, -0) ? 0 : rounded;
+}
+
+/** Exact analyst adapter. Canonical arithmetic is returned unchanged. */
+export function compareRangeForAnalyst(
+  race: RaceData,
+  request: ComparisonRequest,
+): CompareOut | AnalystError {
+  const telemetryError = analystTelemetryError(race, []);
+  if (telemetryError !== null) return telemetryError;
+  const result = compareRange(race, request);
+  if (result.status === "invalid-request" || result.primary === null) {
+    return { error: result.invalidReason ?? "comparison request is invalid" };
+  }
+  const primary = boatById(race, result.primaryBoatId);
+  if (primary === undefined) return { error: unknownBoat(race, result.primaryBoatId) };
+  const rival =
+    result.reference.boatId === null ? null : boatById(race, result.reference.boatId) ?? null;
+  const rivalFacts =
+    result.reference.boatId === null
+      ? result.referenceFacts
+      : result.boats.find((facts) => facts.boatId === result.reference.boatId) ?? null;
+  return {
+    fromClock: clock(result.range.from),
+    toClock: clock(result.range.to),
+    a: compareSide(primary, result.primary),
+    b: compareSide(rival, rivalFacts),
+    aAheadByMetersAtStart: finiteRounded(result.startAdvantageMeters),
+    aAheadByMetersAtEnd: finiteRounded(result.endAdvantageMeters),
+    comparison: result,
+    equation: {
+      observedGainMeters: result.progressGainedMeters,
+      straightMadeGoodDeltaMeters: result.straightDeltaMeters,
+      maneuverWindowMadeGoodDeltaMeters: result.maneuverWindowDeltaMeters,
+      residualMeters: result.residualMeters,
+      waterMadeGoodDeltaMeters: result.waterDeltaMeters,
+      currentMadeGoodDeltaMeters: result.currentDeltaMeters,
+      groundMadeGoodGainMeters: result.groundGainMeters,
+      componentResidualMeters: result.componentResidualMeters,
+      provenance: result.componentProvenance,
+    },
   };
 }
 
@@ -249,26 +370,19 @@ export function compareBoats(
   bId: string,
   t0Raw: number,
   t1Raw: number,
-): CompareOut | { error: string } {
+): CompareOut | AnalystError {
+  const telemetryError = analystTelemetryError(race, []);
+  if (telemetryError !== null) return telemetryError;
   const a = boatById(race, aId);
   const b = boatById(race, bId);
   if (a === undefined) return { error: unknownBoat(race, aId) };
   if (b === undefined) return { error: unknownBoat(race, bId) };
-  let t0 = clampT(race, t0Raw);
-  let t1 = clampT(race, t1Raw);
-  if (t0 > t1) [t0, t1] = [t1, t0];
-  const pa0 = progressAt(race, a.id, t0);
-  const pb0 = progressAt(race, b.id, t0);
-  const pa1 = progressAt(race, a.id, t1);
-  const pb1 = progressAt(race, b.id, t1);
-  return {
-    fromClock: clock(t0),
-    toClock: clock(t1),
-    a: compareSide(race, a, t0, t1),
-    b: compareSide(race, b, t0, t1),
-    aAheadByMetersAtStart: Math.round(pb0.dtf - pa0.dtf),
-    aAheadByMetersAtEnd: Math.round(pb1.dtf - pa1.dtf),
-  };
+  return compareRangeForAnalyst(race, {
+    primaryBoatId: a.id,
+    reference: { kind: "boat", boatId: b.id },
+    /* compareRange owns safe integer-microsecond validation before clamping. */
+    range: { from: t0Raw, to: t1Raw },
+  });
 }
 
 export interface ManeuverOut {
@@ -279,7 +393,7 @@ export interface ManeuverOut {
   raceClock: string;
   entrySogKnots: string;
   exitSogKnots: string;
-  speedLossKnots: string;
+  speedLossKnots: string | null;
 }
 
 /**
@@ -294,10 +408,20 @@ export interface ManeuverOut {
  * Entry is the reading the loss is measured from, the fastest in the four
  * seconds up to the flip; exit is the last reading four seconds past it.
  */
-export function detectManeuvers(race: RaceData, boatId?: string): ManeuverOut[] {
+export type ManeuverOutList = ManeuverOut[] & { error?: string };
+
+function invalidManeuvers(error: AnalystError): ManeuverOutList {
+  return Object.assign([] as ManeuverOut[], error);
+}
+
+export function detectManeuvers(race: RaceData, boatId?: string): ManeuverOutList {
+  const raceError = analystTelemetryError(race, []);
+  if (raceError !== null) return invalidManeuvers(raceError);
   const boats =
     boatId === undefined ? race.boats : race.boats.filter((boat) => boat.id === boatId);
-  const out: ManeuverOut[] = [];
+  const telemetryError = analystTelemetryError(race, boats.map((boat) => boat.id));
+  if (telemetryError !== null) return invalidManeuvers(telemetryError);
+  const out: ManeuverOutList = [];
   for (const boat of boats) {
     const fixes = race.fixes[boat.id];
     for (const move of maneuversOf(race, boat.id)) {
@@ -306,7 +430,8 @@ export function detectManeuvers(race: RaceData, boatId?: string): ManeuverOut[] 
       for (const fix of fixes) {
         if (fix.t < move.t - LOSS_WINDOW) continue;
         if (fix.t > move.t + LOSS_WINDOW) break;
-        if (fix.t <= move.t && fix.sog > entry) entry = fix.sog;
+        const sog = fixVelocity(fix).sog;
+        if (fix.t <= move.t && sog > entry) entry = sog;
         exit = fix;
       }
       out.push({
@@ -316,7 +441,7 @@ export function detectManeuvers(race: RaceData, boatId?: string): ManeuverOut[] 
         t: move.t,
         raceClock: clock(move.t),
         entrySogKnots: knots(entry),
-        exitSogKnots: knots(exit.sog),
+        exitSogKnots: knots(fixVelocity(exit).sog),
         speedLossKnots: move.lossKnots,
       });
     }
@@ -335,11 +460,14 @@ export interface StartRowOut {
 }
 
 export interface StartReportOut {
-  lineLengthMeters: number;
+  lineLengthMeters: number | null;
   rows: StartRowOut[];
+  error?: string;
 }
 
 export function startReport(race: RaceData): StartReportOut {
+  const telemetryError = analystTelemetryError(race, race.boats.map((boat) => boat.id));
+  if (telemetryError !== null) return { lineLengthMeters: null, rows: [], ...telemetryError };
   const rows = race.boats.map((boat): StartRowOut => {
     const fixes = race.fixes[boat.id];
     const atGun = fixNear(fixes, 0);
@@ -359,7 +487,7 @@ export function startReport(race: RaceData): StartReportOut {
       boatId: boat.id,
       sail: boat.sail,
       distanceToLineMeters: round1(Math.abs(atGun.y)),
-      sogAtGunKnots: knots(atGun.sog),
+      sogAtGunKnots: knots(fixVelocity(atGun).sog),
       crossedAfterGunSeconds: crossed,
       nearerEnd: toPin < toBoat ? "pin" : "boat",
     };
@@ -421,7 +549,7 @@ export interface AnalystTool {
  * which is which in every description that returns them is what keeps an
  * answer from calling the strip's number by the dock's name. */
 const SPEED_NOTE =
-  "Two made-good readings come back and they are different numbers. toMark is speed along the course axis, sog times the cosine of cog, signed toward whichever mark the boat is sailing for, so it is positive whenever the boat is gaining; the strip beside the instrument dock prints it as \"To mark\". vmg is speed along the wind axis, sog times the cosine of the true wind angle, positive climbing to windward and negative running away from the wind; that is the number the dock's VMG tile shows. They differ whenever the wind sits off the course axis, and they differ in sign on the run. toMark is null before the gun and after a boat finishes, when there is no mark to make good toward and the strip prints nothing; the strip also floors its display at zero, so a small negative reading here shows on screen as 0.0.";
+  "Two made-good readings come back and they are different numbers. toMark is ground speed along the course axis, SOG*cos(COG), signed toward whichever mark the boat is sailing for, so it is positive whenever the boat is gaining; the strip beside the instrument dock prints it as \"To mark\". vmg is ground wind-axis VMG = SOG*cos(COG - TWD), positive climbing to windward and negative running away from the wind; that is the number the dock's VMG tile shows. The water wind-axis counterpart = STW*cos(CTW - TWD), but boat_state reports the ground quantity. They differ whenever the wind sits off the course axis, and they differ in sign on the run. toMark is null before the gun and after a boat finishes, when there is no mark to make good toward and the strip prints nothing; the strip also floors its display at zero, so a small negative reading here shows on screen as 0.0.";
 
 const T_NOTE = "Race time in seconds relative to the gun; negative is the prestart.";
 
@@ -441,7 +569,7 @@ export const ANALYST_TOOLS: AnalystTool[] = [
   {
     name: "boat_state",
     description:
-      `One boat's telemetry at a race time: position in course meters, speed over ground in knots, course over ground, heading, heel and wind angle in degrees, gennaker hoist state 0 to 1, and both made-good speeds in knots. ${SPEED_NOTE}`,
+      `One boat's recorded-fix telemetry at a race time: position, water/current components in meters per second, derived speed/course through water, current drift/set, derived speed/course over ground, heading, heel, wind angle, gennaker state, and both made-good speeds. ${SPEED_NOTE}`,
     strict: true,
     input_schema: {
       type: "object",
@@ -456,17 +584,31 @@ export const ANALYST_TOOLS: AnalystTool[] = [
   {
     name: "compare_boats",
     description:
-      `Compare two boats over a time window: average sog, average speed to the mark and average VMG in knots, distance sailed in meters, and the along-course gap between them at the start and end of the window, positive when boat a is ahead. ${SPEED_NOTE}`,
+      "Compare one selected boat with either a named rival or a fixed fleet median over an exact race-time range. Returns compareRange unchanged under comparison: exact cohort IDs, status and disjoint coverage, ground progress/distance/VMG, detected maneuver observations with unsupported costs left null, the straight plus maneuver-window equation, and the alternative water plus current equation. Water and current are reconstructed fix components, ground is their derived sum, and current contribution is descriptive rather than a tactical cause. Positive advantage means the selected boat is ahead; positive gain means it improved over the range. Legacy avgVmgKnots remains null because wind-axis dock VMG is distinct from ground-to-mark VMG.",
     strict: true,
     input_schema: {
       type: "object",
       properties: {
-        a: { type: "string", description: "Lowercase id of the first boat" },
-        b: { type: "string", description: "Lowercase id of the second boat" },
-        t0: { type: "number", description: `Window start. ${T_NOTE}` },
-        t1: { type: "number", description: `Window end. ${T_NOTE}` },
+        a: { type: "string", description: "Lowercase id of the selected boat" },
+        referenceKind: {
+          type: "string",
+          enum: ["boat", "fleet-median"],
+          description: "Named rival or fixed fleet-median reference",
+        },
+        b: {
+          type: ["string", "null"],
+          description: "Named rival id when referenceKind is boat; otherwise null",
+        },
+        cohortBoatIds: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Fixed requested boat ids when referenceKind is fleet-median; otherwise an empty array",
+        },
+        t0: { type: "number", description: `Exact range start. ${T_NOTE}` },
+        t1: { type: "number", description: `Exact range end. ${T_NOTE}` },
       },
-      required: ["a", "b", "t0", "t1"],
+      required: ["a", "referenceKind", "b", "cohortBoatIds", "t0", "t1"],
       additionalProperties: false,
     },
   },
@@ -536,27 +678,49 @@ function str(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+function comparisonRequest(args: Record<string, unknown>): ComparisonRequest {
+  const primaryBoatId = str(args.a);
+  if (args.referenceKind === "fleet-median") {
+    const boatIds = Array.isArray(args.cohortBoatIds)
+      ? args.cohortBoatIds.filter((id): id is string => typeof id === "string")
+      : [];
+    return {
+      primaryBoatId,
+      reference: { kind: "fleet-median", boatIds },
+      range: { from: num(args.t0), to: num(args.t1) },
+    };
+  }
+  return {
+    primaryBoatId,
+    reference: { kind: "boat", boatId: str(args.b) },
+    range: { from: num(args.t0), to: num(args.t1) },
+  };
+}
+
 /** Run one tool by name against one race. Returns the tool_result JSON. */
 export function runTool(race: RaceData, name: string, input: unknown): string {
   const args = (typeof input === "object" && input !== null ? input : {}) as Record<
     string,
     unknown
   >;
+  if (["standings_at", "boat_state", "compare_boats", "maneuvers", "start_report"].includes(name)) {
+    const telemetryError = analystTelemetryError(race, []);
+    if (telemetryError !== null) return JSON.stringify(telemetryError);
+  }
   switch (name) {
     case "standings_at":
       return JSON.stringify(standingsAt(race, num(args.t)));
     case "boat_state":
       return JSON.stringify(boatState(race, str(args.boatId), num(args.t)));
     case "compare_boats":
-      return JSON.stringify(
-        compareBoats(race, str(args.a), str(args.b), num(args.t0), num(args.t1)),
-      );
+      return JSON.stringify(compareRangeForAnalyst(race, comparisonRequest(args)));
     case "maneuvers": {
       const boatId = typeof args.boatId === "string" && args.boatId.length > 0 ? args.boatId : undefined;
       if (boatId !== undefined && boatById(race, boatId) === undefined) {
         return JSON.stringify({ error: unknownBoat(race, boatId) });
       }
       const moves = detectManeuvers(race, boatId);
+      if (moves.error !== undefined) return JSON.stringify({ error: moves.error });
       return JSON.stringify({
         tacks: moves.filter((move) => move.kind === "tack").length,
         gybes: moves.filter((move) => move.kind === "gybe").length,
@@ -590,7 +754,9 @@ export function toolStatusLabel(race: RaceData, name: string, input: unknown): s
     case "boat_state":
       return `reading ${sail(args.boatId)} at ${clock(clampT(race, num(args.t)))}`;
     case "compare_boats":
-      return `comparing ${sail(args.a)} and ${sail(args.b)}`;
+      return args.referenceKind === "fleet-median"
+        ? `comparing ${sail(args.a)} with the fixed fleet median`
+        : `comparing ${sail(args.a)} and ${sail(args.b)}`;
     case "maneuvers":
       return typeof args.boatId === "string" && args.boatId.length > 0
         ? `counting ${sail(args.boatId)} tacks and gybes`

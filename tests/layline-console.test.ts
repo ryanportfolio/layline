@@ -28,14 +28,15 @@ test("standings read finished the instant a boat's finish time passes", () => {
 });
 
 test("a fresh finisher never shares a place with a boat still racing", () => {
-  /* nzl crosses at 56.965 with result rank 4 while the 56.5 progress sample
-   * still holds aus at rank 4; the rows must resolve to unique places with the
-   * finisher ahead of the held rival, not two fours sorted by boat id. */
-  const rows = standingsAt(race, 56.965);
-  assert.deepEqual(
-    rows.map((row) => `${row.boatId}:${row.rank}${row.finished ? "F" : ""}`),
-    ["usa:1F", "jpn:2F", "gbr:3F", "nzl:4F", "aus:5", "fra:6"],
-  );
+  /* The second finisher crosses between held progress samples. Exact result
+   * rank must win over that hold without duplicating a still-racing place. */
+  const fresh = race.results.find((result) => result.rank === 2);
+  assert.ok(fresh !== undefined);
+  const rows = standingsAt(race, fresh.elapsed);
+  assert.equal(new Set(rows.map((row) => row.rank)).size, race.boats.length);
+  const finished = rows.find((row) => row.boatId === fresh.boatId);
+  assert.equal(finished?.finished, true);
+  assert.equal(finished?.rank, 2);
 });
 
 test("the clock runs out the whole feed and stops at tMax", () => {

@@ -6,8 +6,8 @@
    one place that draws them in CSS, and it draws them in the console's own
    closed palette: every stop below is a mix of the four sky and water tokens,
    placed against a profile read off the rendered canvas at the prestart. Sky
-   to the bright band at the horizon around a fifth of the way down, then water
-   falling away to deep.
+   to the bright band at the horizon, held until the header rule has cleared it,
+   then water falling away to deep.
 
    The brief is one chart and the readings that hang off it: the last ten
    seconds before the gun seen from above at true scale, then the fleet in the
@@ -36,12 +36,25 @@
      bar and the docks share this level and come later in the DOM, so they stay
      above it. */
   z-index: 3;
+  /* How far down the bright horizon band holds before the water starts. It was
+     a percentage of height (20 to 26%), and the header rule is placed by width:
+     at 1600x950 the meta line landed at 27%, which is already the first water
+     mix, and the header's dark ink measured 2.85:1 there against a sampled
+     composite of 66,89,106. Against the horizon token itself the same ink reads
+     8.4:1. So the band is stated in the same axis the header is placed in, and
+     it clears the rule at every width: the header's bottom edge runs about
+     0.185 of the box, and 21vw sits above that from a handset to 1600 while the
+     clamp keeps a tall thin window from washing out and a short wide one from
+     losing its water. */
+  --brief-sky-hold: clamp(200px, 21vw, 380px);
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--sky-horizon) 76%, var(--sky-zenith)) 0%,
-    var(--sky-horizon) 20%,
-    color-mix(in srgb, var(--sky-horizon) 55%, var(--water-mid)) 26%,
-    color-mix(in srgb, var(--sky-horizon) 40%, var(--water-mid)) 38%,
+    var(--sky-horizon) var(--brief-sky-hold),
+    color-mix(in srgb, var(--sky-horizon) 55%, var(--water-mid))
+      calc(var(--brief-sky-hold) + 6%),
+    color-mix(in srgb, var(--sky-horizon) 40%, var(--water-mid))
+      calc(var(--brief-sky-hold) + 18%),
     color-mix(in srgb, var(--water-mid) 78%, var(--water-deep)) 62%,
     color-mix(in srgb, var(--water-mid) 60%, var(--water-deep)) 100%
   );
@@ -97,11 +110,12 @@
      measures the token's WCAG luminance after hydration and writes the white
      branch over these two if the sky came out dark. */
   --brief-head-ink: color-mix(in srgb, var(--water-deep) 88%, var(--sky-horizon));
-  /* Stated, never an opacity, for the same reason as --brief-dim. 88 and not
-     the 78 this started at: the meta line is 10px, so it owes 4.5:1 against
-     the sky it sits on, and 78 measured 4.44:1 at 1440 and 4.36:1 at 606,
-     sampled off a screenshot. At 88 it reads 5.76:1 and 4.95:1. */
-  --brief-head-dim: color-mix(in srgb, var(--brief-head-ink) 88%, var(--sky-horizon));
+  /* There is no dimmer header tier any more. Every text role on this rule is
+     11px or smaller and all of it is fact, so all of it takes the full head
+     ink. The tier this replaced was a second colour-mix at 88% of the ink,
+     which measured 5.76:1 at 1440 and 4.95:1 at 606: over the 4.5 that small
+     text owes, and still unreadable to the owner on a bright sky. Weight and
+     size carry the hierarchy instead. */
   --brief-head-line: color-mix(in srgb, var(--water-deep) 30%, transparent);
 
   /* Nothing is pinned over the brief at this width, so the footer sits on the
@@ -236,17 +250,15 @@
 }
 
 /* The label size, and there is one of it: 10px Archivo on a 16px box with the
-   console's own 0.14em of dock tracking, uppercase. Every label on the layer
-   takes this rule rather than a size of its own, which is what holds the whole
-   layer to three sizes: 22 for a reading, 10 for a label, 9 inside the
-   drawing. */
-.raceMeta,
+   console's own 0.14em of dock tracking, uppercase. Every label that sits on a
+   plate takes this rule rather than a size of its own, which is what holds the
+   whole layer to three sizes: 22 for a reading, 10 for a label, 9 inside the
+   drawing. The header rule is the one exception and says why at .raceMeta. */
 .panelLabel,
 .readLabel,
 .viewBtn,
 .twsUnit,
-.biasCap,
-.status {
+.biasCap {
   font-family: var(--brief-sans);
   font-size: 10px;
   font-weight: 600;
@@ -264,16 +276,49 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 1cqw 2cqw;
+  gap: 1cqw 1.5cqw;
 }
 
 /* Given the row's spare width rather than its own intrinsic one: it is the
    longest thing in the header and the only part of it that may wrap, and left
    at flex: none it ran under the switch and off the layer at handset widths. */
+/* A size and a tracking of its own, off the plate label tier. This line sits on
+   the sky rather than on a 0.86 plate, and at 10px with 0.14em of tracking the
+   owner could not read it there. 11px at 0.1em, on the full head ink. */
 .raceMeta {
   flex: 1 1 auto;
   min-width: 0;
-  color: var(--brief-head-dim);
+  color: var(--brief-head-ink);
+  font-family: var(--brief-sans);
+  font-size: 11px;
+  font-weight: 600;
+  /* 0.08em rather than the label tier's 0.14: the extra pixel of size has to
+     come out of the tracking or the rule wraps to two lines at 1280. */
+  letter-spacing: 0.08em;
+  line-height: 16px;
+  text-transform: uppercase;
+}
+
+/* The start facts, on the header rule rather than in the fleet plate's foot:
+   the rule had the spare width and the plate keeps its height for rows. Mono,
+   because all three are measured. */
+.headFacts {
+  display: flex;
+  /* Shrinkable, never stretched: at handset widths the row's max-content is
+     wider than the header, and flex: none held it there while the brief's
+     overflow: hidden clipped the last fact. Allowed to shrink, the wrap below
+     stacks the facts instead. Codex review finding. */
+  flex: 0 1 auto;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
+  color: var(--brief-head-ink);
+  font-family: var(--brief-mono);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  white-space: nowrap;
 }
 
 /* The console's transport already carries this control: a segmented pair, the
@@ -290,7 +335,7 @@
   padding: 5px 10px;
   border: 0;
   background: transparent;
-  color: var(--brief-head-dim);
+  color: var(--brief-head-ink);
   cursor: var(--house-cursor);
   transition: background 160ms var(--ease), color 160ms var(--ease);
 }
@@ -444,22 +489,6 @@
   width: 64px;
 }
 
-.fleetFoot {
-  display: flex;
-  flex: none;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 4px 16px;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--brief-hair);
-  color: var(--brief-dim);
-  font-family: var(--brief-mono);
-  font-size: 10px;
-  line-height: 16px;
-  white-space: nowrap;
-}
-
 /* ---- the readings ---- */
 
 .readCell {
@@ -512,9 +541,7 @@
   padding: 1.5cqw 1.6cqw;
 }
 
-/* Six rows on their own plate, ruled, rather than six lines under a drawing.
-   Nothing is stretching above them, so the foot sits under the last boat
-   instead of at the bottom of a plate taller than its rows. */
+/* Six rows on their own plate, ruled, rather than six lines under a drawing. */
 [data-brief-view="panels"] .fleetRow {
   padding: 0.78cqw 0;
   border-bottom: 1px solid var(--brief-hair);
@@ -533,8 +560,68 @@
   text-align: right;
 }
 
-[data-brief-view="panels"] .fleetFoot {
-  margin-top: auto;
+/* The fleet plate never clips its own rows. A short window takes the row
+   padding down first; a window shorter still lets the plate scroll in the
+   layer's own bar instead of cutting a boat off mid-plate. */
+[data-brief-view="panels"] .panelMain .panel:first-child {
+  overflow-y: auto;
+}
+
+@media (max-height: 840px) {
+  .brief {
+    gap: 0.8cqw;
+    padding-top: 2cqw;
+    padding-bottom: calc(1.2cqw + var(--brief-foot-gap));
+  }
+
+  /* The footer's way through gives its slack padding back to the plates: with
+     the status sentence gone this row is the only thing under them, and a
+     short window needs the height more than the button needs the air. */
+  .briefFoot {
+    --go-pad: 1cqw;
+  }
+
+  [data-brief-view="panels"] .fleetRow {
+    padding: 0.25cqw 0;
+  }
+
+  /* Short AND narrow, the 1024x768 class of window: the container is small
+     enough that the cqw sizes above stop paying for themselves, and the fleet
+     plate came up 43px short of its six rows. The title gives back the bulk:
+     8cqw still fills the width edge to edge at these sizes, and a name that
+     fits one line at 9.4 fits at 8. */
+  @media (max-width: 1120px) {
+    .raceName {
+      font-size: calc(7.6 * 1cqw);
+    }
+
+    .brief {
+      gap: 0.6cqw;
+      padding-top: 1.2cqw;
+    }
+
+    .briefHead {
+      padding-bottom: 1cqw;
+    }
+
+    .briefFoot {
+      --go-pad: 0.8cqw;
+    }
+
+    [data-brief-view="panels"] .panel {
+      padding-top: 0.8cqw;
+      padding-bottom: 0.8cqw;
+    }
+
+    [data-brief-view="panels"] .fleetRow {
+      padding: 0.15cqw 0;
+    }
+  }
+
+  [data-brief-view="panels"] .panel {
+    padding-top: 1cqw;
+    padding-bottom: 1cqw;
+  }
 }
 
 .dialWrap {
@@ -914,77 +1001,16 @@
   animation: briefRise 420ms var(--ease) 280ms both;
 }
 
-.status {
-  flex: none;
-  margin: 0;
-  color: var(--brief-dim);
-  text-transform: none;
-  letter-spacing: 0.06em;
-}
-
-/* The two things the status line can say, stacked, so the change from one to
-   the other crossfades on the same 700ms the bar takes to finish rather than
-   cutting in the frame the bar happens to jump. */
-.statusStack {
-  position: relative;
-  display: inline-block;
-  vertical-align: middle;
-}
-
-.statusStack span {
-  transition: opacity 700ms var(--ease);
-}
-
-.statusStack span + span {
-  position: absolute;
-  inset: 0;
-  white-space: nowrap;
-}
-
-/* Hidden until the wait is long enough to be worth describing, and it fades in
-   rather than appearing, so the layer never gains a part with a cut. */
-.statusBar {
-  position: relative;
-  display: inline-block;
-  width: 14cqw;
-  height: 2px;
-  margin-left: 1cqw;
-  background: var(--brief-hair);
-  vertical-align: middle;
-  transition: opacity 400ms var(--ease);
-}
-
-/* Honest about what it is: it fills while the renderer warms and completes when
-   the renderer is up. It is a wait, not a percentage of anything, so it eases
-   out rather than running at a rate it cannot know.
-
-   A transition rather than a keyframe, and that is the whole point. The first
-   version ran a 6s animation to 88% and then swapped in a class that set
-   animation: none with width: 100%. Killing an animation drops the element back
-   to its base width before the new one applies, so the bar snapped from wherever
-   the ramp had reached straight to full, and the status text swapped in the same
-   frame. Two hard changes at one instant read as a glitch. A transition
-   interpolates from the current computed width, so the renderer arriving mid
-   ramp is one gentle 700ms settle to full instead. */
-.statusFill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 0;
-  background: var(--brief-dim);
-  transition: width var(--status-ease, 6000ms) var(--ease);
-}
-
 /* Square, like everything else on this layer and like the console's own
    registration box, which states border-radius: 0 on whatever it rings. A pill
    here was a control that changed shape the moment it took focus. */
 .goBtn {
-  /* Takes the footer's spare width instead of sitting in a corner of it. The
-     status line beside it is a sentence of a stated length; everything the
-     sentence does not need belongs to the way through. */
+  /* The whole footer belongs to the way through: the status sentence that used
+     to sit beside it said nothing the plates above were not already saying. */
   position: relative;
   flex: 1;
   min-width: 0;
-  padding: 1.6cqw 2.4cqw;
+  padding: var(--go-pad, 1.6cqw) 2.4cqw;
   overflow: hidden;
   border: 1px solid var(--brief-ink);
   background: var(--brief-ink);
@@ -1104,7 +1130,7 @@
   }
 
   .raceMeta {
-    font-size: 9px;
+    font-size: 10px;
   }
 
   /* Stacked, each block is as tall as what is in it and the column scrolls.
@@ -1140,10 +1166,6 @@
 
   [data-brief-view="panels"] .fleetRow {
     padding: 7px 0;
-  }
-
-  [data-brief-view="panels"] .fleetFoot {
-    margin-top: 8px;
   }
 
   .twsRow {
@@ -1240,10 +1262,6 @@
     background: rgba(7, 30, 50, 0.94);
   }
 
-  .status {
-    display: none;
-  }
-
   .goBtn {
     width: 100%;
     padding: 14px 16px;
@@ -1267,16 +1285,6 @@
   animation: none;
 }
 
-/* The same promise for the one part of the footer that runs on wall time rather
-   than on the replay clock. The status line describes the renderer, not the
-   race, so left easing it caught two captures of the same stated time at two
-   points of one crossfade. Held, it states its values instead. */
-[data-brief-still] .statusFill,
-[data-brief-still] .statusBar,
-[data-brief-still] .statusStack span {
-  transition: none;
-}
-
 /* A viewer who asked for less motion gets the two pictures and no dissolve,
    and a brief that states its numbers rather than sweeping to them. */
 @media (prefers-reduced-motion: reduce) {
@@ -1287,12 +1295,6 @@
   .panel,
   .briefFoot {
     animation: none;
-  }
-
-  .statusFill,
-  .statusBar,
-  .statusStack span {
-    transition: none;
   }
 
   .goBtn,

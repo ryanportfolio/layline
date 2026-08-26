@@ -7,11 +7,11 @@
  * race.events or race.results, or built from them with the same arithmetic
  * interpolate.ts uses, so a change to the seed redraws the section by itself.
  */
-import { poseAt } from "@/lib/layline/interpolate";
+import { createPose, poseAt } from "@/lib/layline/interpolate";
 import { FIX_HZ, SIM_HZ } from "@/lib/layline/types";
 import type { BoatMeta, Fix, Pose, RaceData } from "@/lib/layline/types";
 
-/** The bench boat. USA 4 wins the seeded race and tacks inside the window. */
+/** The bench boat. USA 4 tacks inside the fixed inspection window. */
 export const BENCH_BOAT = "usa";
 
 /* The first tack is off the start line. The beat's second one is the turn the
@@ -46,7 +46,7 @@ export function fmt2(value: number): string {
 
 /** poseAt writes into a caller-owned pose; this is the empty one to hand it. */
 export function newPose(): Pose {
-  return { x: 0, y: 0, hdg: 0, heel: 0, twa: 0, sog: 0, cog: 0, kite: 0 };
+  return createPose();
 }
 
 /** Signed short way round from a to b, in (-180, 180]. */

@@ -19,7 +19,8 @@
  */
 import { shaderMaterial } from "@react-three/drei";
 import { BufferAttribute, BufferGeometry, Color, Vector2, Vector3 } from "three";
-import { legAt, poseAt, windAt } from "@/lib/layline/interpolate";
+import { createPose, legAt, poseAt, windAt } from "@/lib/layline/interpolate";
+import type { LaylineTrace } from "@/lib/layline/laylines";
 import type { BoatMeta, Pose, RaceData, WindSample } from "@/lib/layline/types";
 import { WAVE_GLSL } from "./waves";
 
@@ -402,6 +403,33 @@ export function pushRun(
   }
 }
 
+/** Copies one immutable inspection trace into the course's existing line pool. */
+export function pushInspectionTrace(
+  buffer: LineBuffer,
+  trace: LaylineTrace,
+  color: Color,
+): number {
+  if (trace.status === "invalid" || trace.points.length < 2) return 0;
+  const before = buffer.quads;
+  for (let index = 1; index < trace.points.length; index++) {
+    const from = trace.points[index - 1];
+    const to = trace.points[index];
+    pushSegment(
+      buffer,
+      from.x,
+      -from.y,
+      to.x,
+      -to.y,
+      LAYLINE_LIFT + 0.035,
+      LAYLINE_HALF * 0.72,
+      LAYLINE_MAX_PX,
+      color,
+      LAYLINE_FADE * 0.82,
+    );
+  }
+  return buffer.quads - before;
+}
+
 export function pushRing(
   buffer: LineBuffer,
   cx: number,
@@ -439,7 +467,7 @@ const BEAT_MIN = 34;
 const BEAT_MAX = 56;
 const BEAT_OPTIMUM = 44;
 
-const beatProbe: Pose = { x: 0, y: 0, hdg: 0, heel: 0, twa: 0, sog: 0, cog: 0, kite: 0 };
+const beatProbe: Pose = createPose();
 
 /* The fleet's beating angle at one instant, averaged over the boats on the beat
  * that are inside the band. Membership is a step quantity twice over: leg comes
