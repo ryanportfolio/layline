@@ -11,6 +11,14 @@
  * two honest samples.
  */
 import { hashString, mulberry32 } from "../prng";
+import { createCurrentFieldSpec, sampleSeededCurrentField, type CurrentFieldSpec } from "./current";
+import {
+  shouldRefreshTacticalGuidance,
+  tacticalLaylineGuidanceForSimulator,
+  TACTICAL_GUIDANCE_MAX_CANDIDATES,
+  type TacticalSideGuidance,
+} from "./laylines";
+import { FICTIONAL_ONE_DESIGN_POLAR, targetBoatSpeed } from "./polar";
 import { FIX_HZ, PROGRESS_HZ, SIM_HZ, WIND_HZ } from "./types";
 import type {
   BoatMeta,
@@ -23,9 +31,21 @@ import type {
   RaceResult,
   WindSample,
 } from "./types";
+import {
+  simulationAcos,
+  simulationAtan2,
+  simulationCourseUnitVector,
+  simulationExp,
+  simulationHypot,
+  simulationLog,
+  simulationSqrt,
+  simulationVectorFromSpeedCourse,
+  simulationVelocityFromComponents,
+} from "./simulation-math";
+import { waterCourseFromHeading, wrap360, wrapSigned } from "./velocity";
 
 const DEG = Math.PI / 180;
-const SIM_DT = 1 / SIM_HZ;
+export const SIM_DT = 1 / SIM_HZ;
 const FIX_EVERY = SIM_HZ / FIX_HZ;
 const PROGRESS_EVERY = SIM_HZ / PROGRESS_HZ;
 
@@ -44,16 +64,21 @@ const HORIZON = 90;
 
 /* Relaxation coefficients for the fixed tick, not the time constants: these
  * are the same number 120,000 times over a race. */
-const SPEED_BLEND = 1 - Math.exp(-SIM_DT / 3.5);
-const COAST_BLEND = 1 - Math.exp(-SIM_DT / 4);
-const HEEL_BLEND = 1 - Math.exp(-SIM_DT / 1.2);
+const positiveZero = (value: number): number => value === 0 ? 0 : value;
+
+function simulationCourseUnit(course: number): { x: number; y: number } {
+  return simulationCourseUnitVector(course, { x: 0, y: 0 });
+}
+
+const SPEED_BLEND = 1 - simulationExp(-SIM_DT / 3.5);
+const COAST_BLEND = 1 - simulationExp(-SIM_DT / 4);
+const HEEL_BLEND = 1 - simulationExp(-SIM_DT / 1.2);
 const YAW_MAX = 28;
-const SOG_CAP = 11.3;
+const STW_CAP = 11.3;
 const HEEL_MAX = 24;
 const HEEL_K = 0.215;
 const HIKING_KNEE = 11;
 const HIKING_CAP = 14;
-const LEEWAY_MAX = 4;
 /* How far off the buoy the boat aims to pass. With the yaw limit doing the
  * work the bear away comes out at about a 9 m radius, which puts the mark
  * inside the turning circle and on the boat's port side throughout. */
@@ -103,20 +128,8 @@ const FLEET: BoatMeta[] = [
 
 const START_SLOTS = [-30, -18, -6, 6, 18, 30];
 
-const POLAR_TWA = [30, 44, 60, 90, 110, 140, 165];
-const POLAR_FRAC = [0.15, 0.8, 0.95, 1.1, 1.15, 1.15, 0.85];
-
 function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
-}
-
-function wrap360(a: number): number {
-  const w = a % 360;
-  return w < 0 ? w + 360 : w;
-}
-
-function wrapSigned(a: number): number {
-  return wrap360(a + 180) - 180;
 }
 
 function smoothstep(edge0: number, edge1: number, x: number): number {
@@ -130,46 +143,202 @@ function q(v: number): number {
   return Math.round(v * 1000) / 1000;
 }
 
+export interface SegmentPoint {
+  x: number;
+  y: number;
+}
+
+export interface TimedPassage extends SegmentPoint {
+  t: number;
+  alpha: number;
+}
+
+export interface SimulatorFixAudit {
+  boatId: string;
+  t: number;
+  x: number;
+  y: number;
+  waterX: number;
+  waterY: number;
+  currentX: number;
+  currentY: number;
+  groundX: number;
+  groundY: number;
+  stw: number;
+  ctw: number;
+  sog: number;
+  cog: number;
+  hdg: number;
+  heel: number;
+  twa: number;
+  kite: number;
+  refTwd: number;
+  noise: number;
+  dirty: number;
+  avoid: number;
+  avoidUrg: number;
+  brake: number;
+  desired: number;
+  phase: number;
+  tack: number;
+  man: number;
+  laying: boolean;
+  wantLay: boolean;
+  toGo: number;
+  portCrossTrack: number | null;
+  starboardCrossTrack: number | null;
+}
+
+export type SimulatorFixObserver = (sample: Readonly<SimulatorFixAudit>) => void;
+export type SimulatorTickObserver = (sample: Readonly<SimulatorFixAudit>) => void;
+
+function observeSimulatorState(
+  b: Sim,
+  t: number,
+  observer?: SimulatorFixObserver | SimulatorTickObserver,
+): void {
+  observer?.(Object.freeze({
+    boatId: b.meta.id,
+    t,
+    x: b.x,
+    y: b.y,
+    waterX: b.waterX,
+    waterY: b.waterY,
+    currentX: b.currentX,
+    currentY: b.currentY,
+    groundX: positiveZero(b.waterX + b.currentX),
+    groundY: positiveZero(b.waterY + b.currentY),
+    stw: b.stw,
+    ctw: b.ctw,
+    sog: b.sog,
+    cog: b.cog,
+    hdg: b.hdg,
+    heel: b.heel,
+    twa: b.twa,
+    kite: b.kite,
+    refTwd: b.refTwd,
+    noise: b.noise,
+    dirty: b.dirty,
+    avoid: b.avoid,
+    avoidUrg: b.avoidUrg,
+    brake: b.brake,
+    desired: b.desired,
+    phase: b.phase,
+    tack: b.tack,
+    man: b.man,
+    laying: b.laying,
+    wantLay: b.wantLay,
+    toGo: b.toGo,
+    portCrossTrack: b.guidance?.[0].signedCrossTrackMeters ?? null,
+    starboardCrossTrack: b.guidance?.[1].signedCrossTrackMeters ?? null,
+  }));
+}
+
+export function tacticalCandidateBudgetAtTick(
+  raceTick: number,
+  active: boolean,
+  phaseDone: boolean,
+): number {
+  return shouldRefreshTacticalGuidance(raceTick, active && !phaseDone)
+    ? TACTICAL_GUIDANCE_MAX_CANDIDATES
+    : 0;
+}
+
+export function finishCrossingOnSegment(
+  from: SegmentPoint,
+  to: SegmentPoint,
+  segmentStartTime: number,
+): TimedPassage | null {
+  if (!(from.y > 0 && to.y <= 0)) return null;
+  const alpha = from.y / (from.y - to.y);
+  return {
+    x: from.x + alpha * (to.x - from.x),
+    y: from.y + alpha * (to.y - from.y),
+    t: segmentStartTime + alpha * SIM_DT,
+    alpha,
+  };
+}
+
+export function advancePositionOnTick<T extends SegmentPoint>(
+  from: SegmentPoint,
+  groundX: number,
+  groundY: number,
+  out: T,
+): T {
+  out.x = positiveZero(from.x + groundX * SIM_DT);
+  out.y = positiveZero(from.y + groundY * SIM_DT);
+  return out;
+}
+
+export function roundingCompletionOnSegment(
+  from: SegmentPoint,
+  to: SegmentPoint,
+  mark: SegmentPoint,
+  segmentStartTime: number,
+): TimedPassage | null {
+  if (!(from.x >= mark.x && to.x <= mark.x) || from.x === to.x) return null;
+  const alpha = (from.x - mark.x) / (from.x - to.x);
+  if (alpha < 0 || alpha > 1) return null;
+  const y = from.y + alpha * (to.y - from.y);
+  return y > mark.y
+    ? { x: mark.x, y, t: segmentStartTime + alpha * SIM_DT, alpha }
+    : null;
+}
+
+export function closestPassageOnSegment(
+  from: SegmentPoint,
+  to: SegmentPoint,
+  mark: SegmentPoint,
+  segmentStartTime: number,
+): TimedPassage & { distance: number } {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const lengthSquared = dx * dx + dy * dy;
+  const rx = from.x - mark.x;
+  const ry = from.y - mark.y;
+  const alpha = lengthSquared <= 1e-18
+    ? 0
+    : clamp(-(rx * dx + ry * dy) / lengthSquared, 0, 1);
+  const x = from.x + alpha * dx;
+  const y = from.y + alpha * dy;
+  return {
+    x,
+    y,
+    t: segmentStartTime + alpha * SIM_DT,
+    alpha,
+    distance: simulationHypot(x - mark.x, y - mark.y),
+  };
+}
+
+export function solvePrestartPosition<T extends SegmentPoint>(
+  spec: CurrentFieldSpec,
+  later: SegmentPoint,
+  waterX: number,
+  waterY: number,
+  t: number,
+  out: T,
+  observeSubstitution?: (iteration: number) => void,
+): T {
+  let x = later.x - SIM_DT * waterX;
+  let y = later.y - SIM_DT * waterY;
+  const current = { x: 0, y: 0 };
+  for (let substitution = 0; substitution < 6; substitution++) {
+    observeSubstitution?.(substitution);
+    sampleSeededCurrentField(spec, x, y, t, current);
+    const currentX = current.x;
+    const currentY = current.y;
+    x = later.x - SIM_DT * (waterX + currentX);
+    y = later.y - SIM_DT * (waterY + currentY);
+  }
+  out.x = x;
+  out.y = y;
+  return out;
+}
+
 function gauss(rand: () => number): number {
   const u = 1 - rand();
   const v = rand();
-  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
-}
-
-/* Boat speed as a fraction of TWS. Catmull-Rom through the measured knots,
- * with the tangents taken over the neighbour spacing so the uneven twa steps
- * do not kink the curve. Below the first knot the boat is pinching into the
- * no-go zone; above the last it is dead downwind with the main blanketing the
- * kite. */
-export function polarFrac(twaAbs: number): number {
-  const a = clamp(twaAbs, 0, 180);
-  if (a <= POLAR_TWA[0]) return (a / POLAR_TWA[0]) * POLAR_FRAC[0];
-  const last = POLAR_TWA.length - 1;
-  if (a >= POLAR_TWA[last]) {
-    return POLAR_FRAC[last] - ((a - POLAR_TWA[last]) / 15) * 0.1;
-  }
-  let i = 0;
-  while (i < last - 1 && a > POLAR_TWA[i + 1]) i++;
-  const x0 = POLAR_TWA[i];
-  const x1 = POLAR_TWA[i + 1];
-  const y0 = POLAR_FRAC[i];
-  const y1 = POLAR_FRAC[i + 1];
-  const xm = i > 0 ? POLAR_TWA[i - 1] : x0 - (x1 - x0);
-  const ym = i > 0 ? POLAR_FRAC[i - 1] : y0 - (y1 - y0);
-  const xp = i + 2 <= last ? POLAR_TWA[i + 2] : x1 + (x1 - x0);
-  const yp = i + 2 <= last ? POLAR_FRAC[i + 2] : y1 + (y1 - y0);
-  const h = x1 - x0;
-  const m0 = ((y1 - ym) / (x1 - xm)) * h;
-  const m1 = ((yp - y0) / (xp - x0)) * h;
-  const s = (a - x0) / h;
-  const s2 = s * s;
-  const s3 = s2 * s;
-  return (
-    (2 * s3 - 3 * s2 + 1) * y0 +
-    (s3 - 2 * s2 + s) * m0 +
-    (-2 * s3 + 3 * s2) * y1 +
-    (s3 - s2) * m1
-  );
+  return simulationSqrt(-2 * simulationLog(u)) * simulationCourseUnit(v * 360).y;
 }
 
 /* Heel comes from apparent wind, not true: a skiff sailing away from the
@@ -177,22 +346,17 @@ export function polarFrac(twaAbs: number): number {
  * over upwind and lets it sail flat under the kite. */
 function heelTarget(sog: number, tws: number, twa: number): number {
   const a = Math.abs(twa);
-  const c = Math.cos(a * DEG);
-  const aws = Math.sqrt(sog * sog + tws * tws + 2 * sog * tws * c);
+  const c = simulationCourseUnit(a).y;
+  const aws = simulationSqrt(sog * sog + tws * tws + 2 * sog * tws * c);
   if (aws < 1e-6) return 0;
-  const awa = Math.acos(clamp((sog + tws * c) / aws, -1, 1));
-  let mag = clamp(HEEL_K * aws * aws * Math.sin(awa), 0, HEEL_MAX);
+  const awa = simulationAcos(clamp((sog + tws * c) / aws, -1, 1));
+  let mag = clamp(HEEL_K * aws * aws * simulationCourseUnit(awa / DEG).x, 0, HEEL_MAX);
   /* Upwind the crew are on the wire and take the extra heeling moment out of
    * a puff, up to what two people weigh: past that the boat lies over. */
   if (a < 70 && mag > HIKING_KNEE) {
-    mag = HIKING_KNEE + (HIKING_CAP - HIKING_KNEE) * (1 - Math.exp((HIKING_KNEE - mag) / 3));
+    mag = HIKING_KNEE + (HIKING_CAP - HIKING_KNEE) * (1 - simulationExp((HIKING_KNEE - mag) / 3));
   }
   return -clamp(twa / 8, -1, 1) * mag;
-}
-
-function leeway(twa: number): number {
-  const a = Math.abs(twa);
-  return LEEWAY_MAX * clamp(twa / 12, -1, 1) * clamp((70 - a) / 50, 0, 1);
 }
 
 interface Personality {
@@ -225,6 +389,14 @@ interface Sim {
   x: number;
   y: number;
   hdg: number;
+  stw: number;
+  ctw: number;
+  waterX: number;
+  waterY: number;
+  currentX: number;
+  currentY: number;
+  groundX: number;
+  groundY: number;
   cog: number;
   sog: number;
   heel: number;
@@ -254,7 +426,8 @@ interface Sim {
   gybes: number;
   tArc: number;
   markMin: number;
-  tRound: number;
+  roundingClosestTime: number;
+  roundingCompleteTime: number;
   tFinish: number;
   finishTwa: number;
   place: number;
@@ -263,6 +436,12 @@ interface Sim {
   laying: boolean;
   locked: boolean;
   active: boolean;
+  guidance: readonly [TacticalSideGuidance, TacticalSideGuidance] | null;
+  guidanceTick: number;
+  guidancePhase: number;
+  guidanceTack: number;
+  guidanceMarkId: "windward" | "finish";
+  guidanceTwaAbs: number;
   fixes: Fix[];
   prog: ProgressSample[];
 }
@@ -293,7 +472,7 @@ function makePersonality(meta: BoatMeta, seed: number): Personality {
     twaRun: 142 + 8 * rand(),
     shiftSense: sense,
     shiftHold: 3 + 1.4 * rand(),
-    memory: 1 - Math.exp(-SIM_DT / (14 + 10 * rand())),
+    memory: 1 - simulationExp(-SIM_DT / (14 + 10 * rand())),
     laylineMargin: 3 + 7 * rand(),
     crossY: 31 + 10 * rand(),
     sideLeft: 68 - half,
@@ -326,18 +505,24 @@ function buildWind(seed: number, count: number): Wind {
   const twd = new Float64Array(count);
   const tws = new Float64Array(count);
   const dt = 1 / WIND_HZ;
-  const a1 = Math.exp(-dt / 12);
-  const a2 = Math.exp(-dt / 15);
-  const s1 = 1.2 * Math.sqrt(1 - a1 * a1);
-  const s2 = 0.26 * Math.sqrt(1 - a2 * a2);
+  const a1 = simulationExp(-dt / 12);
+  const a2 = simulationExp(-dt / 15);
+  const s1 = 1.2 * simulationSqrt(1 - a1 * a1);
+  const s2 = 0.26 * simulationSqrt(1 - a2 * a2);
   let ou1 = 0;
   let ou2 = 0;
   for (let i = 0; i < count; i++) {
     const t = T_PRESTART + i * dt;
     ou1 = ou1 * a1 + s1 * gauss(rand);
     ou2 = ou2 * a2 + s2 * gauss(rand);
-    twd[i] = 6 * Math.sin((2 * Math.PI * t) / 35) + 2.5 * Math.sin((2 * Math.PI * t) / 90 + p1) + ou1;
-    tws[i] = clamp(7.2 + 0.9 * Math.sin((2 * Math.PI * t) / 70 + p2) + ou2, 6.2, 8.7);
+    twd[i] = 6 * simulationCourseUnit((360 * t) / 35).x +
+      2.5 * simulationCourseUnit((360 * t) / 90 + p1 / DEG).x +
+      ou1;
+    tws[i] = clamp(
+      7.2 + 0.9 * simulationCourseUnit((360 * t) / 70 + p2 / DEG).x + ou2,
+      6.2,
+      8.7,
+    );
   }
   return { twd, tws };
 }
@@ -359,13 +544,16 @@ function windTwsAt(w: Wind, t: number): number {
   return w.tws[i] + (w.tws[i + 1] - w.tws[i]) * f;
 }
 
-function pushFix(b: Sim, t: number): void {
+function pushFix(b: Sim, t: number, observeFix?: SimulatorFixObserver): void {
+  observeSimulatorState(b, t, observeFix);
   b.fixes.push({
     t: q(t),
     x: q(b.x),
     y: q(b.y),
-    sog: q(b.sog),
-    cog: q(wrap360(b.cog)),
+    waterX: q(b.waterX),
+    waterY: q(b.waterY),
+    currentX: q(b.currentX),
+    currentY: q(b.currentY),
     hdg: q(wrap360(b.hdg)),
     heel: q(b.heel),
     twa: q(b.twa),
@@ -394,9 +582,11 @@ const COURSE_ARC = 2 * LEG_LENGTH + TURN_ARC;
  * crossed the line has none of it left. */
 function distanceToFinish(x: number, y: number, rounded: boolean, done: boolean): number {
   if (done) return 0;
-  const above = y - LEG_LENGTH;
-  if (above > 0) return LEG_LENGTH + TURN_ARC * (1 - Math.atan2(above, x - MARK_X) / Math.PI);
   if (rounded) return Math.max(y, 0);
+  const above = y - LEG_LENGTH;
+  if (above > 0) {
+    return LEG_LENGTH + TURN_ARC * (1 - simulationAtan2(above, x - MARK_X) / Math.PI);
+  }
   return COURSE_ARC - y;
 }
 
@@ -424,23 +614,32 @@ function legOf(b: Sim, t: number): LegName {
  * where each boat has to be at t=0, then walk the approach backwards from it
  * so the fleet arrives spread along the line, at speed, on time, without a
  * controller that could miss by a boat length. */
-function buildPrestart(b: Sim, w: Wind, ticks: number): void {
+function buildPrestart(
+  b: Sim,
+  w: Wind,
+  spec: CurrentFieldSpec,
+  ticks: number,
+  observeFix?: SimulatorFixObserver,
+): void {
   const hdg = new Float64Array(ticks);
-  const cog = new Float64Array(ticks);
-  const sog = new Float64Array(ticks);
+  const ctw = new Float64Array(ticks);
+  const stw = new Float64Array(ticks);
+  const waterX = new Float64Array(ticks);
+  const waterY = new Float64Array(ticks);
   const twa = new Float64Array(ticks);
   const px = new Float64Array(ticks);
   const py = new Float64Array(ticks);
   const gunTws = windTwsAt(w, 0);
-  const gunSpeed = polarFrac(b.p.twaBeat) * gunTws * b.p.pace * 0.97;
+  const gunSpeed = (targetBoatSpeed(FICTIONAL_ONE_DESIGN_POLAR, gunTws, b.p.twaBeat) ?? 0) * b.p.pace * 0.97;
   for (let k = 0; k < ticks; k++) {
     const t = T_PRESTART + k * SIM_DT;
     const twd = windTwdAt(w, t);
     const up = smoothstep(b.p.turnT - 1.2, b.p.turnT + 1.2, t);
     const angle = 100 + (b.p.twaBeat - 100) * up;
     hdg[k] = twd - angle;
-    twa[k] = wrapSigned(twd - hdg[k]);
-    cog[k] = hdg[k] - leeway(twa[k]);
+    const course = waterCourseFromHeading(twd, hdg[k]);
+    twa[k] = course.twa;
+    ctw[k] = course.ctw;
     /* Ten seconds is one approach and no more: the fleet is already reaching
      * along the line when the window opens, loses a little coming up to
      * close hauled, and spends what is left of it accelerating. */
@@ -452,29 +651,58 @@ function buildPrestart(b: Sim, w: Wind, ticks: number): void {
      * with it instead of leaving the fleet reaching in at yesterday's speed. */
     const reach = 0.72 * gunTws;
     const slow = 0.56 * gunTws;
-    sog[k] = reach - (reach - slow) * luff + (gunSpeed - slow) * accel;
+    stw[k] = reach - (reach - slow) * luff + (gunSpeed - slow) * accel;
+    const water = simulationVectorFromSpeedCourse(stw[k], ctw[k], { x: 0, y: 0 });
+    waterX[k] = water.x;
+    waterY[k] = water.y;
   }
   px[ticks - 1] = b.p.slot;
   py[ticks - 1] = b.p.gunY;
   for (let k = ticks - 2; k >= 0; k--) {
-    const d = sog[k + 1] * SIM_DT;
-    px[k] = px[k + 1] - d * Math.sin(cog[k + 1] * DEG);
-    py[k] = py[k + 1] - d * Math.cos(cog[k + 1] * DEG);
+    const solved = solvePrestartPosition(
+      spec,
+      { x: px[k + 1], y: py[k + 1] },
+      waterX[k],
+      waterY[k],
+      T_PRESTART + k * SIM_DT,
+      { x: 0, y: 0 },
+    );
+    px[k] = solved.x;
+    py[k] = solved.y;
   }
-  let heel = heelTarget(sog[0], windTwsAt(w, T_PRESTART), twa[0]);
-  for (let k = 0; k < ticks; k++) {
+  let heel = heelTarget(stw[0], windTwsAt(w, T_PRESTART), twa[0]);
+  const current = { x: 0, y: 0 };
+  for (let k = 0; k < ticks - 1; k++) {
     const t = T_PRESTART + k * SIM_DT;
     const tws = windTwsAt(w, t);
-    heel += (heelTarget(sog[k], tws, twa[k]) - heel) * HEEL_BLEND;
+    heel = heel + (heelTarget(stw[k], tws, twa[k]) - heel) * HEEL_BLEND;
+    sampleSeededCurrentField(spec, px[k], py[k], t, current);
+    const currentX = current.x;
+    const currentY = current.y;
+    const velocity = simulationVelocityFromComponents(
+      waterX[k],
+      waterY[k],
+      currentX,
+      currentY,
+      {},
+    );
     if (k % FIX_EVERY === 0) {
       b.x = px[k];
       b.y = py[k];
-      b.sog = sog[k];
-      b.cog = cog[k];
+      b.stw = velocity.stw;
+      b.ctw = velocity.ctw ?? 0;
+      b.waterX = velocity.waterX;
+      b.waterY = velocity.waterY;
+      b.currentX = velocity.currentX;
+      b.currentY = velocity.currentY;
+      b.groundX = velocity.groundX;
+      b.groundY = velocity.groundY;
+      b.sog = velocity.sog;
+      b.cog = velocity.cog ?? 0;
       b.hdg = hdg[k];
       b.twa = twa[k];
       b.heel = heel;
-      pushFix(b, t);
+      pushFix(b, t, observeFix);
     }
     if (k % PROGRESS_EVERY === 0) {
       b.prog.push({
@@ -486,13 +714,31 @@ function buildPrestart(b: Sim, w: Wind, ticks: number): void {
         gapSeconds: 0,
       });
     }
-    b.refTwd += (windTwdAt(w, t) - b.refTwd) * b.p.memory;
+    b.refTwd = b.refTwd + (windTwdAt(w, t) - b.refTwd) * b.p.memory;
   }
   b.x = px[ticks - 1];
   b.y = py[ticks - 1];
   b.hdg = hdg[ticks - 1];
-  b.cog = cog[ticks - 1];
-  b.sog = sog[ticks - 1];
+  b.stw = stw[ticks - 1];
+  b.ctw = ctw[ticks - 1];
+  b.waterX = waterX[ticks - 1];
+  b.waterY = waterY[ticks - 1];
+  sampleSeededCurrentField(spec, b.x, b.y, 0, current);
+  const finalCurrentX = current.x;
+  const finalCurrentY = current.y;
+  const finalVelocity = simulationVelocityFromComponents(
+    b.waterX,
+    b.waterY,
+    finalCurrentX,
+    finalCurrentY,
+    {},
+  );
+  b.currentX = finalVelocity.currentX;
+  b.currentY = finalVelocity.currentY;
+  b.groundX = finalVelocity.groundX;
+  b.groundY = finalVelocity.groundY;
+  b.sog = finalVelocity.sog;
+  b.cog = finalVelocity.cog ?? 0;
   b.twa = twa[ticks - 1];
   b.heel = heel;
 }
@@ -500,23 +746,12 @@ function buildPrestart(b: Sim, w: Wind, ticks: number): void {
 function startManeuver(b: Sim, kind: number): void {
   b.tack = -b.tack;
   b.man = kind;
-  b.manFloor = b.sog * (kind === MAN_TACK ? 0.55 : 0.85);
+  b.manFloor = b.stw * (kind === MAN_TACK ? 0.55 : 0.85);
   b.headerT = 0;
   b.wantT = 0;
   b.dirtyT = 0;
   if (kind === MAN_TACK) b.tacks++;
   else b.gybes++;
-}
-
-/* Signed metres to the right of the starboard layline: negative while a boat
- * on port still has to sail out to it, positive once it has overstood. */
-function laylineOffset(b: Sim, twd: number, markX: number, markY: number): number {
-  const h = (twd - b.p.twaBeat - leeway(b.p.twaBeat)) * DEG;
-  const ux = Math.sin(h);
-  const uy = Math.cos(h);
-  const rx = b.x - markX;
-  const ry = b.y - markY;
-  return -(ux * ry - uy * rx);
 }
 
 /* How near two boats come if neither of them changes anything, looking no
@@ -531,7 +766,9 @@ function closest(
 ): number {
   const rv2 = rvx * rvx + rvy * rvy;
   const tc = rv2 < 1e-6 ? from : clamp(-(rx * rvx + ry * rvy) / rv2, from, horizon);
-  return Math.hypot(rx + rvx * tc, ry + rvy * tc);
+  const closestX = rx + rvx * tc;
+  const closestY = ry + rvy * tc;
+  return simulationSqrt(closestX * closestX + closestY * closestY);
 }
 
 /* Where a boat is going, not where it is pointing this instant: a hull halfway
@@ -543,12 +780,12 @@ function turning(o: Sim): boolean {
 
 function predVx(o: Sim): number {
   const t = turning(o);
-  return o.sog * (t ? 0.8 : 1) * Math.sin((t ? o.desired : o.cog) * DEG);
+  return o.waterX * (t ? 0.8 : 1) + o.currentX;
 }
 
 function predVy(o: Sim): number {
   const t = turning(o);
-  return o.sog * (t ? 0.8 : 1) * Math.cos((t ? o.desired : o.cog) * DEG);
+  return o.waterY * (t ? 0.8 : 1) + o.currentY;
 }
 
 /* Boats that will go about with this one. A line of hulls that all want the
@@ -578,9 +815,14 @@ function tackTogether(b: Sim, boats: Sim[]): void {
  * it would carry through the turn: a tack costs most of it, a gybe almost
  * none, and guessing that wrong is how a manoeuvre ends up on top of somebody. */
 function laneAfterTack(b: Sim, boats: Sim[], twd: number, angle: number, keep: number): number {
-  const h = (twd + b.tack * angle) * DEG;
-  const vx = b.sog * keep * Math.sin(h);
-  const vy = b.sog * keep * Math.cos(h);
+  const course = waterCourseFromHeading(twd, twd + b.tack * angle);
+  const water = simulationVectorFromSpeedCourse(
+    b.stw * keep,
+    course.ctw,
+    { x: 0, y: 0 },
+  );
+  const vx = water.x + b.currentX;
+  const vy = water.y + b.currentY;
   let worst = 1e9;
   for (const o of boats) {
     if (o === b || !o.active) continue;
@@ -590,9 +832,14 @@ function laneAfterTack(b: Sim, boats: Sim[], twd: number, angle: number, keep: n
     let ovx: number;
     let ovy: number;
     if (queued(b, o, dx, dy)) {
-      const oh = (twd + o.tack * angle) * DEG;
-      ovx = o.sog * keep * Math.sin(oh);
-      ovy = o.sog * keep * Math.cos(oh);
+      const otherCourse = waterCourseFromHeading(twd, twd + o.tack * angle);
+      const otherWater = simulationVectorFromSpeedCourse(
+        o.stw * keep,
+        otherCourse.ctw,
+        { x: 0, y: 0 },
+      );
+      ovx = otherWater.x + o.currentX;
+      ovy = otherWater.y + o.currentY;
     } else if (o.man === 0 && o.tack === b.tack && o.phase === b.phase && b.tack < 0) {
       /* Once this tack is complete that boat is on port and owes the water,
        * and what it owes it pays by bearing away behind the transom, so it is
@@ -601,9 +848,9 @@ function laneAfterTack(b: Sim, boats: Sim[], twd: number, angle: number, keep: n
        * never tacking on the layline in front of a line of port tackers,
        * which is exactly where the tack belongs. The question left is whether
        * the duck is still there to be made. */
-      const duck = (o.cog - o.tack * AVOID_DUCK) * DEG;
-      ovx = o.sog * Math.sin(duck);
-      ovy = o.sog * Math.cos(duck);
+      const duck = simulationCourseUnit(o.cog - o.tack * AVOID_DUCK);
+      ovx = o.sog * duck.x;
+      ovy = o.sog * duck.y;
     } else {
       ovx = predVx(o);
       ovy = predVy(o);
@@ -647,7 +894,7 @@ function clampSail(b: Sim, twd: number, hdg: number): number {
       const edge = b.avoidUrg > 0 ? 32 : 29;
       const xc = crossingX(b.x, b.y, hdg);
       if (Math.abs(xc) > edge) {
-        want = Math.atan2(-(b.x - clamp(xc, -edge, edge)) / b.y, -1) / DEG;
+        want = simulationAtan2(-(b.x - clamp(xc, -edge, edge)) / b.y, -1) / DEG;
         /* Fetching the line is a bound, not an override: an alteration that
          * still lands the bow inside the marks survives it. */
         const dodge = want + wrapSigned(hdg - b.desired);
@@ -673,17 +920,19 @@ function clampSail(b: Sim, twd: number, hdg: number): number {
  * metres the offset would swing faster than the boat can turn, so the bearing
  * it was last taken on is the one that gets sailed. */
 function markAim(b: Sim, markX: number, markY: number, pass: number, out: number[]): void {
-  const dist = Math.hypot(markX - b.x, markY - b.y);
+  const dist = simulationHypot(markX - b.x, markY - b.y);
   if (dist > MARK_FREEZE) {
-    b.aimDir = Math.atan2(markX - b.x, markY - b.y) / DEG + 90;
+    b.aimDir = simulationAtan2(markX - b.x, markY - b.y) / DEG + 90;
   }
-  out[0] = markX + pass * Math.sin(b.aimDir * DEG);
-  out[1] = markY + pass * Math.cos(b.aimDir * DEG);
+  const aim = simulationCourseUnit(b.aimDir);
+  out[0] = markX + pass * aim.x;
+  out[1] = markY + pass * aim.y;
 }
 
 function crossingX(x: number, y: number, hdgDeg: number): number {
-  const sx = Math.sin(hdgDeg * DEG);
-  const sy = Math.cos(hdgDeg * DEG);
+  const unit = simulationCourseUnit(hdgDeg);
+  const sx = unit.x;
+  const sy = unit.y;
   if (sy > -0.05) return x + sx * 400;
   return x - (sx * y) / sy;
 }
@@ -691,6 +940,17 @@ function crossingX(x: number, y: number, hdgDeg: number): number {
 /* Written into, never returned: decide runs six times a tick for the whole
  * race and this is the one place it would otherwise allocate. */
 const aimOut = [0, 0];
+
+function cachedBeatLaylineOffset(b: Sim): number | null {
+  if (
+    b.guidance === null ||
+    b.guidancePhase !== b.phase ||
+    b.guidanceTack !== b.tack ||
+    b.guidanceMarkId !== "windward" ||
+    b.guidanceTwaAbs !== b.p.twaBeat
+  ) return null;
+  return -b.guidance[1].signedCrossTrackMeters;
+}
 
 function decide(
   b: Sim,
@@ -705,22 +965,22 @@ function decide(
   const free = b.man === 0 && t > 3 && t - b.tManEnd > 3;
   b.wantLay = false;
   if (b.phase === PHASE_BEAT) {
-    const dLay = laylineOffset(b, twd, markX, markY);
-    const dist = Math.hypot(b.x - markX, b.y - markY);
+    const dLay = cachedBeatLaylineOffset(b);
+    const dist = simulationHypot(b.x - markX, b.y - markY);
     /* On starboard and within what the boat can pinch back is the whole of it.
      * A hull that comes out of its tack fetching the mark from eighty metres
      * is fetching it, and holding the close hauled angle from there instead of
      * steering at the buoy walks off the layline with the next shift. The
      * tolerance is the five degrees of extra height the steering allows a
      * laying boat, which is worth more metres the further out it is. */
-    if (b.tack > 0 && dLay >= -clamp(0.07 * dist, 0, 6)) b.laying = true;
+    if (dLay !== null && b.tack > 0 && dLay >= -clamp(0.07 * dist, 0, 6)) b.laying = true;
     /* A header can put a boat below the line it was fetching on. Holding the
      * angle from there only sails it past the mark to leeward, so it goes back
      * to working the beat and comes at the mark again. */
     /* Inside thirty metres the boat is committed whatever the breeze does:
      * there is no room left to go and get the layline back, so it holds its
      * lane and takes the last few metres out of the sails. */
-    if (b.laying && dist > 30 && b.tacks < 3 && dLay < -clamp(0.22 * dist, 3, 10)) {
+    if (dLay !== null && b.laying && dist > 30 && b.tacks < 3 && dLay < -clamp(0.22 * dist, 3, 10)) {
       b.laying = false;
     }
     /* Nothing upwind of the windward mark is worth sailing to. */
@@ -742,7 +1002,7 @@ function decide(
        * short of the line there is what leaves a hull on starboard that cannot
        * fetch the buoy and has nowhere left to go and get it back. */
       const swing = (0.75 * b.sog * b.p.twaBeat) / YAW_MAX;
-      const room = dLay < b.p.laylineMargin - 2.5 * swing;
+      const room = dLay !== null && dLay < b.p.laylineMargin - 2.5 * swing;
       let want = false;
       if (shifty && b.headerT > b.p.shiftHold) want = true;
       if (shifty && b.dirtyT > 5) want = true;
@@ -755,7 +1015,7 @@ function decide(
        * that deficit, so this is the last point at which the height left is
        * still enough to do it. */
       let owed = false;
-      if (b.tack > 0 && dLay < 0 && -dLay * 0.82 >= markY - 10 - b.y) owed = true;
+      if (dLay !== null && b.tack > 0 && dLay < 0 && -dLay * 0.82 >= markY - 10 - b.y) owed = true;
       /* The turn is called before the layline, not on it. A tack is most of a
        * hundred degrees and the boat keeps making ground to windward of the
        * line for half of it, so the call goes in that much early and the hull
@@ -763,7 +1023,7 @@ function decide(
        * margin is sailed for, not saved: the breeze swings six degrees either
        * way and a boat that lands exactly on the line is below it on the next
        * header with nothing left to do about it. */
-      if (b.tack < 0 && dLay >= b.p.laylineMargin - swing) owed = true;
+      if (dLay !== null && b.tack < 0 && dLay >= b.p.laylineMargin - swing) owed = true;
       if (owed) want = true;
       /* Sailing on past the mark's own latitude on port ends with the boat
        * coming back down at the buoy from above, which is not a rounding. This
@@ -804,31 +1064,32 @@ function decide(
      * metre and a half across the course for every metre of height at the
      * beating angle and two for one cracked off, so the boat that sails a
      * little lower and faster is the one that still gets round the mark. */
-    if (b.tack < 0 && b.man === 0 && dLay < 0 && -dLay * 0.68 > markY - 12 - b.y) {
-      const h = (twd - b.p.twaBeat - leeway(b.p.twaBeat)) * DEG;
-      const ax = markX - FOOT_MARGIN * Math.sin(h);
-      const ay = markY - FOOT_MARGIN * Math.cos(h);
-      const toAim = Math.atan2(ax - b.x, ay - b.y) / DEG;
+    if (dLay !== null && b.tack < 0 && b.man === 0 && dLay < 0 && -dLay * 0.68 > markY - 12 - b.y) {
+      const h = simulationCourseUnit(waterCourseFromHeading(twd, twd - b.p.twaBeat).ctw);
+      const ax = markX - FOOT_MARGIN * h.x;
+      const ay = markY - FOOT_MARGIN * h.y;
+      const toAim = simulationAtan2(ax - b.x, ay - b.y) / DEG;
       if (wrapSigned(toAim - b.desired) * b.tack < 0) b.desired = toAim;
     }
     if (b.laying && b.man === 0) {
       markAim(b, markX, markY, MARK_PASS + b.wide, aimOut);
-      const toAim = Math.atan2(aimOut[0] - b.x, aimOut[1] - b.y) / DEG;
+      const toAim = simulationAtan2(aimOut[0] - b.x, aimOut[1] - b.y) / DEG;
       /* An overstood boat cracks off and sails fast at the mark rather than
        * holding an angle it no longer needs, and inside the last few boat
        * lengths every boat steers at the pass point whatever the breeze has
        * done to the layline since it tacked. */
-      if (dLay > 2 || dist < 45) b.desired = toAim;
+      if ((dLay !== null && dLay > 2) || dist < 45) b.desired = toAim;
       if (dist < 22) b.phase = PHASE_APPROACH;
     }
   } else if (b.phase === PHASE_APPROACH) {
     markAim(b, markX, markY, MARK_PASS + b.wide, aimOut);
     const ax = aimOut[0];
     const ay = aimOut[1];
-    b.desired = Math.atan2(ax - b.x, ay - b.y) / DEG;
-    const hx = Math.sin(b.hdg * DEG);
-    const hy = Math.cos(b.hdg * DEG);
-    const near = Math.hypot(b.x - markX, b.y - markY);
+    b.desired = simulationAtan2(ax - b.x, ay - b.y) / DEG;
+    const headingUnit = simulationCourseUnit(b.hdg);
+    const hx = headingUnit.x;
+    const hy = headingUnit.y;
+    const near = simulationHypot(b.x - markX, b.y - markY);
     /* The turn is carved around the buoy, not begun level with it: the boat
      * comes in wide and leaves close, which is the whole of a good rounding.
      * Any earlier than TURN_LEAD and the turn starts short of the mark, which
@@ -891,7 +1152,7 @@ function decide(
         /* The heading that puts the bow on the line: if the boat cannot hold
          * it on this gybe then it has to gybe, whatever its appetite for
          * gybing was, because finishing outside the marks is not finishing. */
-        const ft = wrapSigned(twd - Math.atan2(-(b.x - clamp(xc, -29, 29)) / b.y, -1) / DEG);
+        const ft = wrapSigned(twd - simulationAtan2(-(b.x - clamp(xc, -29, 29)) / b.y, -1) / DEG);
         if (ft * b.tack < 0 || Math.abs(ft) > 166) must = true;
       }
       if (want || must) b.wantT += SIM_DT;
@@ -919,7 +1180,7 @@ function stepBoat(b: Sim, t: number, twd: number, tws: number): void {
   /* Steering is rudder work and slows down with the boat, but a tack or a
    * gybe is the crew rolling the hull through the turn, and that comes round
    * at the full rate however little way is left on. */
-  const maxYaw = YAW_MAX * (b.man !== 0 ? 1 : clamp(b.sog / 5, 0.55, 1)) * SIM_DT;
+  const maxYaw = YAW_MAX * (b.man !== 0 ? 1 : clamp(b.stw / 5, 0.55, 1)) * SIM_DT;
   b.hdg = wrap360(b.hdg + clamp(err, -maxYaw, maxYaw));
   b.twa = wrapSigned(twd - b.hdg);
   /* The boom decides this one: a boat running deep gets held short of dead
@@ -932,33 +1193,54 @@ function stepBoat(b: Sim, t: number, twd: number, tws: number): void {
   /* Bad air and a crew easing to let someone cross are the same loss twice
    * over, so the boat pays the worse of them and not the product. */
   const loss = Math.max(b.dirty, 1 - b.brake);
-  let target = polarFrac(a) * tws * b.p.pace * (1 + b.noise) * (1 - loss);
+  let target = (targetBoatSpeed(FICTIONAL_ONE_DESIGN_POLAR, tws, a) ?? 0) * b.p.pace * (1 + b.noise) * (1 - loss);
   /* Without the kite drawing there is no downwind power to speak of, which is
    * what makes the hoist out of the mark worth watching. */
   if (a > 100) target *= 0.86 + 0.14 * b.kite;
   if (b.phase === PHASE_DONE) target *= 0.3;
-  target = Math.min(target, SOG_CAP);
-  b.sog += (target - b.sog) * (b.phase === PHASE_DONE ? COAST_BLEND : SPEED_BLEND);
-  if (b.man !== 0 && b.sog < b.manFloor) b.sog = b.manFloor;
+  target = Math.min(target, STW_CAP);
+  b.stw = b.stw + (target - b.stw) * (b.phase === PHASE_DONE ? COAST_BLEND : SPEED_BLEND);
+  if (b.man !== 0 && b.stw < b.manFloor) b.stw = b.manFloor;
   if (b.man !== 0 && Math.abs(wrapSigned(b.desired - b.hdg)) < 6) {
     b.man = 0;
     b.tManEnd = t;
   }
-  if (b.phase === PHASE_RUN && a > 100) b.kite = Math.min(1, b.kite + SIM_DT / 4);
-  else b.kite = Math.max(0, b.kite - SIM_DT / 3);
-  b.heel += (heelTarget(b.sog, tws, b.twa) - b.heel) * HEEL_BLEND;
-  b.cog = wrap360(b.hdg - leeway(b.twa));
-  b.x += b.sog * Math.sin(b.cog * DEG) * SIM_DT;
-  b.y += b.sog * Math.cos(b.cog * DEG) * SIM_DT;
+  if (b.phase === PHASE_RUN && a > 100) {
+    b.kite = Math.min(1, b.kite + SIM_DT / 4);
+  } else {
+    b.kite = Math.max(0, b.kite - SIM_DT / 3);
+  }
+  b.heel = b.heel + (heelTarget(b.stw, tws, b.twa) - b.heel) * HEEL_BLEND;
+  const waterCourse = waterCourseFromHeading(twd, b.hdg);
+  b.ctw = waterCourse.ctw;
+  const water = simulationVectorFromSpeedCourse(b.stw, b.ctw, { x: 0, y: 0 });
+  const velocity = simulationVelocityFromComponents(
+    water.x,
+    water.y,
+    b.currentX,
+    b.currentY,
+    {},
+  );
+  b.waterX = velocity.waterX;
+  b.waterY = velocity.waterY;
+  b.groundX = b.waterX + b.currentX;
+  b.groundY = b.waterY + b.currentY;
+  b.sog = velocity.sog;
+  b.cog = velocity.cog ?? 0;
 }
 
-export function generateRace(seed: number): RaceData {
+export function generateRace(
+  seed: number,
+  observeFix?: SimulatorFixObserver,
+  observeTick?: SimulatorTickObserver,
+): RaceData {
   const course: Course = {
     startPin: { x: -LINE_HALF, y: 0 },
     startBoat: { x: LINE_HALF, y: 0 },
     windward: { x: MARK_X, y: LEG_LENGTH },
     zoneRadius: ZONE_RADIUS,
   };
+  const currentSpec = createCurrentFieldSpec(seed, course);
   const windCount = Math.ceil((HORIZON - T_PRESTART) * WIND_HZ) + 1;
   const wind = buildWind(seed, windCount);
   const markX = course.windward.x;
@@ -971,6 +1253,14 @@ export function generateRace(seed: number): RaceData {
     x: 0,
     y: 0,
     hdg: 0,
+    stw: 0,
+    ctw: 0,
+    waterX: 0,
+    waterY: 0,
+    currentX: 0,
+    currentY: 0,
+    groundX: 0,
+    groundY: 0,
     cog: 0,
     sog: 0,
     heel: 0,
@@ -1000,7 +1290,8 @@ export function generateRace(seed: number): RaceData {
     gybes: 0,
     tArc: 0,
     markMin: 1e6,
-    tRound: 0,
+    roundingClosestTime: 0,
+    roundingCompleteTime: 0,
     tFinish: 0,
     finishTwa: 140,
     place: 0,
@@ -1009,6 +1300,12 @@ export function generateRace(seed: number): RaceData {
     laying: false,
     locked: false,
     active: true,
+    guidance: null,
+    guidanceTick: -1,
+    guidancePhase: -1,
+    guidanceTack: 0,
+    guidanceMarkId: "windward",
+    guidanceTwaAbs: 0,
     fixes: [],
     prog: [],
   }));
@@ -1029,17 +1326,17 @@ export function generateRace(seed: number): RaceData {
   }
 
   const preTicks = Math.round(-T_PRESTART * SIM_HZ) + 1;
-  for (const b of boats) buildPrestart(b, wind, preTicks);
+  for (const b of boats) buildPrestart(b, wind, currentSpec, preTicks, observeFix);
 
   const noiseRand = boats.map((b) =>
     mulberry32((hashString(b.meta.id + "pace") ^ Math.imul(seed, 0xc2b2ae35)) >>> 0),
   );
-  const noiseA = Math.exp(-SIM_DT / 8);
-  const noiseS = 0.03 * Math.sqrt(1 - noiseA * noiseA);
+  const noiseA = simulationExp(-SIM_DT / 8);
+  const noiseS = 0.03 * simulationSqrt(1 - noiseA * noiseA);
 
   const events: RaceEvent[] = [{ kind: "gun", t: 0 }];
   const results: RaceResult[] = [];
-  const maxK = Math.round((HORIZON - T_PRESTART) * SIM_HZ);
+  const maxRaceTick = Math.round(HORIZON * SIM_HZ);
   const order2 = boats.map((_, i) => i);
   /* Which boat of a pair is keeping clear holds for the length of the
    * encounter: a role that swapped every tick would leave both of them
@@ -1056,28 +1353,76 @@ export function generateRace(seed: number): RaceData {
    * coasting down with its sails eased. */
   let paceSpeed = 4;
 
-  for (let k = preTicks; k <= maxK; k++) {
-    const t = T_PRESTART + k * SIM_DT;
+  for (let raceTick = 0; raceTick <= maxRaceTick; raceTick++) {
+    const t = raceTick * SIM_DT;
     const twd = windTwdAt(wind, t);
     const tws = windTwsAt(wind, t);
 
     for (let i = 0; i < boats.length; i++) {
       const b = boats[i];
       if (!b.active) continue;
+      const current = sampleSeededCurrentField(currentSpec, b.x, b.y, t, { x: 0, y: 0 });
+      b.currentX = current.x;
+      b.currentY = current.y;
+      if (tacticalCandidateBudgetAtTick(raceTick, b.active, b.phase === PHASE_DONE) > 0) {
+        const markId = b.phase >= PHASE_RUN ? "finish" : "windward";
+        const targetTwaAbs = markId === "finish" ? b.p.twaRun : b.p.twaBeat;
+        const guidance = tacticalLaylineGuidanceForSimulator({
+          x: b.x,
+          y: b.y,
+          t,
+          markX: markId === "finish" ? 0 : markX,
+          markY: markId === "finish" ? 0 : markY,
+          twd,
+          tws,
+          currentX: b.currentX,
+          currentY: b.currentY,
+          twaAbs: targetTwaAbs,
+          pace: b.p.pace,
+        });
+        const stableGuidance = guidance.map((side) => Object.freeze({
+          ...side,
+          heading: side.heading,
+          twa: side.twa,
+          ctw: side.ctw,
+          groundX: side.groundX,
+          groundY: side.groundY,
+          signedCrossTrackMeters: side.signedCrossTrackMeters,
+          alongTrackMeters: side.alongTrackMeters,
+          etaSeconds: side.etaSeconds === null
+            ? null
+            : side.etaSeconds,
+        }));
+        b.guidance = Object.freeze(stableGuidance) as unknown as readonly [
+          TacticalSideGuidance,
+          TacticalSideGuidance,
+        ];
+        b.guidanceTick = raceTick;
+        b.guidancePhase = b.phase;
+        b.guidanceTack = b.tack;
+        b.guidanceMarkId = markId;
+        b.guidanceTwaAbs = targetTwaAbs;
+      }
       /* Bounded at a bit over two sigma: a 3 percent process is meant to make
        * boats breathe, not to hand one of them a gust nobody else got. */
       b.noise = clamp(b.noise * noiseA + noiseS * gauss(noiseRand[i]), -0.06, 0.06);
-      b.refTwd += (twd - b.refTwd) * b.p.memory;
+      b.refTwd = b.refTwd + (twd - b.refTwd) * b.p.memory;
       b.dirty = 0;
       b.avoid = 0;
       b.avoidUrg = 0;
       b.brake = 1;
       b.toGo = courseToGo(b.y, b.phase >= PHASE_RUN, b.phase === PHASE_DONE);
+      const phaseBeforeDecision = b.phase;
       decide(b, boats, t, twd, markX, markY);
+      if (!b.rounded && phaseBeforeDecision !== PHASE_RUN && b.phase === PHASE_RUN) {
+        b.rounded = true;
+        b.roundingCompleteTime = t;
+      }
     }
 
-    const wx = Math.sin(twd * DEG);
-    const wy = Math.cos(twd * DEG);
+    const windUnit = simulationCourseUnit(twd);
+    const wx = windUnit.x;
+    const wy = windUnit.y;
     for (let i = 0; i < boats.length; i++) {
       const bi = boats[i];
       if (!bi.active) continue;
@@ -1088,7 +1433,7 @@ export function generateRace(seed: number): RaceData {
         const ry = bj.y - bi.y;
         const d2 = rx * rx + ry * ry;
         if (d2 > 6400) continue;
-        const d = Math.sqrt(d2);
+        const d = simulationSqrt(d2);
 
         const along = rx * wx + ry * wy;
         const across = Math.abs(rx * wy - ry * wx);
@@ -1096,8 +1441,9 @@ export function generateRace(seed: number): RaceData {
         if (lead < SHADOW_LENGTH) {
           const halfWidth = 7 + 0.1 * lead;
           if (across < halfWidth) {
-            const shade =
-              (1 - lead / SHADOW_LENGTH) * (1 - across / halfWidth) * (lead > 4 ? 1 : lead / 4);
+            const shade = (1 - lead / SHADOW_LENGTH) *
+                (1 - across / halfWidth) *
+                (lead > 4 ? 1 : lead / 4);
             const lee = along > 0 ? bi : bj;
             lee.dirty = Math.max(lee.dirty, SHADOW_LOSS * shade);
             if (shade > 0.3 && d < SHADOW_WIDE) lee.dirtyT += SIM_DT;
@@ -1155,8 +1501,8 @@ export function generateRace(seed: number): RaceData {
             stand.avoidUrg = Math.max(stand.avoidUrg, mag * (stuck ? 1 : 0.45));
           }
           if (
-            Math.hypot(bi.x - markX, bi.y - markY) < 25 &&
-            Math.hypot(bj.x - markX, bj.y - markY) < 25 &&
+            simulationHypot(bi.x - markX, bi.y - markY) < 25 &&
+            simulationHypot(bj.x - markX, bj.y - markY) < 25 &&
             give.phase <= PHASE_ARC
           ) {
             /* No room at the mark: the boat astern takes the wide arc rather
@@ -1178,7 +1524,7 @@ export function generateRace(seed: number): RaceData {
       const rounding =
         g.phase >= PHASE_APPROACH &&
         g.phase <= PHASE_ARC &&
-        Math.hypot(g.x - markX, g.y - markY) < 16;
+        simulationHypot(g.x - markX, g.y - markY) < 16;
       const mag = rounding ? Math.min(g.avoidUrg, AVOID_DEG) : g.avoidUrg;
       /* On the layline with the mark in sight there is no room to give away
        * to leeward: whatever this boat does about the one alongside, it does
@@ -1187,15 +1533,21 @@ export function generateRace(seed: number): RaceData {
       const holdLane =
         g.laying &&
         g.phase <= PHASE_APPROACH &&
-        Math.hypot(g.x - markX, g.y - markY) < 40;
+        simulationHypot(g.x - markX, g.y - markY) < 40;
       let best = clampSail(g, twd, g.desired);
       let bestScore = -1;
       for (let c = 0; c < 3; c++) {
         const delta = c === 0 ? 0 : c === 1 ? mag : -mag;
         if (holdLane && delta * g.tack < 0) continue;
         const cand = clampSail(g, twd, g.desired + delta);
-        const cvx = g.sog * Math.sin(cand * DEG);
-        const cvy = g.sog * Math.cos(cand * DEG);
+        const candidateCourse = waterCourseFromHeading(twd, cand);
+        const candidateWater = simulationVectorFromSpeedCourse(
+          g.stw,
+          candidateCourse.ctw,
+          { x: 0, y: 0 },
+        );
+        const cvx = candidateWater.x + g.currentX;
+        const cvy = candidateWater.y + g.currentY;
         let score = 1e9;
         for (let j = 0; j < boats.length; j++) {
           if (j === i) continue;
@@ -1238,9 +1590,9 @@ export function generateRace(seed: number): RaceData {
         if (!o.active) continue;
         const dx = o.x - g.x;
         const dy = o.y - g.y;
-        const d = Math.hypot(dx, dy);
+        const d = simulationHypot(dx, dy);
         if (d > 13) continue;
-        const rel = wrapSigned(Math.atan2(dx, dy) / DEG - g.hdg);
+        const rel = wrapSigned(simulationAtan2(dx, dy) / DEG - g.hdg);
         if (Math.abs(rel) > 145) continue;
         const side = Math.abs(rel) < 10 ? -g.tack : -Math.sign(rel);
         /* Both crews are watching the gap, but the one that owes room is the
@@ -1252,85 +1604,39 @@ export function generateRace(seed: number): RaceData {
       }
       /* The buoy gets the same treatment: an inflatable mark is a thing to
        * round, not to sail over. */
-      const dm = Math.hypot(markX - g.x, markY - g.y);
+      const dm = simulationHypot(markX - g.x, markY - g.y);
       if (dm < 9 && g.phase <= PHASE_RUN) {
-        const rel = wrapSigned(Math.atan2(markX - g.x, markY - g.y) / DEG - g.hdg);
+        const rel = wrapSigned(simulationAtan2(markX - g.x, markY - g.y) / DEG - g.hdg);
         if (Math.abs(rel) < 110) push += -Math.sign(rel) * (9 - dm) * 3;
       }
-      if (push !== 0) g.avoid = clamp(g.avoid + push, -AVOID_HARD - 5, AVOID_HARD + 5);
+      if (push !== 0) {
+        g.avoid = clamp(g.avoid + push, -AVOID_HARD - 5, AVOID_HARD + 5);
+      }
     }
 
     for (const b of boats) {
-      if (!b.active) continue;
-      const prevY = b.y;
-      stepBoat(b, t, twd, tws);
-
-      /* The arc is measured to the closest hull, not to the first tick that
-       * reads as a run: a boat is still rounding while it is still closing on
-       * the buoy, whatever the kite is doing. Carried through the run leg so
-       * the minimum is taken after the boat has left the mark behind. */
-      if (b.phase >= PHASE_APPROACH && b.phase <= PHASE_RUN) {
-        const d = Math.hypot(b.x - markX, b.y - markY);
-        if (d < b.markMin) {
-          b.markMin = d;
-          b.tRound = t;
-        }
+      if (b.active) {
+        stepBoat(b, t, twd, tws);
+        observeSimulatorState(b, t, observeTick);
       }
-      /* Which side of the corner the published arc measures from. A rounding to
-       * port comes in on the buoy's right and leaves on its left, so the hull
-       * crossing the mark's own meridian above it is the moment the beat behind
-       * it stops counting and the run in front of it starts. A boat that carves
-       * the turn tight enough to bear away below the mark's own latitude before
-       * it gets across that meridian has rounded just the same, and the leg it
-       * is sailing says so: read off the quadrant alone it would count the beat
-       * all the way down the run. */
-      if (!b.rounded && b.phase >= PHASE_APPROACH) {
-        if (b.phase === PHASE_RUN || (b.y > markY && b.x < markX)) b.rounded = true;
-      }
-      if (b.phase === PHASE_RUN && prevY > 0 && b.y <= 0) {
-        const f = prevY / (prevY - b.y);
-        b.tFinish = t - SIM_DT + f * SIM_DT;
-        b.finishTwa = Math.abs(b.twa);
-        b.phase = PHASE_DONE;
-        b.locked = true;
-        crossed.push(b);
-      }
-      if (b.phase === PHASE_DONE && t > b.tFinish + RUN_OUT) b.active = false;
     }
 
-    /* Two hulls can cross inside one tick and the fleet array is not the order
-     * they crossed in. Places go on the interpolated crossing time, which is
-     * the only thing the line itself measured. */
-    if (crossed.length > 0) {
-      if (crossed.length > 1) {
-        crossed.sort((a, b) => a.tFinish - b.tFinish || a.meta.id.localeCompare(b.meta.id));
-      }
-      for (const b of crossed) {
-        finished++;
-        b.place = finished;
-        events.push({ kind: "rounding", t: q(b.tRound), boatId: b.meta.id });
-        events.push({ kind: "finish", t: q(b.tFinish), boatId: b.meta.id, rank: finished });
-        results.push({ boatId: b.meta.id, rank: finished, elapsed: q(b.tFinish) });
-      }
-      crossed.length = 0;
-    }
-
-    if (k % FIX_EVERY === 0) {
+    if (raceTick % FIX_EVERY === 0) {
       for (const b of boats) {
         if (!b.active) continue;
-        pushFix(b, t);
+        pushFix(b, t, observeFix);
         lastFixT = t;
       }
     }
 
-    if (k % PROGRESS_EVERY === 0) {
+    if (raceTick % PROGRESS_EVERY === 0) {
       for (const b of boats) {
         if (b.active) b.dtf = distanceToFinish(b.x, b.y, b.rounded, b.phase === PHASE_DONE);
       }
       order2.sort((i, j) => boats[i].dtf - boats[j].dtf || boats[i].place - boats[j].place);
       const lead = boats[order2[0]];
       if (lead.phase !== PHASE_DONE) {
-        paceSpeed = Math.max(Math.abs(lead.sog * Math.cos(lead.cog * DEG)), 1.5);
+        paceSpeed = Math.max(Math.abs(lead.groundY), 1.5);
       }
       for (let r = 0; r < order2.length; r++) {
         const b = boats[order2[r]];
@@ -1346,11 +1652,74 @@ export function generateRace(seed: number): RaceData {
       }
     }
 
-    if (finished === boats.length) {
-      let done = true;
-      for (const b of boats) if (b.active) done = false;
-      if (done) break;
+    /* A run-out boat becomes inactive only after its terminal state has been
+     * published. The terminal tick therefore has no following integration. */
+    for (const b of boats) {
+      if (b.active && b.phase === PHASE_DONE && t > b.tFinish + RUN_OUT) b.active = false;
     }
+    if (finished === boats.length && boats.every((boat) => !boat.active)) break;
+    if (raceTick === maxRaceTick) break;
+
+    for (const b of boats) {
+      if (!b.active) continue;
+      const from = { x: b.x, y: b.y };
+      const to = advancePositionOnTick(
+        from,
+        b.groundX,
+        b.groundY,
+        { x: 0, y: 0 },
+      );
+
+      if (b.phase >= PHASE_APPROACH && b.phase <= PHASE_RUN) {
+        const passage = closestPassageOnSegment(from, to, course.windward, t);
+        if (
+          passage.distance < b.markMin ||
+          (passage.distance === b.markMin && passage.t < b.roundingClosestTime)
+        ) {
+          b.markMin = passage.distance;
+          b.roundingClosestTime = passage.t;
+        }
+      }
+
+      if (!b.rounded && b.phase >= PHASE_APPROACH && b.phase < PHASE_RUN) {
+        const completion = roundingCompletionOnSegment(from, to, course.windward, t);
+        if (completion !== null) {
+          b.rounded = true;
+          b.roundingCompleteTime = completion.t;
+        }
+      }
+
+      if (b.phase === PHASE_RUN) {
+        const finish = finishCrossingOnSegment(from, to, t);
+        if (finish !== null) {
+          b.tFinish = finish.t;
+          b.finishTwa = Math.abs(b.twa);
+          b.phase = PHASE_DONE;
+          b.locked = true;
+          crossed.push(b);
+        }
+      }
+
+      b.x = to.x;
+      b.y = to.y;
+    }
+
+    /* Two hulls can cross inside one tick and the fleet array is not the order
+     * they crossed in. Places go on the unrounded crossing time. */
+    if (crossed.length > 0) {
+      if (crossed.length > 1) {
+        crossed.sort((a, b) => a.tFinish - b.tFinish || a.meta.id.localeCompare(b.meta.id));
+      }
+      for (const b of crossed) {
+        finished++;
+        b.place = finished;
+        events.push({ kind: "rounding", t: q(b.roundingClosestTime), boatId: b.meta.id });
+        events.push({ kind: "finish", t: q(b.tFinish), boatId: b.meta.id, rank: finished });
+        results.push({ boatId: b.meta.id, rank: finished, elapsed: q(b.tFinish) });
+      }
+      crossed.length = 0;
+    }
+
   }
 
   const fixes: Record<string, Fix[]> = {};
@@ -1381,6 +1750,7 @@ export function generateRace(seed: number): RaceData {
     tMin: T_PRESTART,
     tMax: q(tMax),
     course,
+    environment: { current: currentSpec },
     wind: windOut,
     boats: FLEET.map((m) => ({ ...m })),
     fixes,

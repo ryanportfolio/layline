@@ -75,6 +75,7 @@ export default async function LaylineRacesPage({
   const initialTheme = storedTheme(cookieStore.get("layline-races-theme-v1")?.value);
   const race = raceFor(selectedId);
   if (race === null) throw new Error(`missing race ${selectedId}`);
+  const initialRace = Object.freeze({ id: selectedId, seed: race.seed });
   const fleet = new Map(race.boats.map((boat) => [boat.id, boat]));
 
   const rows: RaceRow[] = RACES.map((meta) => {
@@ -113,14 +114,14 @@ export default async function LaylineRacesPage({
 
       {/* Three panes, three ways in. Each link parks in the same corner and
           only the focused one is on screen, so the row costs no space. */}
-      <a className={layline.skip} href="#race-list">
-        Skip to the race list
+      <a className={layline.skip} href="#race-list-toggle">
+        Skip to the race picker
       </a>
       <a className={layline.skip} href="#replay-console">
         Skip to the replay console
       </a>
-      <a className={layline.skip} href="#race-analyst">
-        Skip to the analyst
+      <a className={layline.skip} href="#race-analyst-toggle">
+        Skip to the debrief
       </a>
 
       <div className={layline.prototypeBar}>
@@ -143,7 +144,7 @@ export default async function LaylineRacesPage({
       </div>
 
       <RaceWorkspace
-        initialRaceId={selectedId}
+        initialRace={initialRace}
         rows={rows}
         initialPreferences={initialPreferences}
         analystOffline={
@@ -153,7 +154,7 @@ export default async function LaylineRacesPage({
         <div className={layline.fallback}>
           <figure className={layline.chartFigure}>
             <TrackChart race={race} />
-            <figcaption className={layline.caption}>
+            <figcaption className={layline.caption} data-analysis-layer-caption="tracks">
               Every track, sampled once a second through the same evaluator the replay reads
             </figcaption>
           </figure>

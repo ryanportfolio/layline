@@ -17,7 +17,7 @@ import { boatState, detectManeuvers, runTool, standingsAt } from "../src/lib/lay
 import { maneuversOf } from "../src/lib/layline/analytics";
 import { knots } from "../src/lib/layline/format";
 import { vmgOf as dockVmg } from "../src/components/layline/hud/live";
-import { poseAt } from "../src/lib/layline/interpolate";
+import { createPose, poseAt, windAt } from "../src/lib/layline/interpolate";
 import type { Pose } from "../src/lib/layline/types";
 import { standingsAt as hudStandings } from "../src/lib/layline/interpolate";
 import { POST } from "../src/app/api/layline/analyst/route";
@@ -104,15 +104,22 @@ test("the analyst and the timeline markers report one set of maneuvers", () => {
 
 test("boat_state reports the dock's VMG and the strip's speed to the mark", () => {
   const race = generateRace(RACE_SEED);
-  const pose: Pose = { x: 0, y: 0, hdg: 0, heel: 0, twa: 0, sog: 0, cog: 0, kite: 0 };
+  const pose: Pose = createPose();
+  const wind = { t: 0, twd: 0, tws: 0 };
   let sawRun = false;
   for (let t = race.tMin; t <= race.tMax; t += 0.25) {
     const state = boatState(race, "usa", t);
     assert.ok(!("error" in state));
 
     /* The tile's number, computed by the dock's own function on the same fix. */
-    poseAt(race, "usa", t, "raw", pose);
-    assert.equal(state.vmgKnots, knots(dockVmg(pose)), `VMG disagrees with the dock at t=${t}`);
+    const fix = race.fixes.usa.reduce((nearest, candidate) =>
+      Math.abs(candidate.t - t) < Math.abs(nearest.t - t) ? candidate : nearest,
+    );
+    poseAt(race, "usa", fix.t, "smooth", pose);
+    windAt(race, fix.t, wind);
+    const dock = dockVmg(pose, wind.twd);
+    assert.ok(dock !== null);
+    assert.equal(state.vmgKnots, knots(dock), `VMG disagrees with the dock at t=${t}`);
 
     if (state.leg === "beat" || state.leg === "run") {
       assert.notEqual(state.toMarkKnots, null, `no speed to the mark on the ${state.leg} at t=${t}`);
@@ -272,7 +279,7 @@ test("live mode normalizes a paragraph before it reaches the SSE stream", async 
     );
 
   try {
-    const res = await post({ messages: [{ role: "user", content: "How did USA 4 take the lead" }] });
+    const res = await post({ messages: [{ role: "user", content: "How did JPN 18 take the lead" }] });
     assert.equal(res.status, 200);
     const answer = (await res.text())
       .split("\n")

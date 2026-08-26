@@ -17,6 +17,8 @@
  * through exactly one conversion.
  */
 
+import type { CurrentFieldSpec } from "./current";
+
 export const FIX_HZ = 4;
 export const SIM_HZ = 20;
 export const WIND_HZ = 1;
@@ -41,8 +43,10 @@ export interface Fix {
   t: number; // s relative to the gun (negative during the prestart)
   x: number;
   y: number;
-  sog: number; // m/s over ground
-  cog: number; // deg, course frame
+  waterX: number; // m/s through water, course-frame x
+  waterY: number; // m/s through water, course-frame y
+  currentX: number; // m/s seeded current, course-frame x
+  currentY: number; // m/s seeded current, course-frame y
   hdg: number; // deg, course frame
   heel: number; // deg, signed
   twa: number; // deg, signed
@@ -96,6 +100,9 @@ export interface RaceData {
   tMin: number; // first fix time (start of the prestart window)
   tMax: number; // last fix time (a beat after the final finisher)
   course: Course;
+  environment: {
+    current: CurrentFieldSpec;
+  };
   wind: WindSample[]; // WIND_HZ
   boats: BoatMeta[];
   fixes: Record<string, Fix[]>; // per boat id, FIX_HZ
@@ -111,9 +118,44 @@ export interface Pose {
   hdg: number;
   heel: number;
   twa: number;
-  sog: number;
-  cog: number;
   kite: number;
+  waterX: number;
+  waterY: number;
+  currentX: number;
+  currentY: number;
+  stw: number;
+  ctw: number | null;
+  currentDrift: number;
+  currentSet: number | null;
+  groundX: number;
+  groundY: number;
+  sog: number;
+  cog: number | null;
+  telemetryProvenance: "recorded-fix" | "reconstructed-from-fixes";
+}
+
+/* One audit reading at one replay instant. The fix references point straight
+ * into RaceData. Both poses are absent when the selected fix series is absent
+ * or empty, so a consumer cannot mistake an old caller buffer for current
+ * telemetry. `u` is the clock's derived position between the two measured
+ * fixes. At an exact fix or either series boundary, both references name that
+ * fix and u is zero. */
+export interface TelemetryTruth {
+  t: number;
+  beforeIndex: number;
+  afterIndex: number;
+  before: Fix | null;
+  after: Fix | null;
+  u: number;
+  raw: Pose | null;
+  reconstructed: Pose | null;
+}
+
+/** Half-open measured-fix range selected around one truth reading. */
+export interface TelemetryFixWindow {
+  start: number;
+  end: number;
+  count: number;
 }
 
 export type ReplayMode = "smooth" | "raw";

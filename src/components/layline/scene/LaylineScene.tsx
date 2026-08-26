@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { NeutralToneMapping } from "three";
 import type { RaceData } from "@/lib/layline/types";
+import type { LayerVisibility } from "@/lib/layline/analysis-state";
 import { renderStats, resetRenderStats, useReplay } from "../store";
 import {
   requestSceneFrame,
@@ -16,26 +17,21 @@ import { BoatPicker } from "./BoatPicker";
 import { BoatTracks } from "./BoatTracks";
 import { CameraRigs } from "./CameraRigs";
 import { CourseGraphics } from "./CourseGraphics";
+import { CurrentField } from "./CurrentField";
 import { Fleet } from "./Fleet";
 import { SKY_HORIZON } from "./sky";
 import { Water } from "./Water";
 import { SkyDome } from "./SkyDome";
 import { WakeTrails } from "./WakeTrails";
 
-/* The clock lives here and nowhere else. Nothing outside a drawn frame moves
- * time, so a frozen page holds the instant it was frozen at.
- *
- * It also settles, first thing in the frame, whether this frame is going to be
+/* The shared replay clock lives above the optional renderer so the SVG path
+ * can play too. This frame gate settles whether the current scene frame is
  * drawn. The governor below and the render at the bottom both answer to that
  * one verdict rather than deciding for themselves, so a frame cannot be half
  * skipped: the governor must not resize a buffer nobody is about to fill. */
 function Clock() {
-  useFrame((state, delta) => {
+  useFrame((state) => {
     const replay = useReplay.getState();
-    if (replay.playing && !replay.frozen) {
-      replay.advance(Math.min(delta, 0.25) * replay.rate);
-    }
-
     /* A resized drawing buffer is a cleared drawing buffer, and the governor
      * resizes it from inside this same loop, so the comparison is made before
      * the verdict rather than after it. */
@@ -199,7 +195,8 @@ function DemandBridge() {
           state.t !== previous.t ||
           state.rig !== previous.rig ||
           state.mode !== previous.mode ||
-          state.followId !== previous.followId
+          state.followId !== previous.followId ||
+          state.truthMode !== previous.truthMode
         ) {
           stamp.current += FROZEN_STEP;
           advance(stamp.current);
@@ -301,6 +298,7 @@ function RenderGate() {
           state.rig !== previous.rig ||
           state.mode !== previous.mode ||
           state.followId !== previous.followId ||
+          state.truthMode !== previous.truthMode ||
           state.chart2d !== previous.chart2d ||
           state.playing !== previous.playing ||
           state.frozen !== previous.frozen ||
@@ -356,7 +354,13 @@ function RenderGate() {
   return null;
 }
 
-export function LaylineScene({ race }: { race: RaceData }) {
+export function LaylineScene({
+  race,
+  layers,
+}: {
+  race: RaceData;
+  layers: LayerVisibility;
+}) {
   const frozen = useReplay((state) => state.frozen);
 
   /* The gate is one per document and outlives every canvas mounted into it,
@@ -406,10 +410,15 @@ export function LaylineScene({ race }: { race: RaceData }) {
       <color attach="background" args={[SKY_HORIZON]} />
       <SkyDome />
       <Water race={race} />
-      <CourseGraphics race={race} />
+      <CurrentField race={race} visible={layers.current} />
+      <CourseGraphics race={race} showLaylines={layers.laylines} />
       <Fleet race={race} />
       <WakeTrails race={race} />
-      <BoatTracks race={race} />
+      <BoatTracks
+        race={race}
+        showTracks={layers.tracks}
+        showRawFixes={layers["raw-fixes"]}
+      />
       <CameraRigs race={race} />
       <BoatLabels race={race} />
       <BoatPicker race={race} />

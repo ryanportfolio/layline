@@ -249,8 +249,8 @@ const AnalystBody = memo(function AnalystBody({
  * `rail` is the same conversation in a 380px column beside the viewer on
  * /races. It drops every part of that dressing and takes its
  * suggested questions from the loaded race in the registry rather than from the
- * shipped race's three, because a question naming USA 4 is only true of the
- * race USA 4 sailed. Everything below the chips is the same markup in both.
+ * shipped race's three, because a question naming one race's boat need not be
+ * true of another race. Everything below the chips is the same markup in both.
  */
 export function AnalystSection({
   variant = "story",
@@ -336,13 +336,12 @@ export function AnalystSection({
       .filter((boat): boat is BoatMeta => boat !== undefined);
   }, []);
 
-  /* The event times the card glyphs draw between: USA 4's beat runs from the
-   * gun to its rounding, JPN 18's run from its rounding to its finish. Read
+  /* The event times the card glyphs draw between: JPN 18's beat runs from the
+   * gun to its rounding, then its run continues to its finish. Read
    * from the seeded events so a data change redraws the cards by itself. */
   const eventMarks = useMemo(() => {
     const events = raceData().events;
     return {
-      usaRounding: events.find((event) => event.kind === "rounding" && event.boatId === "usa"),
       jpnRounding: events.find((event) => event.kind === "rounding" && event.boatId === "jpn"),
       jpnFinish: events.find((event) => event.kind === "finish" && event.boatId === "jpn"),
     };
@@ -665,10 +664,10 @@ export function AnalystSection({
                         <TrackGlyph boatId={null} from={0} to={0} hue="var(--wind)" />
                       ) : index === 1 ? (
                         <TrackGlyph
-                          boatId="usa"
+                          boatId="jpn"
                           from={0}
-                          to={eventMarks.usaRounding?.t ?? 0}
-                          hue={fleet.get("usa")?.hue ?? "var(--wind)"}
+                          to={eventMarks.jpnRounding?.t ?? 0}
+                          hue={fleet.get("jpn")?.hue ?? "var(--wind)"}
                         />
                       ) : (
                         <TrackGlyph
@@ -685,7 +684,7 @@ export function AnalystSection({
                         {index === 0
                           ? `Prestart · Gun ${clock(0)}`
                           : index === 1
-                            ? `${fleet.get("usa")?.sail ?? ""} · The beat`
+                            ? `${fleet.get("jpn")?.sail ?? ""} · The beat`
                             : `${fleet.get("jpn")?.sail ?? ""} · The run`}
                       </span>
                       <span className={styles.cardQuestion}>{question}</span>

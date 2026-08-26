@@ -13,9 +13,14 @@ import {
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { AnalystSection } from "@/components/layline/analyst/AnalystSection";
-import { LaylineApp } from "@/components/layline/LaylineApp";
-import { pointAtRace, useReplay } from "@/components/layline/store";
+import {
+  LaylineApp,
+  type InitialRaceAuthority,
+} from "@/components/layline/LaylineApp";
+import { pointAtRace, raceData, useReplay } from "@/components/layline/store";
 import { raceMeta } from "@/lib/layline/races";
+import { createInspectionPlayingCadenceBudget } from "@/lib/layline/surfaces";
+import { RaceSidebarStatus } from "./RaceSidebarStatus";
 import styles from "./races.module.css";
 import {
   ANALYST_MAX,
@@ -26,9 +31,12 @@ import {
   WORKSPACE_STORAGE_KEY,
   clampPaneWidth,
   defaultPaneWidth,
+  hydrateWorkspacePreferences,
+  libraryOpenFromPreferences,
   raceMatchesSearch,
   sanitizeWorkspacePreferences,
   sortPinnedRows,
+  toggleLibraryPreference,
   type PaneSide,
   type WorkspacePreferences,
 } from "./workspaceState";
@@ -194,6 +202,7 @@ function RaceListRow({
   onSelect,
   onPin,
   onArchive,
+  status,
 }: {
   row: RaceRow;
   current: boolean;
@@ -202,6 +211,7 @@ function RaceListRow({
   onSelect: () => void;
   onPin: () => void;
   onArchive: () => void;
+  status?: ReactNode;
 }) {
   return (
     <li className={styles.rowShell} data-current={current ? "true" : undefined}>
@@ -239,6 +249,7 @@ function RaceListRow({
           {archived ? "Restore" : "Archive"}
         </button>
       </span>
+      {status}
     </li>
   );
 }
@@ -264,13 +275,13 @@ function RaceListRow({
  * the wrong one.
  */
 export function RaceWorkspace({
-  initialRaceId,
+  initialRace,
   rows,
   initialPreferences,
   analystOffline = false,
   children,
 }: {
-  initialRaceId: string;
+  initialRace: InitialRaceAuthority;
   rows: readonly RaceRow[];
   initialPreferences: WorkspacePreferences;
   /* The server knows whether a key or the mock is configured; the client
@@ -279,20 +290,32 @@ export function RaceWorkspace({
   analystOffline?: boolean;
   children: ReactNode;
 }) {
+  const initialRaceId = initialRace.id;
   useState(() => {
-    if (typeof window !== "undefined") pointAtRace(initialRaceId);
+    if (typeof window !== "undefined") pointAtRace(initialRace.id);
     return null;
   });
+
+  /* Query-driven race changes preserve this workspace while key={raceId}
+   * intentionally remounts the race viewer. The shared budget carries only
+   * an integer replay second across those child remounts, never RaceData.
+   * A full workspace remount gets a new budget and may perform its first trace. */
+  const [inspectionCadenceBudget] = useState(
+    () => createInspectionPlayingCadenceBudget(),
+  );
 
   const router = useRouter();
   const pathname = usePathname();
   const storeRaceId = useReplay((state) => state.raceId);
+  const briefDone = useReplay((state) => state.briefDone);
   const [mounted, setMounted] = useState(false);
+  const [pendingRaceId, setPendingRaceId] = useState<string | null>(null);
   const validIds = useMemo(() => new Set(rows.map((row) => row.id)), [rows]);
   const initialPreferencesRef = useRef(initialPreferences);
   const [preferences, setPreferences] = useState(() =>
     sanitizeWorkspacePreferences(initialPreferences, validIds),
   );
+  const libraryOpen = libraryOpenFromPreferences(preferences);
   const [storageReady, setStorageReady] = useState(false);
   const loadedPreferences = useRef(false);
   const [query, setQuery] = useState("");
@@ -303,7 +326,7 @@ export function RaceWorkspace({
   );
   const workspaceRef = useRef<HTMLElement>(null);
   const libraryRef = useRef<HTMLElement>(null);
-  const analystRef = useRef<HTMLDivElement>(null);
+  const analystRef = useRef<HTMLElement>(null);
   const draggedPane = useRef<"rail" | "analyst" | null>(null);
   const [measuredWidths, setMeasuredWidths] = useState({
     rail: initialPreferences.railWidth ?? defaultPaneWidth("rail", 1600),
@@ -326,13 +349,17 @@ export function RaceWorkspace({
   useEffect(() => {
     if (loadedPreferences.current) return;
     loadedPreferences.current = true;
-    let next = sanitizeWorkspacePreferences(initialPreferencesRef.current, validIds);
+    let localRaw: string | null | undefined;
     try {
-      const raw = window.localStorage.getItem(WORKSPACE_STORAGE_KEY);
-      if (raw !== null) next = sanitizeWorkspacePreferences(JSON.parse(raw), validIds);
+      localRaw = window.localStorage.getItem(WORKSPACE_STORAGE_KEY);
     } catch {
-      /* Keep the server copy when storage is unavailable or malformed. */
+      localRaw = undefined;
     }
+    const next = hydrateWorkspacePreferences(
+      initialPreferencesRef.current,
+      localRaw,
+      validIds,
+    );
     setPreferences(next);
     setStorageReady(true);
   }, [validIds]);
@@ -370,11 +397,18 @@ export function RaceWorkspace({
     return () => observer.disconnect();
   }, [preferences.railCollapsed]);
 
+  const [analystOpen, setAnalystOpen] = useState(false);
+  /* Mount the analyst on first use, then keep it alive while its drawer is
+   * closed. A question thread and an in-flight answer belong to the selected
+   * race, not to whether its panel is taking width this moment. */
+  const [analystReady, setAnalystReady] = useState(false);
+
   /* Also the back button: a navigation changes the prop, and the store follows
    * it. Selecting a race the store already holds is a no-op, so the mount pass
    * costs nothing. */
   useEffect(() => {
     useReplay.getState().selectRace(initialRaceId);
+    setPendingRaceId(null);
     setMounted(true);
   }, [initialRaceId]);
 
@@ -416,6 +450,7 @@ export function RaceWorkspace({
    * back to, and the history would fill with one entry per glance. */
   const select = (id: string) => {
     if (id === raceId) return;
+    setPendingRaceId(id);
     router.replace(`${pathname}?race=${id}`, { scroll: false });
   };
 
@@ -596,8 +631,9 @@ export function RaceWorkspace({
   };
 
   const toggleRail = () => {
-    const railCollapsed = !preferences.railCollapsed;
-    setPreferences((current) => ({ ...current, railCollapsed }));
+    const next = toggleLibraryPreference(preferences);
+    setPreferences(next);
+    const railCollapsed = next.railCollapsed;
     setAnnouncement(`Race list ${railCollapsed ? "collapsed" : "restored"}`);
   };
 
@@ -664,18 +700,26 @@ export function RaceWorkspace({
     emptyMainCopy = "Every active race is pinned";
   }
 
-  const renderRow = (row: RaceRow, inArchive = false) => (
-    <RaceListRow
+  const renderRow = (row: RaceRow, inArchive = false) => {
+    const current = row.id === raceId;
+    return (
+      <RaceListRow
       key={row.id}
       row={row}
-      current={row.id === raceId}
+      current={current}
       pinned={pinned.has(row.id)}
       archived={inArchive}
       onSelect={() => select(row.id)}
       onPin={() => togglePin(row.id)}
       onArchive={() => toggleArchive(row.id)}
+      status={
+        current && briefDone && pendingRaceId === null && storeRaceId === initialRaceId
+          ? <RaceSidebarStatus race={raceData()} />
+          : null
+      }
     />
-  );
+    );
+  };
 
   return (
     <main
@@ -684,27 +728,38 @@ export function RaceWorkspace({
       style={workspaceStyle}
       data-rail-side={preferences.railSide}
       data-rail-collapsed={preferences.railCollapsed ? "true" : "false"}
+      data-library-open={libraryOpen}
+      data-analyst-open={analystOpen}
     >
       <span className={styles.srOnly} aria-live="polite">
         {announcement}
       </span>
       <button
+        id="race-list-toggle"
         type="button"
         className={styles.panelToggle}
+        aria-controls="race-library-panel"
+        aria-expanded={libraryOpen}
         aria-label={preferences.railCollapsed ? "Restore race list" : "Collapse race list"}
         onClick={toggleRail}
       >
         <PanelToggleIcon action={preferences.railCollapsed ? "restore" : "collapse"} />
       </button>
-      <section
+      <aside
         ref={libraryRef}
         id="race-list"
-        className={styles.library}
-        aria-labelledby="race-list-heading"
+        className={styles.libraryPane}
+        aria-label="Race library"
         tabIndex={-1}
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => dropPane(sideFor("rail"), event)}
       >
+        <section
+          id="race-library-panel"
+          className={`${styles.drawerBody} ${styles.library}`}
+          aria-labelledby="race-list-heading"
+          hidden={!libraryOpen}
+        >
         <div
           className={`${styles.paneHeader} ${styles.railHeader}`}
           draggable
@@ -799,6 +854,7 @@ export function RaceWorkspace({
           )}
         </details>
       </section>
+      </aside>
 
       {separator("left")}
 
@@ -812,14 +868,19 @@ export function RaceWorkspace({
       >
         <LaylineApp
           key={raceId}
+          initialRace={initialRace}
+          useInitialRace={!mounted}
           venue={venue}
           autoplay="immediate"
           boot="sea"
+          inspectionCadenceBudget={inspectionCadenceBudget}
           bootBrief={
             meta === undefined
               ? undefined
               : { name: meta.name, venue: meta.venue, dateLabel: meta.dateLabel }
           }
+          comparison
+          analysisWorkspaces
         >
           {children}
         </LaylineApp>
@@ -830,14 +891,46 @@ export function RaceWorkspace({
       {/* Remounted with the race. The thread belongs to the race it was asked
           about, and the unmount aborts an answer still streaming for the race
           nobody is watching any more. */}
-      <div
+      <aside
         ref={analystRef}
         id="race-analyst"
-        className={styles.analyst}
+        className={styles.analystPane}
+        aria-label="Race debrief"
         tabIndex={-1}
+        draggable
+        data-pane-drag-handle
+        onDragStart={(event) => startPaneDrag("analyst", event)}
+        onDragEnd={() => {
+          draggedPane.current = null;
+        }}
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => dropPane(sideFor("analyst"), event)}
       >
+        <div className={styles.paneBar}>
+          <button
+            id="race-analyst-toggle"
+            type="button"
+            className={styles.paneToggle}
+            aria-controls="race-debrief-panel"
+            aria-expanded={analystOpen}
+            aria-label={analystOpen ? "Close debrief" : "Open debrief"}
+            onClick={() => {
+              if (!analystOpen) setAnalystReady(true);
+              setAnalystOpen((open) => !open);
+            }}
+          >
+            <span className={styles.paneLabel}>Debrief</span>
+            <span className={styles.paneArrow} aria-hidden="true">
+              {analystOpen ? "›" : "‹"}
+            </span>
+          </button>
+          {paneMoveButton("analyst")}
+        </div>
+        <div
+          id="race-debrief-panel"
+          className={`${styles.drawerBody} ${styles.analyst}`}
+          hidden={!analystOpen}
+        >
         {analystOffline ? (
           <div className={styles.analystOffline}>
             <div
@@ -857,24 +950,13 @@ export function RaceWorkspace({
               It answers when a model key or the mock mode is configured
             </p>
           </div>
-        ) : mounted ? (
-          <AnalystSection
-            key={raceId}
-            variant="rail"
-            railHeaderProps={{
-              draggable: true,
-              "data-pane-drag-handle": "",
-              onDragStart: (event) => startPaneDrag("analyst", event),
-              onDragEnd: () => {
-                draggedPane.current = null;
-              },
-            }}
-            railHeaderControls={paneMoveButton("analyst")}
-          />
+        ) : mounted && analystReady ? (
+          <AnalystSection key={raceId} variant="rail" />
         ) : (
           <div className={styles.analystHold} aria-hidden="true" />
         )}
       </div>
+      </aside>
     </main>
   );
 }

@@ -7,7 +7,7 @@
  * The course frame puts +y up the beat, so the drawing negates y to get the
  * screen's downward axis. Everything else is metres, one to one.
  */
-import { poseAt } from "@/lib/layline/interpolate";
+import { createPose, poseAt } from "@/lib/layline/interpolate";
 import type { BoatMeta, Pose, RaceData } from "@/lib/layline/types";
 
 export const SAMPLE_STEP = 1; // s between samples, the chart's own frame rate
@@ -31,7 +31,7 @@ export interface ChartFrame {
 }
 
 function newPose(): Pose {
-  return { x: 0, y: 0, hdg: 0, heel: 0, twa: 0, sog: 0, cog: 0, kite: 0 };
+  return createPose();
 }
 
 function sampleTrack(race: RaceData, boatId: string, pose: Pose): ChartTrack {

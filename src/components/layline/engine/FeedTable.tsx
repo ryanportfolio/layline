@@ -3,6 +3,7 @@
 import clsx from "clsx";
 import { useEffect, useRef } from "react";
 import type { Fix } from "@/lib/layline/types";
+import { velocityFromComponents } from "@/lib/layline/velocity";
 import { BENCH_BOAT, fixIndexAt, fmt1, fmt2 } from "./benchData";
 import { useLabClock } from "./clock";
 import styles from "./engine.module.css";
@@ -16,12 +17,13 @@ import styles from "./engine.module.css";
 const ROWS = 6;
 
 function cells(fix: Fix): string[] {
+  const velocity = velocityFromComponents(fix.waterX, fix.waterY, fix.currentX, fix.currentY, {});
   return [
     fmt2(fix.t),
     fmt2(fix.x),
     fmt2(fix.y),
-    fmt2(fix.sog),
-    fmt1(fix.cog),
+    fmt2(velocity.sog),
+    velocity.cog === null ? "-" : fmt1(velocity.cog),
     fmt1(fix.hdg),
     fmt1(fix.twa),
   ];

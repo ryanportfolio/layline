@@ -335,15 +335,14 @@
 
 /* Hue map assumes the current SUGGESTED_QUESTIONS order in protocol.ts:
    card 1 asks about the start (the line before the gun is amber by the page
-   palette contract), card 2 names USA 4 in its own text, card 3's answer boat
-   is JPN 18, the fastest downwind boat by VMG in this race's data. A boat is
+   palette contract), cards 2 and 3 both name JPN 18 in the default race. A boat is
    the same colour everywhere it appears. */
 .suggestionList li:nth-child(1) .suggestion {
   --card-hue: var(--wind);
 }
 
 .suggestionList li:nth-child(2) .suggestion {
-  --card-hue: var(--hue-usa);
+  --card-hue: var(--hue-jpn);
 }
 
 .suggestionList li:nth-child(3) .suggestion {

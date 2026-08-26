@@ -14,7 +14,7 @@ import {
   Vector2,
   type InstancedMesh,
 } from "three";
-import { poseAt } from "@/lib/layline/interpolate";
+import { createPose, poseAt } from "@/lib/layline/interpolate";
 import { hashString, mulberry32 } from "@/lib/prng";
 import type { Pose, RaceData, ReplayMode } from "@/lib/layline/types";
 import { useReplay } from "../store";
@@ -433,7 +433,7 @@ function advance(
 }
 
 function newPose(): Pose {
-  return { x: 0, y: 0, hdg: 0, heel: 0, twa: 0, sog: 0, cog: 0, kite: 0 };
+  return createPose();
 }
 
 /**

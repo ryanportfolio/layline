@@ -14,6 +14,7 @@ import {
 import { poseAt } from "@/lib/layline/interpolate";
 import { FIX_HZ, SIM_HZ } from "@/lib/layline/types";
 import type { Fix, Pose } from "@/lib/layline/types";
+import { velocityFromComponents } from "@/lib/layline/velocity";
 import {
   BENCH_BOAT,
   TANGENT_SECONDS,
@@ -79,8 +80,11 @@ function segmentFrame(fixes: Fix[]): Frame {
     see(fix.x, fix.y);
     /* The tangent arrows leave the track at the ends of the window, so the
      * box has to hold where they point as well as where the boat is. */
-    const reach = fix.sog * TANGENT_SECONDS;
-    see(fix.x + reach * Math.sin(fix.cog * DEG), fix.y + reach * Math.cos(fix.cog * DEG));
+    const velocity = velocityFromComponents(fix.waterX, fix.waterY, fix.currentX, fix.currentY, {});
+    see(
+      fix.x + velocity.groundX * TANGENT_SECONDS,
+      fix.y + velocity.groundY * TANGENT_SECONDS,
+    );
   }
   const along = maxAlong - minAlong;
   const scale = along > 0 ? (FIGURE_WIDTH - PAD * 2) / along : 10;
@@ -102,8 +106,19 @@ function write(node: Element | null, name: string, value: string): void {
   if (node !== null && node.getAttribute(name) !== value) node.setAttribute(name, value);
 }
 
+/* And a changed reading mutates the text node it already has: `textContent =`
+ * removes and re-inserts the node, which the route's root-anchored :has()
+ * scrollbar gate answers with a document-wide restyle. Same body as the HUD's
+ * setText in hud/live.ts. */
 function print(node: HTMLElement | null, value: string): void {
-  if (node !== null && node.textContent !== value) node.textContent = value;
+  if (node === null) return;
+  const first = node.firstChild;
+  if (first !== null && first === node.lastChild && first.nodeType === 3) {
+    const data = first as CharacterData;
+    if (data.data !== value) data.data = value;
+    return;
+  }
+  if (node.textContent !== value) node.textContent = value;
 }
 
 function place(node: SVGGElement | null, frame: Frame, pose: Pose): void {
@@ -364,17 +379,17 @@ export function CameraTwo() {
           `M0 0H${fmt1(reach)}M${fmt1(reach)} 0L${fmt1(reach - 9)} -4L${fmt1(reach - 9)} 4Z`,
         );
       }
-      if (cogRef.current !== null) cogRef.current.textContent = fmt1(pose.cog);
+      print(cogRef.current, pose.cog === null ? "-" : fmt1(pose.cog));
     });
   }, [clock, race, bench, frame]);
 
   const tangentOf = useCallback(
     (fix: Fix) => {
       const [x0, y0] = frame.px(fix.x, fix.y);
-      const reach = fix.sog * TANGENT_SECONDS;
+      const velocity = velocityFromComponents(fix.waterX, fix.waterY, fix.currentX, fix.currentY, {});
       const [x1, y1] = frame.px(
-        fix.x + reach * Math.sin(fix.cog * DEG),
-        fix.y + reach * Math.cos(fix.cog * DEG),
+        fix.x + velocity.groundX * TANGENT_SECONDS,
+        fix.y + velocity.groundY * TANGENT_SECONDS,
       );
       const dx = x1 - x0;
       const dy = y1 - y0;
@@ -405,7 +420,7 @@ export function CameraTwo() {
           <Chip label="Segments" value={`${frame.fixes.length - 1}`} />
           <Chip label="Curve" value={`${SIM_HZ}`} unit="hz" />
           <Chip label="Chord" value={fmt2(bench.drift)} unit="m" />
-          <Chip label="COG" value={fmt1(opening.cog)} unit="deg" valueRef={cogRef} />
+          <Chip label="COG" value={opening.cog === null ? "-" : fmt1(opening.cog)} unit="deg" valueRef={cogRef} />
         </div>
       </div>
 
@@ -495,6 +510,7 @@ export function CameraTwo() {
 }
 
 function TipPlate({ frame, fix }: { frame: Frame; fix: Fix }) {
+  const velocity = velocityFromComponents(fix.waterX, fix.waterY, fix.currentX, fix.currentY, {});
   const [cx, cy] = frame.px(fix.x, fix.y);
   const x = Math.min(Math.max(4, cx - TIP_WIDTH / 2), frame.width - TIP_WIDTH - 4);
   const y = cy - 16 - TIP_HEIGHT < 4 ? cy + 16 : cy - 16 - TIP_HEIGHT;
@@ -502,7 +518,7 @@ function TipPlate({ frame, fix }: { frame: Frame; fix: Fix }) {
     <g>
       <rect className={styles.tipPlate} x={fmt1(x)} y={fmt1(y)} width={TIP_WIDTH} height={TIP_HEIGHT} />
       <text className={styles.tipText} x={fmt1(x + 8)} y={fmt1(y + 15)}>
-        T+{fmt2(fix.t)} · SOG {fmt2(fix.sog)} · COG {fmt1(fix.cog)}
+        T+{fmt2(fix.t)} · SOG {fmt2(velocity.sog)} · COG {velocity.cog === null ? "-" : fmt1(velocity.cog)}
       </text>
     </g>
   );

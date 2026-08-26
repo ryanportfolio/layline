@@ -21,8 +21,8 @@
  * amplify a last-bit difference into a different fourth place. Seed 20281016
  * sat here until `node scripts/layline-cross-engine-audit.mjs` caught it doing
  * exactly that, 0.95 s apart on FRA 12 with the finish clocks a second apart.
- * The three seeds below agree on the finish order, every finish clock, the
- * leader timeline and every standings gap to within 0.029 s.
+ * The three seeds below agree exactly on the finish order, every finish clock,
+ * the leader timeline, every standings gap, and every serialized fix channel.
  *
  * The three suggested questions on each race are the three the mock analyst
  * answers from the tools, in the order start, lead change, downwind. Each was
@@ -45,10 +45,10 @@ export interface RaceMeta {
  * and the story page at / renders it and nothing else. */
 export const RACES: readonly RaceMeta[] = [
   {
-    /* Seed 20280726. USA 4 wins in 51.53 s over a 5.97 s spread, five lead
-     * changes, decided on the beat when USA 4 goes through at t=28.0 and holds
-     * to the gun. JPN 18 crosses first after the start at 0.15 s and is the
-     * fastest boat downwind at 12.5 knots to the mark. */
+    /* Seed 20280726. JPN 18 wins in 50.14 s over an 8.58 s spread after four
+     * lead changes. Its last pass comes on the beat at t=20.0. JPN 18 also
+     * crosses first after the start at 0.16 s. JPN 18 averages 13.3 knots
+     * toward the mark in the audited run window; FRA 12 is next at 12.6. */
     id: "long-beach",
     name: "Summer fleet race",
     venue: "Long Beach",
@@ -56,16 +56,15 @@ export const RACES: readonly RaceMeta[] = [
     seed: RACE_SEED,
     suggestedQuestions: [
       "Who won the start",
-      "How did USA 4 take the lead",
+      "How did JPN 18 take the lead",
       "Which boat was fastest downwind",
     ],
   },
   {
-    /* Seed 20281113. The busiest race in the library: GBR 21 wins in 47.30 s
-     * over an 8.21 s spread with seven lead changes, one of them a single
-     * sample. GBR 21 is first off the line at 0.10 s, takes the lead for the
-     * last time on the beat at t=18.0 and holds it 29 s to the gun, and is the
-     * fastest boat downwind at 11.7 knots to the mark. */
+    /* Seed 20281113. GBR 21 wins in 47.65 s over an 8.49 s spread after four
+     * lead changes. It crosses first at 0.11 s, takes the lead for the last
+     * time on the beat at t=9.0, and is fastest downwind at 12.1 knots toward
+     * the mark. */
     id: "kestrel-sound",
     name: "Winter series race 2",
     venue: "Kestrel Sound",
@@ -78,11 +77,10 @@ export const RACES: readonly RaceMeta[] = [
     ],
   },
   {
-    /* Seed 20281024. The one race in the library decided downwind: AUS 33 leads
-     * the beat back from t=30.0, FRA 12 goes through at t=36.5 with the fleet
-     * on the run, and wins in 51.38 s over a 4.35 s spread, the tightest here,
-     * by 0.50 s. AUS 33 crosses first after the start at 0.23 s and is the
-     * fastest boat downwind at 14.0 knots to the mark. */
+    /* Seed 20281024. NZL 7 wins in 50.79 s over a 5.56 s spread after six lead
+     * changes. It passes for the last time on the run at t=34.5 and wins by
+     * 2.22 s. AUS 33 crosses first at 0.24 s and is fastest downwind at 13.9
+     * knots toward the mark. */
     id: "sable-reach",
     name: "Autumn invitational",
     venue: "Sable Reach",
@@ -90,7 +88,7 @@ export const RACES: readonly RaceMeta[] = [
     seed: 20281024,
     suggestedQuestions: [
       "Who won the start",
-      "How did FRA 12 pass on the run",
+      "How did NZL 7 pass on the run",
       "Which boat was fastest downwind",
     ],
   },

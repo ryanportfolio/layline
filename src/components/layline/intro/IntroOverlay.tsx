@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { clock } from "@/lib/layline/format";
-import { poseAt } from "@/lib/layline/interpolate";
+import { createPose, poseAt } from "@/lib/layline/interpolate";
 import { FIX_HZ } from "@/lib/layline/types";
 import type { Pose } from "@/lib/layline/types";
 import { raceData, useReplay } from "../store";
@@ -116,7 +116,7 @@ export function IntroOverlay() {
   const clockRef = useRef<HTMLParagraphElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const plotRef = useRef<SVGSVGElement | null>(null);
-  const pose = useRef<Pose>({ x: 0, y: 0, hdg: 0, heel: 0, twa: 0, sog: 0, cog: 0, kite: 0 });
+  const pose = useRef<Pose>(createPose());
 
   /* The feed runs on past the last finisher while boats coast, so the drawing
    * ends on the line rather than on the last fix. */

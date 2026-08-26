@@ -136,7 +136,7 @@ export default function LaylinePage() {
             <div className={styles.fallback}>
               <figure className={styles.chartFigure}>
                 <TrackChart race={race} />
-                <figcaption className={styles.caption}>
+                <figcaption className={styles.caption} data-analysis-layer-caption="tracks">
                   Every track, sampled once a second through the same evaluator the replay reads
                 </figcaption>
               </figure>

@@ -25,7 +25,14 @@ export const KNOWLEDGE: KnowledgeChunk[] = [
     title: "VMG and speed to the mark",
     terms: ["vmg", "velocity", "made", "good", "along", "course", "speed", "mark", "tomark"],
     text:
-      "Velocity made good is the share of boat speed actually spent getting somewhere, and this page shows two of them because there are two somewheres. The dock's VMG tile resolves speed onto the wind axis: positive climbing to windward, negative on the run, since a boat running is sailing away from the wind it is measured against. The strip beside it, labelled To mark, resolves speed onto the course axis toward whichever mark is next, so it stays positive whenever the boat is gaining. They agree only when the wind lies straight down the course. A boat can be fastest through the water and lose on either one by sailing too wide an angle.",
+      "Velocity made good is the share of boat speed actually spent getting somewhere, and this page shows two of them because there are two somewheres. The dock's VMG tile resolves speed onto the wind axis: positive climbing to windward, negative on the run, since a boat running is sailing away from the wind it is measured against. The strip beside it, labelled To mark, resolves ground velocity onto the line from the boat to its current mark, so it stays positive whenever the boat is gaining. They agree only when the wind and mark reference axes align. A boat can be fastest over the ground and lose on either one by sailing too wide an angle.",
+  },
+  {
+    id: "range-comparison",
+    title: "Range comparison",
+    terms: ["compare", "comparison", "advantage", "gain", "range", "median", "cohort", "residual"],
+    text:
+      "A range comparison measures the selected boat against one named rival or a fixed fleet-median cohort at exact race times. Positive advantage means the selected boat is ahead. Positive gain means it improved over the range. Ground distance and VMG use shared valid racing coverage. One equation splits observed gain into straight and detected-maneuver-window made good. A second splits it into water and current made good. Each ends with a residual. Current contribution describes the recorded vectors; it does not identify a tactical cause. Maneuver cost in meters or seconds stays unavailable without a counterfactual.",
   },
   {
     id: "tack-gybe",
@@ -60,14 +67,14 @@ export const KNOWLEDGE: KnowledgeChunk[] = [
     title: "Raw and smooth telemetry",
     terms: ["raw", "smooth", "lens", "interpolation", "telemetry", "replay", "jump"],
     text:
-      "The replay has 2 modes. Smooth rebuilds continuous motion between GPS samples using reported speed and course. Raw shows the samples exactly as they arrived, 4 a second, holds and jumps included. The analyst reads the same data used by both modes.",
+      "The replay has 2 modes. Smooth uses cubic reconstruction between recorded fixes. Position tangents come from each fix's derived ground vector. Water and current components use the same cubic bracket, then ground speed and course are derived from their sum. Raw holds one recorded fix, including its four velocity components. The analyst reads the same feed.",
   },
   {
     id: "fix-pipeline",
     title: "The fix pipeline",
     terms: ["fix", "fixes", "hz", "hertz", "feed", "data", "telemetry", "sample", "four"],
     text:
-      "Each boat reports 4 telemetry samples a second: position, speed over ground, course over ground, heading, heel, wind angle, and gennaker state. The engine keeps everything in meters and seconds, then converts values to knots and race-clock time for display.",
+      "Each boat records 4 fixes a second. A fix stores position, water velocity, current velocity, heading, heel, wind angle, and gennaker state. Speed and course through water, current drift and set, and speed and course over ground are derived from those components. The seeded current-field model is a separate query. The engine keeps meters and seconds internally, then converts values for display.",
   },
   {
     id: "camera-rigs",

@@ -44,11 +44,11 @@ export interface ErrorEventData {
 /* The three suggestion cards. The client renders these verbatim; the mock
  * route matches an incoming question against them by prefix. Each is checked
  * against the seeded race before shipping: JPN 18 crossed first after the
- * gun, USA 4 took the lead on the beat at 0:28 and won, and the run has a
+ * gun, took the lead on the beat at 0:20 and won, and the run has a
  * clear fastest boat by speed made good to the mark. */
 export const SUGGESTED_QUESTIONS = [
   "Who won the start",
-  "How did USA 4 take the lead",
+  "How did JPN 18 take the lead",
   "Which boat was fastest downwind",
 ] as const;
 

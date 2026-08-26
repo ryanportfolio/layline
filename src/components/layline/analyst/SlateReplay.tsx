@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { poseAt } from "@/lib/layline/interpolate";
+import { createPose, poseAt } from "@/lib/layline/interpolate";
 import type { Pose } from "@/lib/layline/types";
 import { raceData } from "../store";
 import { chartFrame, lengthAt, toPath } from "../svg/chartFrame";
@@ -60,7 +60,7 @@ export function SlateReplay({ reduced }: { reduced: boolean }) {
   const ghostRef = useRef<SVGGElement | null>(null);
   const liveRef = useRef<SVGGElement | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
-  const pose = useRef<Pose>({ x: 0, y: 0, hdg: 0, heel: 0, twa: 0, sog: 0, cog: 0, kite: 0 });
+  const pose = useRef<Pose>(createPose());
   const [inView, setInView] = useState(false);
 
   /* The race ends when the last boat crosses, not when the fixes stop: the

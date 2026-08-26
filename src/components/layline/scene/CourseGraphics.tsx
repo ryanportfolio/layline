@@ -5,6 +5,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { Color, DoubleSide, MeshStandardMaterial, type Group, type Mesh } from "three";
 import { hashString, mulberry32 } from "@/lib/prng";
 import type { RaceData } from "@/lib/layline/types";
+import type { LaylineInspectionSurface } from "@/lib/layline/surfaces";
 import { sampleLive } from "../hud/live";
 import { useReplay } from "../store";
 import {
@@ -37,6 +38,7 @@ import {
   displayTwd,
   newLineBuffer,
   pushRing,
+  pushInspectionTrace,
   pushRun,
   pushSegment,
   resetLines,
@@ -79,7 +81,7 @@ const ZONE_SEGMENTS = 48;
 /* The tactical frame is the heavy one: 150 rung spans and their casings, 66
  * layline spans, 48 ring spans and 19 dashes with theirs. One draw either way,
  * so the pool is sized for that frame with room over it. */
-const LINE_CAP = 640;
+const LINE_CAP = 1536;
 
 /* Sky colour, the same value the sails take their through-the-cloth light from. */
 const SKY_FILL = "#b6cfe4";
@@ -192,7 +194,20 @@ function surfaceAt(swell: Swell, x: number, z: number): number {
  * the instruments read, and the laylines take the fleet's beating angle damped
  * over the same window, because both halves of a layline's aim swing it.
  */
-export function CourseGraphics({ race }: { race: RaceData }) {
+export function CourseGraphics({
+  race,
+  showLaylines,
+}: {
+  race: RaceData;
+  showLaylines: boolean;
+}) {
+  /* From the store, not from props: the surface refreshes once a race-second
+   * and a prop would carry that refresh through the element that owns the
+   * Canvas. The race guard drops a surface the last race left behind; the
+   * boat guard below already drops another boat's. */
+  const held = useReplay((state) => state.inspectionHeld);
+  const inspection: LaylineInspectionSurface | null =
+    held !== null && held.race === race ? held.surface : null;
   const gl = useThree((state) => state.gl);
   const wind = useMemo(() => swellDirection(race), [race]);
   const kit = useMemo(() => buildCourse(wind[0], wind[1]), [wind]);
@@ -300,7 +315,7 @@ export function CourseGraphics({ race }: { race: RaceData }) {
      * because that is the rig you switch to in order to read the ladder; the
      * other two only draw them while the boat the console is following still
      * has a windward mark to fetch. */
-    if (rig === "tactical" || live.leg === "beat") {
+    if (showLaylines && (rig === "tactical" || live.leg === "beat")) {
       const angle = tackingAngle(race, t);
       for (let s = 0; s < 2; s++) {
         const side = s === 0 ? 1 : -1;
@@ -318,6 +333,17 @@ export function CourseGraphics({ race }: { race: RaceData }) {
           LAYLINE_FADE,
           LAYLINE_STEP,
         );
+      }
+    }
+
+    /* Prospective evidence stays separate from the straight course furniture.
+     * It was traced from one recorded fix by the cached Stage 6 adapter; this
+     * pass only copies at most port + starboard into the buffer already owned
+     * by the course draw. */
+    if (showLaylines && inspection !== null && inspection.boatId === live.followId) {
+      const count = Math.min(2, inspection.traces.length);
+      for (let index = 0; index < count; index++) {
+        pushInspectionTrace(lines, inspection.traces[index].trace, kit.amber);
       }
     }
 
@@ -465,6 +491,11 @@ export function CourseGraphics({ race }: { race: RaceData }) {
         frustumCulled={false}
         matrixAutoUpdate={false}
         renderOrder={4}
+        name={inspection === null ? "course-lines" : `course-lines inspection-fix-${inspection.fixIndex}`}
+        userData={{
+          inspectionSampledAt: inspection?.sampledAt ?? null,
+          inspectionStatuses: inspection?.traces.map((entry) => entry.trace.status).join("|") ?? "",
+        }}
       />
       <mesh ref={windwardRef} geometry={kit.mark} material={kit.furniture} matrixAutoUpdate={false} />
       <mesh

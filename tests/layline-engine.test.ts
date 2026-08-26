@@ -12,15 +12,17 @@ import { test } from "node:test";
 import { clock, deg, gap, knots, MISSING } from "../src/lib/layline/format";
 import { boomAngle } from "../src/components/layline/scene/skiff";
 import { clothCamber, clothSide } from "../src/components/layline/scene/trim";
-import { poseAt, standingsAt } from "../src/lib/layline/interpolate";
+import { maneuversOf } from "../src/lib/layline/analytics";
+import { createPose, poseAt, standingsAt } from "../src/lib/layline/interpolate";
 import { generateRace } from "../src/lib/layline/sim";
+import { velocityFromComponents } from "../src/lib/layline/velocity";
 import { FIX_HZ, RACE_SEED } from "../src/lib/layline/types";
 import type { Pose } from "../src/lib/layline/types";
 
 const race = generateRace(RACE_SEED);
 
 function blankPose(): Pose {
-  return { x: 0, y: 0, sog: 0, cog: 0, hdg: 0, heel: 0, twa: 0, kite: 0 };
+  return createPose();
 }
 
 function arcDeg(from: number, to: number): number {
@@ -36,18 +38,18 @@ test("one seed, one race: a second run is byte-identical", () => {
 
 test("golden seed summary holds", () => {
   assert.equal(race.tMin, -10);
-  assert.equal(race.tMax, 63.25);
+  assert.equal(race.tMax, 64.75);
   assert.deepEqual(
     race.boats.map((b) => b.id),
     ["fra", "usa", "gbr", "nzl", "aus", "jpn"],
   );
   assert.deepEqual(
     race.results.map((r) => `${r.boatId}:${r.rank}:${r.elapsed}`),
-    ["usa:1:51.525", "jpn:2:52.942", "gbr:3:55.156", "nzl:4:56.965", "aus:5:57.002", "fra:6:57.491"],
+    ["jpn:1:50.138", "fra:2:53.081", "nzl:3:54.593", "gbr:4:56.592", "usa:5:57.97", "aus:6:58.715"],
   );
   assert.deepEqual(
     Object.fromEntries(Object.entries(race.fixes).map(([id, f]) => [id, f.length])),
-    { fra: 294, usa: 271, gbr: 285, nzl: 292, aus: 293, jpn: 276 },
+    { fra: 277, usa: 297, gbr: 291, nzl: 283, aus: 300, jpn: 265 },
   );
 });
 
@@ -59,7 +61,14 @@ test("poseAt lands exactly on every fix it is asked for", () => {
       poseAt(race, id, fix.t, "smooth", out);
       assert.ok(Math.abs(out.x - fix.x) < 1e-9, `${id} x at t=${fix.t}`);
       assert.ok(Math.abs(out.y - fix.y) < 1e-9, `${id} y at t=${fix.t}`);
-      assert.ok(Math.abs(out.sog - fix.sog) < 1e-9, `${id} sog at t=${fix.t}`);
+      const velocity = velocityFromComponents(
+        fix.waterX,
+        fix.waterY,
+        fix.currentX,
+        fix.currentY,
+        {},
+      );
+      assert.ok(Math.abs(out.sog - velocity.sog) < 1e-9, `${id} sog at t=${fix.t}`);
       assert.ok(Math.abs(out.hdg - fix.hdg) < 1e-9, `${id} hdg at t=${fix.t}`);
     }
   }
@@ -70,9 +79,10 @@ test("heading crosses the 359/0 seam the short way", () => {
    * north, 353 apart as plain numbers. The midpoint must sit inside the short
    * arc, nowhere near the 180 a naive lerp would sweep through. */
   const fixes = race.fixes.fra;
-  const a = fixes[76];
-  const b = fixes[77];
-  assert.ok(Math.abs(b.hdg - a.hdg) > 300, "the seam pair moved; re-pin the index");
+  const index = fixes.findIndex((fix, at) => at > 0 && Math.abs(fix.hdg - fixes[at - 1].hdg) > 300);
+  assert.ok(index > 0, "the race lost its north-crossing witness");
+  const a = fixes[index - 1];
+  const b = fixes[index];
   const out = blankPose();
   poseAt(race, "fra", (a.t + b.t) / 2, "smooth", out);
   assert.ok(Math.abs(arcDeg(a.hdg, out.hdg)) <= 15, `mid hdg ${out.hdg} left the short arc`);
@@ -170,9 +180,15 @@ test("the cloth changes sides once per manoeuvre and nowhere else", () => {
       if (here !== 0) prev = here;
     }
   }
-  /* Six gybes on the run and two tacks up each beat, which is every sign
-   * change in the fleet's wind angle and no others. */
-  assert.equal(swings, 18);
+  /* Twelve tacks on the beat and eight gybes on the run, which is every sign
+   * change in the current seeded fleet's wind angle and no others. */
+  const maneuvers = race.boats.reduce(
+    (count, boat) => count + maneuversOf(race, boat.id).length,
+    0,
+  );
+  assert.equal(maneuvers, 22);
+  assert.equal(swings, 22);
+  assert.equal(swings, maneuvers);
 });
 
 test("the rig swings across a manoeuvre instead of teleporting", () => {
@@ -230,5 +246,5 @@ test("the two cut sides of a sail meet with no draft in either", () => {
       prev = side;
     }
   }
-  assert.equal(crossings, 18);
+  assert.equal(crossings, 22);
 });

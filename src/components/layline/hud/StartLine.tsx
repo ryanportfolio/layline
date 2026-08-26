@@ -1,5 +1,6 @@
 "use client";
 
+import clsx from "clsx";
 import { useEffect, useRef } from "react";
 import styles from "@/app/layline.module.css";
 import { startLineOf, startReadingAt, type StartReading } from "@/lib/layline/analytics";
@@ -21,6 +22,9 @@ export function StartLine({ race }: { race: RaceData }) {
   const line = useRef(startLineOf(race.course));
   const reading = useRef<StartReading>({ distance: 0, closing: 0, toLine: 0, early: false });
   const row = useRef<HTMLDivElement>(null);
+  const chip = useRef<HTMLSpanElement>(null);
+  const sail = useRef<HTMLSpanElement>(null);
+  const teamName = useRef<HTMLSpanElement>(null);
   const distance = useRef<HTMLSpanElement>(null);
   const gun = useRef<HTMLSpanElement>(null);
   const closing = useRef<HTMLSpanElement>(null);
@@ -31,6 +35,10 @@ export function StartLine({ race }: { race: RaceData }) {
    * the chart mode opening) cannot hand it back a reading from mount time. */
   const sample = sampleLive(race);
   const open = sample.t < 0;
+  /* Whose start this is. The readings follow the console's followed boat, and
+   * the row says so instead of leaving the reader to infer it. */
+  const followedBoat =
+    race.boats.find((entry) => entry.id === sample.followId) ?? race.boats[0];
   /* After the gun there is no start to read, so the row holds nothing rather
    * than a distance to a line the boat is a hundred metres up the course from. */
   const seed = open ? startReadingAt(line.current, sample.pose, sample.t, reading.current) : null;
@@ -45,6 +53,19 @@ export function StartLine({ race }: { race: RaceData }) {
         const want = prestart ? "" : "none";
         if (node !== null && node.style.display !== want) node.style.display = want;
         if (!prestart) return;
+
+        /* The identity travels with the follow, through the same DOM writes as
+         * the readings, so switching boats never re-renders the row. */
+        const boat = race.boats.find((entry) => entry.id === live.followId);
+        if (boat !== undefined) {
+          setText(sail.current, boat.sail);
+          setText(teamName.current, boat.name);
+          const dot = chip.current;
+          if (dot !== null) {
+            if (dot.style.background !== boat.hue) dot.style.background = boat.hue;
+            dot.classList.toggle(styles.chipOutlined, boat.dark === true);
+          }
+        }
 
         const read = startReadingAt(line.current, live.pose, live.t, reading.current);
         setText(distance.current, meters(read.distance));
@@ -66,6 +87,19 @@ export function StartLine({ race }: { race: RaceData }) {
       aria-label="Start line"
     >
       <span className={styles.startTitle}>Start</span>
+
+      <span className={styles.startBoat} data-live="follow">
+        <span
+          className={clsx(styles.standingChip, followedBoat.dark === true && styles.chipOutlined)}
+          style={{ background: followedBoat.hue }}
+          ref={chip}
+          aria-hidden="true"
+        />
+        <strong ref={sail}>{followedBoat.sail}</strong>
+        <span className={styles.startBoatName} ref={teamName}>
+          {followedBoat.name}
+        </span>
+      </span>
 
       <div className={styles.startCell}>
         <span className={styles.hudLabel}>

@@ -4,7 +4,7 @@ import { useEffect, useMemo } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Vector3, type PerspectiveCamera } from "three";
 import styles from "@/app/layline.module.css";
-import { poseAt } from "@/lib/layline/interpolate";
+import { createPose, poseAt } from "@/lib/layline/interpolate";
 import { FIX_HZ } from "@/lib/layline/types";
 import type { Pose, RaceData, ReplayMode, RigName } from "@/lib/layline/types";
 import { useReplay } from "../store";
@@ -425,7 +425,7 @@ interface Plan {
 }
 
 function newPose(): Pose {
-  return { x: 0, y: 0, hdg: 0, heel: 0, twa: 0, sog: 0, cog: 0, kite: 0 };
+  return createPose();
 }
 
 function newDisplay(): Display {

@@ -4,7 +4,7 @@ import { useEffect, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import { BoxGeometry, FrontSide, MeshBasicMaterial, MeshLambertMaterial, MeshStandardMaterial } from "three";
 import type { BufferGeometry, Mesh } from "three";
-import { poseAt } from "@/lib/layline/interpolate";
+import { createPose, poseAt } from "@/lib/layline/interpolate";
 import type { Pose, RaceData } from "@/lib/layline/types";
 import { sampleLive } from "../hud/live";
 import { useReplay } from "../store";
@@ -51,7 +51,7 @@ const CREW_FEET = 0.4;
 const SAIL_GLOW = "#b6cfe4";
 
 function newPose(): Pose {
-  return { x: 0, y: 0, hdg: 0, heel: 0, twa: 0, sog: 0, cog: 0, kite: 0 };
+  return createPose();
 }
 
 function clamp(value: number, low: number, high: number): number {

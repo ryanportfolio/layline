@@ -11,7 +11,13 @@ import {
   InstancedBufferGeometry,
   type Mesh,
 } from "three";
-import { poseAt } from "@/lib/layline/interpolate";
+import { createPose, poseAt } from "@/lib/layline/interpolate";
+import {
+  createReplayRawFixEvidenceModel,
+  RAW_FIX_EVIDENCE_SLOTS_PER_BOAT,
+  replayRawFixesVisible,
+  sampleReplayRawFixEvidence,
+} from "@/lib/layline/analysis-layers";
 import type { Pose, RaceData } from "@/lib/layline/types";
 import { useReplay } from "../store";
 import {
@@ -51,15 +57,11 @@ const TRACK_FADE = 0.9;
  * memory of one. */
 const TRACK_TAU = 7;
 
-/* Four a second is what the instrument sent, so four a second is what the raw
- * lens draws, plus the pair either side of the window edge. */
-const FIX_PER_BOAT = TRACK_SPAN * 4 + 2;
 const DOT_RADIUS = 0.42;
 const DOT_LIFT = TRACK_LIFT + 0.02;
 /* Parked slots are sent back far enough that their own fade underflows to zero
  * rather than being clipped to it. */
 const DOT_PARK = 1000;
-
 interface Ribbon {
   geometry: BufferGeometry;
   arrays: LineArrays;
@@ -110,10 +112,9 @@ function newRibbon(colour: Color): Ribbon {
   };
 }
 
-/* Always the interpolated pose, whichever lens the page is showing. The raw lens
- * swaps the ribbon out for the fixes it was built from rather than making the
- * ribbon itself steppy: a stepped ribbon under a stepped hull would be the same
- * claim made twice. */
+/* Ribbons always sample the smooth evaluator. Raw replay hides the ribbon so a
+ * held hull is not joined by a reconstructed trail. The independent raw-fixes
+ * layer owns measured evidence. */
 function emit(rib: Ribbon, race: RaceData, boatId: string, k: number, pose: Pose): void {
   rib.headK = k;
   if (rib.count >= TRACK_CAP) return;
@@ -157,19 +158,27 @@ function advance(rib: Ribbon, race: RaceData, boatId: string, t: number, pose: P
 }
 
 function newPose(): Pose {
-  return { x: 0, y: 0, hdg: 0, heel: 0, twa: 0, sog: 0, cog: 0, kite: 0 };
+  return createPose();
 }
 
 /**
- * Where each boat has been, in its own hue. Twenty seconds of it, and the lens
- * decides what that history looks like: a fading ribbon off the evaluator in
- * smooth mode, the fixes themselves in raw. Neither is violet, because violet
- * belongs to the chip in the console rather than to a boat.
+ * Where each boat has been, in its own hue. The tracks layer draws a fading
+ * ribbon in smooth replay. The raw-fixes layer draws the measured fleet window,
+ * while truth mode narrows that evidence to the selected boat's witness.
  */
-export function BoatTracks({ race }: { race: RaceData }) {
+export function BoatTracks({
+  race,
+  showTracks,
+  showRawFixes,
+}: {
+  race: RaceData;
+  showTracks: boolean;
+  showRawFixes: boolean;
+}) {
   const count = race.boats.length;
   const wind = useMemo(() => swellDirection(race), [race]);
   const pose = useMemo(newPose, []);
+  const rawFixEvidence = useMemo(() => createReplayRawFixEvidenceModel(race), [race]);
   const ribbonNodes = useMemo<(Mesh | null)[]>(() => race.boats.map(() => null), [race]);
   const dotNode = useRef<Mesh>(null);
 
@@ -193,15 +202,15 @@ export function BoatTracks({ race }: { race: RaceData }) {
       new BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]), 3),
     );
     dots.setIndex([0, 1, 2, 0, 2, 3]);
-    const slots = count * FIX_PER_BOAT;
+    const slots = rawFixEvidence.slots.length;
     const dotData = new Float32Array(slots * 3);
     const dotColour = new Float32Array(slots * 3);
     /* A dot's hue never changes, so it is dealt once per slot and the loop only
      * ever writes where and when. */
     for (let i = 0; i < count; i++) {
       trackColour(race.boats[i], hue);
-      for (let j = 0; j < FIX_PER_BOAT; j++) {
-        const slot = i * FIX_PER_BOAT + j;
+      for (let j = 0; j < RAW_FIX_EVIDENCE_SLOTS_PER_BOAT; j++) {
+        const slot = i * RAW_FIX_EVIDENCE_SLOTS_PER_BOAT + j;
         dotColour[slot * 3] = hue.r;
         dotColour[slot * 3 + 1] = hue.g;
         dotColour[slot * 3 + 2] = hue.b;
@@ -233,13 +242,14 @@ export function BoatTracks({ race }: { race: RaceData }) {
         dotMaterial.dispose();
       },
     };
-  }, [count, race, wind]);
+  }, [count, race, rawFixEvidence, wind]);
 
   useEffect(() => kit.dispose, [kit]);
 
   useFrame((state) => {
-    const { t, mode } = useReplay.getState();
+    const { t, mode, truthMode, followId } = useReplay.getState();
     const raw = mode === "raw";
+    const rawFixesVisible = replayRawFixesVisible(showRawFixes, truthMode);
     const height = state.gl.domElement.height;
     kit.material.uniforms.uTime.value = t;
     kit.material.uniforms.uHeight.value = height;
@@ -251,8 +261,8 @@ export function BoatTracks({ race }: { race: RaceData }) {
 
     for (let i = 0; i < count; i++) {
       const node = ribbonNodes[i];
-      if (node !== null) node.visible = !raw;
-      if (raw) continue;
+      if (node !== null) node.visible = showTracks && !raw;
+      if (raw || !showTracks) continue;
       const rib = kit.ribbons[i];
       advance(rib, race, race.boats[i].id, t, pose);
       if (rib.dirty) {
@@ -265,8 +275,8 @@ export function BoatTracks({ race }: { race: RaceData }) {
 
     const dots = dotNode.current;
     if (dots === null) return;
-    dots.visible = raw;
-    if (!raw) return;
+    dots.visible = rawFixesVisible;
+    if (!dots.visible) return;
 
     /* The camera's own right and up, so a fix reads as a disc from the chase rig
      * four metres off the sea as well as from a hundred and sixty. */
@@ -275,29 +285,19 @@ export function BoatTracks({ race }: { race: RaceData }) {
     kit.dotMaterial.uniforms.uRight.value.set(basis[0], basis[1], basis[2]);
     kit.dotMaterial.uniforms.uUp.value.set(basis[4], basis[5], basis[6]);
 
-    for (let i = 0; i < count; i++) {
-      const fixes = race.fixes[race.boats[i].id];
-      const base = i * FIX_PER_BOAT;
-      let written = 0;
-      if (fixes !== undefined) {
-        for (let f = 0; f < fixes.length && written < FIX_PER_BOAT; f++) {
-          const fix = fixes[f];
-          if (fix.t > t) break;
-          if (fix.t < t - TRACK_SPAN) continue;
-          const at = base + written;
-          kit.dotData[at * 3] = fix.x;
-          kit.dotData[at * 3 + 1] = -fix.y;
-          kit.dotData[at * 3 + 2] = fix.t;
-          written++;
-        }
+    /* One shared sampler owns all-fleet layer evidence versus the selected
+     * nine-fix truth witness. This renderer only copies its persistent slots. */
+    sampleReplayRawFixEvidence(race, t, followId, showRawFixes, truthMode, rawFixEvidence);
+    for (const entry of rawFixEvidence.slots) {
+      const fix = entry.fix;
+      const offset = entry.slot * 3;
+      if (fix === null) {
+        kit.dotData[offset + 2] = t - DOT_PARK;
+        continue;
       }
-      /* Instanced attributes are read in order, so a gap in the middle of the
-       * run would redraw whatever the slot held last. Anything a boat did not
-       * fill is stamped with a time far enough back that its own fade is zero. */
-      for (let j = written; j < FIX_PER_BOAT; j++) {
-        const at = base + j;
-        kit.dotData[at * 3 + 2] = t - DOT_PARK;
-      }
+      kit.dotData[offset] = fix.x;
+      kit.dotData[offset + 1] = -fix.y;
+      kit.dotData[offset + 2] = fix.t;
     }
     kit.dots.attributes.aDot.needsUpdate = true;
   }, -55);

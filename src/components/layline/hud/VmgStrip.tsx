@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import { useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from "react";
 import styles from "@/app/layline.module.css";
-import { VMG_STEP, vmgSeries, vmgToMark } from "@/lib/layline/analytics";
+import { groundMadeGoodToMark, VMG_STEP, vmgSeries } from "@/lib/layline/analytics";
 import { MISSING, knots } from "@/lib/layline/format";
 import type { LegName, RaceData } from "@/lib/layline/types";
 import { useReplay } from "../store";
@@ -28,6 +28,11 @@ const LEG_LABEL: Record<LegName, string> = {
 function ceilingOf(peak: number): number {
   const kn = Math.ceil(peak * MPS_TO_KNOTS);
   return (kn < 1 ? 1 : kn) / MPS_TO_KNOTS;
+}
+
+function displayedToMark(pose: Parameters<typeof groundMadeGoodToMark>[0], leg: LegName): string {
+  const value = groundMadeGoodToMark(pose, leg);
+  return value === null ? MISSING : knots(Math.max(0, value));
 }
 
 /**
@@ -133,7 +138,7 @@ export function VmgStrip({ race }: { race: RaceData }) {
       const racing = live.leg === "beat" || live.leg === "run";
       setText(
         now.current,
-        racing ? knots(Math.max(0, vmgToMark(live.pose.sog, live.pose.cog, live.leg))) : MISSING,
+        racing ? displayedToMark(live.pose, live.leg) : MISSING,
       );
       /* The fleet best comes off the same half second grid the trace is drawn
        * from, floored so it reads the latest sample the reveal has reached
@@ -230,7 +235,7 @@ export function VmgStrip({ race }: { race: RaceData }) {
           />
           <span className={styles.vmgNow} ref={now} data-live="vmg-now">
             {seedRacing
-              ? knots(Math.max(0, vmgToMark(sample.pose.sog, sample.pose.cog, sample.leg)))
+              ? displayedToMark(sample.pose, sample.leg)
               : MISSING}
           </span>
         </span>

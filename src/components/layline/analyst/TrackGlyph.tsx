@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { poseAt } from "@/lib/layline/interpolate";
+import { createPose, poseAt } from "@/lib/layline/interpolate";
 import type { Pose } from "@/lib/layline/types";
 import { raceData } from "../store";
 import { useMounted } from "./useMounted";
@@ -14,7 +14,7 @@ import styles from "./analyst.module.css";
  * focusable. */
 
 function scratchPose(): Pose {
-  return { x: 0, y: 0, hdg: 0, heel: 0, twa: 0, sog: 0, cog: 0, kite: 0 };
+  return createPose();
 }
 
 export function TrackGlyph({
