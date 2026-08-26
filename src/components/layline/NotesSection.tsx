@@ -82,7 +82,7 @@ export function NotesSection({ race }: { race: RaceData }) {
           <article className={notes.card}>
             <h3>GPU work</h3>
             <p>
-              Hull colours live in the geometry, so the fleet shares 2 hull materials. Spray and
+              Hull colors live in the geometry, so the fleet shares 2 hull materials. Spray and
               raw telemetry dots use instancing, sending each type to the GPU in 1 batch.
             </p>
           </article>
