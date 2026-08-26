@@ -137,11 +137,7 @@ export function SceneKey({ race }: { race: RaceData }) {
     >
       <div className={key.block}>
         <p className={key.kicker}>Key</p>
-        <h2 className={key.heading}>Reading the water</h2>
-        <p className={key.lead}>
-          Amber belongs to the wind, cyan to the water moving under the fleet, violet to raw
-          telemetry, and every remaining colour on the sea belongs to a boat
-        </p>
+        <h2 className={key.heading}>Legend</h2>
 
         <dl className={key.grid}>
           <div className={key.entry}>
@@ -156,12 +152,9 @@ export function SceneKey({ race }: { race: RaceData }) {
                   />
                 ))}
               </span>
-              <span>Boat colour</span>
+              <span>Boat color</span>
             </dt>
-            <dd className={key.meaning}>
-              One colour a boat, the same on its chip, its label, its trail, its gennaker and its
-              hull
-            </dd>
+            <dd className={key.meaning}>One color per boat / chip / trail / gennaker / hull</dd>
           </div>
 
           <div className={key.entry}>
@@ -169,7 +162,7 @@ export function SceneKey({ race }: { race: RaceData }) {
               <Track hue={lead.hue} />
               <span>Track</span>
             </dt>
-            <dd className={key.meaning}>Where a boat has already been, drawn in its own colour</dd>
+            <dd className={key.meaning}>Where a boat has already been, drawn in its own color</dd>
           </div>
 
           <div className={key.entry}>

@@ -1,8 +1,7 @@
-/* The key under the console. Deliberately the quietest section on the page:
-   it is a reference a reader consults once and then stops seeing, so it takes
-   the notes section's kicker and body sizes but a heading two steps down from
-   theirs. A key set at chapter size would announce itself louder than the
-   thing it explains. */
+/* The key under the console. A reference a reader consults once and then stops
+   seeing, so everything below the heading stays at the notes section's quiet
+   kicker and body sizes; the heading itself matches the Debrief's, because a
+   one-word chapter title is what a reader scrolls looking for. */
 
 .block {
   padding: 44px 0;
@@ -21,23 +20,17 @@
   text-transform: uppercase;
 }
 
+/* Chapter size, the same clamp the Debrief heading below it takes, so the two
+   sections under the console read as siblings rather than one outranking the
+   other. */
 .heading {
-  margin: 0 0 10px;
+  margin: 0 0 26px;
   font-family: var(--font-pangram);
-  font-size: clamp(28px, 3.4vw, 40px);
+  font-size: clamp(48px, 7.5vw, 78px);
   font-weight: 400;
   font-variation-settings: "wdth" 110, "wght" 680;
   letter-spacing: 0.01em;
-  line-height: 1.06;
-}
-
-.lead {
-  max-width: 68ch;
-  margin: 0 0 26px;
-  color: var(--ink-dim);
-  font-family: Verdana, Geneva, sans-serif;
-  font-size: 15px;
-  line-height: 25px;
+  line-height: 1.05;
 }
 
 /* Two columns where there is room and one where there is not. 420 and not the
