@@ -112,7 +112,11 @@ function TypedHint({ active, questions }: { active: boolean; questions: readonly
     return () => window.clearTimeout(timer);
   }, [active, questions]);
 
-  if (line.text === "") return null;
+  /* Mounted for the whole active run, not just while a question has letters.
+   * In the warmup and the between-questions gap the line is a lone blinking
+   * caret, which keeps the box read as "about to type" instead of letting the
+   * real placeholder flash through for a split second and vanish again. */
+  if (!active) return null;
   return (
     <p className={styles.typedLine} data-out={line.out ? "true" : "false"} aria-hidden="true">
       {line.text}
