@@ -997,11 +997,47 @@ test("the sea cover briefs the race it is loading", () => {
   const brief = shell + panels + performance;
   const cover = source("src/components/layline/bootSea.module.css");
 
-  /* The title card face, still preloaded by the page for the same reason: the
-     face is font-display: block and the brief is what fills the wait. */
-  assert.ok(cover.includes("var(--font-pangram)"), "the race name left the display face");
-  assert.ok(cover.includes("font-weight: 400"), "the race name left the display face's book weight");
-  assert.ok(cover.includes("letter-spacing: -0.025em"), "the race name lost its tracking");
+  /* The title card face. Montserrat at 700 for the race name, sliced out of
+     the rule rather than matched loose against the whole file: every weight
+     and family in this stylesheet appears somewhere else too, so a bare
+     includes() would pass on another rule's copy of the same declaration. */
+  const rule = (selector: string): string => {
+    const open = cover.indexOf(selector);
+    assert.ok(open >= 0, `${selector} left the cover`);
+    return cover.slice(open, cover.indexOf("}", open));
+  };
+  const raceName = rule(".raceName {");
+  assert.ok(raceName.includes("var(--brief-title)"), "the race name left the title face");
+  assert.ok(raceName.includes("font-weight: 700"), "the race name left the title face's bold");
+  assert.ok(raceName.includes("letter-spacing: -0.025em"), "the race name lost its tracking");
+  /* Pangram stands behind Montserrat rather than under it: the page still
+     preloads that face, which is font-display: block, and a capture harness
+     rendering the cover outside the layline shells has to land on a display
+     face rather than the browser's default sans. */
+  assert.ok(
+    cover.includes("--brief-title: var(--font-montserrat), var(--font-pangram), sans-serif;"),
+    "the title face lost its fallback to the other display face",
+  );
+  /* The three section heads over the panels, the layer's other Montserrat.
+     They keep the 10px label size and take the weight and tracking the face is
+     set at where this borrowed it from. */
+  const panelHead = rule(".panelLabelHead {");
+  assert.ok(panelHead.includes("var(--brief-display)"), "the panel heads left the borrowed face");
+  assert.ok(panelHead.includes("font-weight: 400"), "the panel heads went back to the dock weight");
+  assert.ok(panelHead.includes("letter-spacing: 0.15em"), "the panel heads lost their tracking");
+  for (const label of ["Fleet at the line", "Wind, live off the seed", "Start line"]) {
+    assert.ok(panels.includes(label), `the start view stopped heading a panel "${label}"`);
+  }
+  assert.ok(
+    (panels.match(/styles\.panelLabelHead/g) ?? []).length === 3,
+    "the start view's section heads are no longer exactly three",
+  );
+  /* The performance view heads a table of mono numbers and has to carry weight
+     against it, so its labels stay on the Archivo rule. */
+  assert.ok(
+    !performance.includes("panelLabelHead"),
+    "the performance view's labels took the start view's face",
+  );
   /* The console divides its three faces by job, and says why: "a number set in
      Archivo is a number nobody measured, and a button set in mono is a lie
      about where the data is". So Martian is quarantined to measured values,
@@ -1098,10 +1134,19 @@ test("the sea cover briefs the race it is loading", () => {
   assert.ok(head.includes("align-items: flex-start;"), "the header stopped ranging its two lines left");
   assert.ok(!head.includes("align-items: baseline;"), "the header went back to a baseline row");
 
+  /* The title card no longer names the race in Pangram, but the page still
+     preloads it: the Debrief's heading is set in it, the face is
+     font-display: block, and a pane that opens on a blocked face holds
+     unpainted in front of the reader. Montserrat needs no line here, next/font
+     preloads what it self-hosts. */
   const racesPage = source("src/app/races/page.tsx");
   assert.ok(
     racesPage.includes('href="/assets/fonts/pangram-display.woff2"'),
-    "the library stopped preloading the face its brief is set in",
+    "the library stopped preloading the blocking face its Debrief is set in",
+  );
+  assert.ok(
+    racesPage.includes("montserrat.variable"),
+    "the library stopped putting the brief's face on its shell",
   );
 
   /* The name is capped at two line boxes by measurement, because what overflows

@@ -94,21 +94,25 @@
      .shell and no theme restates it, so it holds on all five. */
   --brief-accent: var(--wind);
 
-  /* The three faces, and the console's own division of labour between them.
-     Pangram carries the race name. Martian is quarantined to measured values,
-     because "a number set in Archivo is a number nobody measured". Archivo
-     carries the labels and the button, because "a button set in mono is a lie
-     about where the data is". */
+  /* The console's own division of labour between its faces. Martian is
+     quarantined to measured values, because "a number set in Archivo is a
+     number nobody measured". Archivo carries the labels and the button,
+     because "a button set in mono is a lie about where the data is". */
   --brief-mono: var(--font-martian), monospace;
   --brief-sans: var(--font-archivo), sans-serif;
 
-  /* A fourth face, and it gets exactly three headings: the section heads on
-     the start view. Montserrat is what the sailing-instrument brands set their
-     section heads in, and this borrows their setting rather than their size,
-     which is 400 weight and 0.15em of tracking in caps. Both layline routes
-     put the font's variable on their shell; Archivo stands behind it so a
-     capture harness or an embed that renders this component outside those two
-     shells still gets a label rather than the browser's default sans. */
+  /* Montserrat, and the two jobs it has on this layer: the race name at the
+     top of the title card and the three section heads over the panels under
+     it. It is what the sailing-instrument brands set their headings in, and
+     the brief is the one layer here that speaks in a client's voice rather
+     than the console's, so it is the one layer that borrows theirs.
+
+     Two tokens rather than one because the fallbacks differ, and a fallback is
+     what a capture harness rendering this component outside the two layline
+     shells actually gets. A missed title should land on the other display
+     face; a missed label should land on the face every other label already
+     uses. Pangram keeps the wordmark and the section headings elsewhere. */
+  --brief-title: var(--font-montserrat), var(--font-pangram), sans-serif;
   --brief-display: var(--font-montserrat), var(--font-archivo), sans-serif;
 
   /* The header sits on the gradient's top band, which is the sky-horizon token
@@ -235,21 +239,24 @@
 }
 
 .raceName {
-  /* Pangram, the face this page spends on the wordmark and on a section
-     heading, at the size that makes the race a title card rather than a status
-     line. Capped at two line boxes; RaceBrief measures and steps the size down
-     until the name fits inside them. */
-  font-family: var(--font-pangram);
-  font-weight: 400;
-  /* 9.4, not the 11 this started at, because 11 does not fit. Measured: the
-     largest size that holds each of the three shipped names inside two line
-     boxes lands between 9.41 and 10.40 cqw across nine viewport widths, and the
-     binding case is "Winter series race 2" at 9.41. A stated size above the
-     binding case is a size the measured fit has to correct after hydration, in
-     full view of the reader. Below it, the fit never fires and the server's
-     first paint is the final one. The fit stays as the net for a name longer
-     than any in the registry today. */
-  font-size: calc(9.4 * 1cqw);
+  /* The title card's face, at the size that makes the race a title card rather
+     than a status line. Capped at two line boxes; RaceBrief measures and steps
+     the size down until the name fits inside them. */
+  font-family: var(--brief-title);
+  font-weight: 700;
+  /* 9.3, re-measured for Montserrat 700. The largest size that holds each of
+     the three shipped names inside two line boxes lands between 9.33 and 10.13
+     cqw across nine viewport widths from 1920 down to 960, and the binding
+     case is "Autumn invitational" at 9.33. Pangram 400 bound at 9.41 on
+     "Winter series race 2", so this stepped down a tenth when the face
+     changed. A stated size above the binding case is a size the measured fit
+     has to correct after hydration, in full view of the reader. Below it, the
+     fit never fires and the server's first paint is the final one. The fit
+     stays as the net for a name longer than any in the registry today. The
+     measurement is RaceBrief's own fits() replayed against the rendered node
+     per name per width, in headed Chrome; redo it whenever this face, its
+     weight or its tracking changes. */
+  font-size: calc(9.3 * 1cqw);
   line-height: 1.02;
   letter-spacing: -0.025em;
   text-wrap: balance;
@@ -611,8 +618,8 @@
   /* Short AND narrow, the 1024x768 class of window: the container is small
      enough that the cqw sizes above stop paying for themselves, and the fleet
      plate came up 43px short of its six rows. The title gives back the bulk:
-     8cqw still fills the width edge to edge at these sizes, and a name that
-     fits one line at 9.4 fits at 8. */
+     7.6cqw still fills the width edge to edge at these sizes, and it sits well
+     under the 9.33 the binding name measures at, so the fit never fires. */
   @media (max-width: 1120px) {
     .raceName {
       font-size: calc(7.6 * 1cqw);
