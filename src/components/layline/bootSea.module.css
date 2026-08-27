@@ -1,13 +1,19 @@
-/* The library's boot cover: the sea the scene opens on, painted flat, with the
-   race brief laid over it.
+/* The library's boot cover: the sea the scene opens on, with the race brief laid
+   over it.
 
-   It lives in its own module because the console stylesheet bans gradients
-   inside it, the sky and the water being the renderer's job there. This is the
-   one place that draws them in CSS, and it draws them in the console's own
-   closed palette: every stop below is a mix of the four sky and water tokens,
-   placed against a profile read off the rendered canvas at the prestart. Sky
-   to the bright band at the horizon, held until the header rule has cleared it,
-   then water falling away to deep.
+   The original CSS gradient remains the background in every mode. Over it, the
+   brief reuses the Layline hero's captured OCI Bayer screen, bias drift, and
+   half-float pointer trail without the hero image. The shader derives density
+   from a procedural sea field and stays transparent, so the gradient remains
+   legible as the material. A blurred, low-opacity CSS light wash moves by
+   transform under the same visibility gate. Reduced motion renders the screen
+   once and holds both layers.
+
+   Raw replay colour was rejected because it made the brief and the warming
+   scene compete. Full device DPR and instant quality changes were rejected
+   because two full-frame passes cannot spend pixels the reader cannot see. DPR
+   is capped, then lowered only after a 2.4 second slow-frame sample. The loop is
+   the brief's existing prestart clock, with no second requestAnimationFrame.
 
    The brief is one chart and the readings that hang off it: the last ten
    seconds before the gun seen from above at true scale, then the fleet in the
@@ -15,9 +21,9 @@
    equal readings out of one subject, and the bias figure in the third was
    computed from the wind in the second and the line in the first.
 
-   Nothing else moves while this leaves. The canvas underneath sits at full
-   strength the whole time, so the only animated value on the page is this
-   layer's opacity, and what a viewer sees is a still sea starting to move.
+   The replay canvas underneath sits at full strength while the cover leaves. The
+   dither stops on release and the held framebuffer leaves with the cover, so
+   the race gains motion without a background swap inside the fade.
 
    The console's bans hold up here: no drop shadow anywhere below, no gradient
    inside a panel, and exactly one accent. The gradient above is the sea, which
@@ -153,6 +159,8 @@
 /* ---- the brief ---- */
 
 .brief {
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   gap: 1.8cqw;
@@ -162,6 +170,85 @@
   color: var(--brief-ink);
   font-family: var(--brief-sans);
   font-variant-numeric: tabular-nums;
+}
+
+/* The dither screen fills the complete brief but never becomes an input layer.
+   Pointer sampling happens on a passive window listener, so touch and wheel
+   gestures still belong to the page. The wash keeps the header's measured dark
+   ink on its light band and the lower plates on deep water. */
+.briefDither {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  touch-action: auto;
+}
+
+.briefDither::after {
+  position: absolute;
+  z-index: 2;
+  top: -22%;
+  left: -14%;
+  width: 72%;
+  height: 76%;
+  background: color-mix(in srgb, var(--sky-horizon) 52%, transparent);
+  clip-path: ellipse(50% 50% at 50% 50%);
+  content: "";
+  filter: blur(7cqw);
+  opacity: 0.56;
+  transform: translate3d(-1.8%, -1%, 0) scale(1.06);
+  animation: briefLightDrift 16s var(--ease) infinite alternate;
+  animation-play-state: paused;
+  will-change: transform;
+}
+
+.briefDither[data-render-state="running"]::after {
+  animation-play-state: running;
+}
+
+@keyframes briefLightDrift {
+  to {
+    transform: translate3d(1.8%, 1%, 0) scale(1.1);
+  }
+}
+
+.briefDitherCanvas,
+.briefDitherFallback {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.briefDitherCanvas {
+  z-index: 1;
+  display: block;
+  opacity: 0;
+  transition: opacity 900ms var(--ease);
+}
+
+.briefDitherCanvas[data-ready="true"] {
+  opacity: 0.84;
+}
+
+.briefDitherFallback {
+  z-index: 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' viewBox='0 0 4 4'%3E%3Ccircle cx='.8' cy='.8' r='.65' fill='%230a2a44' fill-opacity='.42'/%3E%3C/svg%3E") 0 0 / 4px 4px;
+  opacity: 0.3;
+  transition: opacity 900ms var(--ease);
+}
+
+.briefDitherCanvas[data-ready="true"] + .briefDitherFallback {
+  opacity: 0;
+}
+
+.briefHead,
+.panelMain,
+.perfMain,
+.briefFoot {
+  position: relative;
+  z-index: 1;
 }
 
 /* Every scroller on this layer, at every width, not just the stacked column
@@ -1063,9 +1150,10 @@
   cursor: var(--house-cursor);
   /* Background, never shadow: the console does not raise panels and it does
      not raise buttons either. */
-  transition:
-    background 160ms var(--ease),
-    border-color 160ms var(--ease);
+  /* The fill and ink invert together. Interpolating both crosses a frame where
+     they are the same colour, so the inversion is immediate and only the rule
+     may ease. */
+  transition: border-color 160ms var(--ease);
 }
 
 /* The ten seconds to the gun, drawn across the foot of the thing that fires it.
@@ -1098,7 +1186,7 @@
 /* Inverts, the way the console's own primary button does, rather than picking
    up a second fill colour this layer would then have to name. */
 .goBtn:hover {
-  background: transparent;
+  background: var(--water-deep);
   color: var(--brief-ink);
 }
 
@@ -1320,6 +1408,16 @@
 @media (prefers-reduced-motion: reduce) {
   .cover {
     transition: none;
+  }
+
+  .briefDitherCanvas,
+  .briefDitherFallback {
+    transition: none;
+  }
+
+  .briefDither::after {
+    animation: none;
+    transform: translate3d(0, 0, 0) scale(1.08);
   }
 
   .panel,
