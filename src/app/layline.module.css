@@ -511,40 +511,71 @@
   background: var(--water-deep);
 }
 
-/* Task navigation and task facts use the four console docks. They never add a
-   normal-flow sibling above or below the stage, so the library still hands one
-   viewport cell to one replay. */
-.analysisWorkspaceTabs {
-  grid-row: 2;
-  display: flex;
-  grid-column: 1 / -1;
-  align-self: stretch;
-  gap: 2px;
-  min-width: 0;
-  padding: 3px 0 4px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  border-top: 1px solid var(--rule);
-  scrollbar-width: thin;
+/* Analyze stays in the status row. Its temporary picker owns a second row only
+   while open, so Replay does not carry permanent task chrome. */
+.analysisNavigation {
+  display: contents;
 }
 
-.analysisWorkspaceTab {
-  flex: 1 0 72px;
-  min-width: 72px;
-  min-height: 32px;
-  padding: 0 8px;
+.analyzeButton,
+.analysisWorkspaceTab,
+.analysisReplayButton {
+  min-height: 44px;
+  padding: 0 12px;
   background: transparent;
-  border: 1px solid transparent;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
   color: var(--ink-dim);
   font-family: var(--font-archivo), sans-serif;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.12em;
+  line-height: 16px;
   text-transform: uppercase;
   cursor: var(--house-cursor);
 }
 
+.analyzeButton {
+  grid-row: 1;
+  grid-column: 4;
+  min-width: 92px;
+}
+
+.analysisTaskPicker {
+  grid-row: 2;
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  padding: 4px 0;
+  border-top: 1px solid var(--rule);
+}
+
+.analysisWorkspaceTabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.analysisWorkspaceTab,
+.analysisReplayButton {
+  min-width: 0;
+  border-color: transparent;
+  white-space: nowrap;
+}
+
+.analyzeButton:hover,
 .analysisWorkspaceTab:hover {
+  color: var(--ink);
+}
+
+.analysisReplayButton:hover {
+  border-color: var(--rule);
   color: var(--ink);
 }
 
@@ -554,7 +585,9 @@
   color: var(--ink);
 }
 
-.analysisWorkspaceTab:focus-visible {
+.analyzeButton:focus-visible,
+.analysisWorkspaceTab:focus-visible,
+.analysisReplayButton:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
 }
@@ -1000,18 +1033,16 @@
 }
 
 .dockTopAnalysis {
-  grid-template-rows: 48px 40px;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   column-gap: 16px;
   row-gap: 0;
-  height: 88px;
   padding-top: 0;
   padding-bottom: 0;
 }
 
-.dockTopAnalysis > .wordmarkBlock,
-.dockTopAnalysis > .clockBlock,
-.dockTopAnalysis > .windGroup {
-  grid-row: 1;
+.dockTopAnalysis:has(.analysisTaskPicker) {
+  grid-template-rows: 48px 52px;
+  height: 100px;
 }
 
 /* Dock containers are placement only. Their boxes stretch over open water
@@ -1029,33 +1060,14 @@
 
 .dockLeft > *,
 .dockRight > *,
-.dockVector > *,
 .dockBottom > * {
   pointer-events: auto;
 }
 
-/* The velocity triangle's own plate, in the open water beside the transport.
-   Populated only while the right column would otherwise carry the triangle;
-   Compare keeps it inline because its own panel owns this corner. */
-.dockVector {
-  position: absolute;
-  z-index: 3;
-  left: 8px;
-  bottom: 8px;
-  width: 264px;
-  pointer-events: none;
-}
-
-.dockVector:empty {
-  display: none;
-}
-
-.dockVector .vectorTriangle {
-  border-top: 0;
-  padding-top: 0;
-}
-
 .dockLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   left: 8px;
   top: 56px;
   width: 264px;
@@ -1075,17 +1087,16 @@
   container-type: inline-size;
 }
 
-/* The second top-dock row is task navigation. Side task surfaces begin below
-   it. Evidence can use the full right edge, so its bottom dock yields that
-   264px column instead of painting under the truth panel. */
-.stage[data-analysis-ready="true"] .dockLeft,
-.stage[data-analysis-ready="true"] .dockRight {
-  top: 96px;
+/* An open picker adds the second top-dock row. Side task surfaces begin below
+   it until the picker closes. */
+.stage:has(.analysisTaskPicker) .dockLeft,
+.stage:has(.analysisTaskPicker) .dockRight {
+  top: 108px;
 }
 
 /* Desktop task panels and the replay transport share the active task side.
-   Overview, Start and Performance own the left track; Evidence owns the right;
-   Compare supplies its wider left boundary below. The opposite transport edge
+   Start review owns the left track; Evidence owns the right; Compare supplies
+   its wider left boundary below. The opposite transport edge
    stays on the scene edge, so its evidence lanes keep their horizontal shape.
    Panels keep a complete scroll range while the transport yields the owned
    side. Phone docks return to document flow below. */
@@ -1124,7 +1135,7 @@
     overscroll-behavior: contain;
   }
 
-  /* The Evidence tabpanel passes the column height through to the inspector
+  /* The Evidence panel passes the column height through to the inspector
      it holds; its own flex column already stretches children. */
   .dockRight > .analysisWorkspacePanel,
   .stage[data-analysis-panel-dock="left"] .dockLeft > .analysisWorkspacePanel {
@@ -1138,12 +1149,6 @@
 
   .dockRight:not(:empty) ~ .dockBottom {
     right: 280px;
-  }
-
-  /* The docked triangle owns the bottom-left column the same way, so the
-     transport clears it even where no left task panel already reserved it. */
-  .stage[data-vector-dock="true"] .dockBottom {
-    left: 280px;
   }
 
   /* Compare's open-rail transport is the narrowest desktop timeline. Its
@@ -1160,8 +1165,8 @@
   }
 }
 
-.stage[data-analysis-ready="true"] .chartLayer {
-  top: 96px;
+.stage:has(.analysisTaskPicker) .chartLayer {
+  top: 108px;
 }
 
 /* At the shortest supported desktop height the six-row standings witness
@@ -1651,6 +1656,16 @@
   gap: 10px;
 }
 
+.truthSectionHeading {
+  margin: 0;
+  color: var(--ink-dim);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  line-height: 14px;
+  text-transform: uppercase;
+}
+
 .truthHeader,
 .truthClock,
 .truthPhase {
@@ -1796,56 +1811,6 @@
   border-top: 1px solid var(--rule);
 }
 
-.truthVectors > div {
-  display: grid;
-  gap: 4px;
-  padding: 6px 8px;
-  border-left: 2px solid var(--rule);
-}
-
-.truthVectors > div[data-provenance="measured"] {
-  border-left-color: var(--raw);
-}
-
-.truthVectors strong {
-  color: var(--ink-dim);
-  font-family: var(--font-archivo), sans-serif;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  line-height: 14px;
-}
-
-.truthVelocityTable {
-  display: grid;
-  font-family: var(--font-martian), monospace;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  line-height: 16px;
-}
-
-.truthVelocityHead,
-.truthVelocityRow {
-  display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 0.7fr) auto;
-  gap: 6px;
-  align-items: center;
-  padding: 2px 0;
-}
-
-.truthVelocityHead {
-  color: var(--ink-dim);
-  font-family: var(--font-archivo), sans-serif;
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-}
-
-.truthVelocityHead span:nth-child(n + 2),
-.truthVelocityRow span:nth-child(n + 2) {
-  text-align: right;
-}
-
 .vectorTriangle {
   display: grid;
   grid-template-columns: minmax(112px, 0.8fr) minmax(0, 1.2fr);
@@ -1855,7 +1820,7 @@
 }
 
 .vectorHeader,
-.vectorTrace {
+.vectorMethod {
   grid-column: 1 / -1;
 }
 
@@ -1867,7 +1832,6 @@
   line-height: 14px;
 }
 
-.vectorHeader span,
 .vectorTrace {
   color: var(--ink-dim);
 }
@@ -1925,6 +1889,35 @@
 .vectorLegend span {
   position: relative;
   padding-left: 24px;
+}
+
+.vectorMethod {
+  border-top: 1px solid var(--rule);
+}
+
+.vectorMethod > summary {
+  min-height: 32px;
+  padding: 7px 0;
+  color: var(--ink-dim);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 16px;
+  text-transform: uppercase;
+  cursor: var(--house-cursor);
+}
+
+.vectorMethodBody {
+  display: grid;
+  gap: 3px;
+  padding: 0 0 6px;
+  color: var(--ink-dim);
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.vectorMethodBody p {
+  margin: 0;
 }
 
 .vectorLegend span::before {
@@ -3550,10 +3543,21 @@
   .console {
     height: auto;
     min-height: 0;
+    width: 100%;
+    max-width: 100%;
   }
 
   .analysisWorkspaceTab {
-    min-height: 40px;
+    min-height: 44px;
+  }
+
+  .analysisLayerDisclosure > summary,
+  .vectorMethod > summary,
+  .comparisonObservations summary,
+  .analysisLayerChoice,
+  .analysisLayerReset,
+  .startSeek {
+    min-height: 44px;
   }
 
   .stage[data-analysis-panel-dock="right"] .dockRight {
@@ -3576,9 +3580,18 @@
   .stage {
     display: flex;
     flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow: visible;
     /* The water is inside the canvas now rather than behind everything, so the
        panels stand on the page's own ground the way the notes below them do. */
     background: var(--page-ground);
+  }
+
+  .stage > * {
+    min-width: 0;
+    max-width: 100%;
   }
 
   /* Behind a brief nobody has read, the rest of the column is dead weight. The
@@ -3593,7 +3606,7 @@
      releasing the gate drops the cap and the column is already the shape it
      was going to be. */
   .stage[data-gate="brief"] {
-    max-height: calc(100svh - var(--composer-bar, 59px) - env(safe-area-inset-bottom));
+    max-height: 100svh;
   }
 
   .stage[data-gate="brief"] > * {
@@ -3609,29 +3622,28 @@
 
   .dockLeft,
   .dockRight,
-  .dockVector,
   .dockBottom {
     position: static;
     width: auto;
   }
 
   .dockLeft {
-    order: 2;
+    order: 5;
     margin: 8px 8px 0;
   }
 
   .dockRight {
-    order: 4;
+    order: 6;
     margin: 8px 8px 0;
   }
 
-  .dockVector {
+  .stage[data-analysis-active="true"] .dockLeft,
+  .stage[data-analysis-active="true"] .dockRight {
     order: 4;
-    margin: 8px 8px 0;
   }
 
   .dockBottom {
-    order: 5;
+    order: 3;
     margin: 8px;
   }
 
@@ -3642,7 +3654,7 @@
      handset size and the floor holds it above 300px on a short screen. */
   .canvasLayer {
     position: relative;
-    order: 3;
+    order: 2;
     flex: none;
     height: 48vh;
     min-height: 300px;
@@ -3657,7 +3669,7 @@
      would stop that frame ever arriving. */
   .fallbackLayer {
     position: static;
-    order: 3;
+    order: 2;
     overflow: visible;
     padding: 8px;
   }
@@ -3712,6 +3724,11 @@
     font-size: 13px;
   }
 
+  .truthButton {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
   /* ---- standings in two columns of three ---- */
 
   /* A row rail put four of the six boats past the right edge of a 390px phone,
@@ -3731,14 +3748,14 @@
   .standingRow {
     grid-template-columns: 16px 10px minmax(0, 1fr) auto;
     gap: 6px;
-    min-height: 40px;
+    min-height: 44px;
     padding: 8px 6px;
   }
 
-  /* ---- instruments in two rows of three ---- */
+  /* ---- compact instruments ---- */
 
   .instrGrid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .instrValue {
@@ -3757,19 +3774,25 @@
   }
 
   .playButton {
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
   }
 
-  /* A thumb needs 40px in both directions. "1X" and "TV" are narrow enough
+  /* A thumb needs 44px in both directions. "1X" and "TV" are narrow enough
      that padding alone left the rate and rig cells at 35 to 37 across, so the
      floor is stated rather than inferred from the label. */
   .segButton,
   .snapButton,
   .return3dButton {
-    min-width: 40px;
-    min-height: 40px;
+    min-width: 44px;
+    min-height: 44px;
     padding: 12px 10px;
+  }
+
+  /* Match the container rule's specificity so its desktop-only 40px packing
+     cannot lower touch targets. The row already wraps before it can overflow. */
+  .dockBottom .cameraGroup .viewButton {
+    min-width: 44px;
   }
 
   .comparisonHeader,
@@ -3784,7 +3807,7 @@
   }
 
   .referenceField select {
-    min-height: 40px;
+    min-height: 44px;
     max-width: none;
     flex: 1 1 220px;
   }
@@ -3799,7 +3822,7 @@
   }
 
   .comparisonRangeControl .rangeButton {
-    min-height: 40px;
+    min-height: 44px;
     flex: 1 1 96px;
   }
 
@@ -3836,11 +3859,11 @@
   }
 
   .eventsToggle {
-    min-height: 40px;
+    min-height: 44px;
   }
 
   .rangeButton {
-    min-height: 40px;
+    min-height: 44px;
     padding: 10px;
   }
 
@@ -3852,11 +3875,11 @@
   .phaseRail {
     grid-row: 3;
     grid-column: 1 / -1;
-    height: 40px;
+    height: 44px;
   }
 
   .phaseBand {
-    min-width: 40px;
+    min-width: 44px;
   }
 
   .eventRail {
@@ -3866,18 +3889,18 @@
 
   .eventRail,
   .manRail {
-    --point-clearance: 48px;
-    --point-row-pitch: 48px;
+    --point-clearance: 52px;
+    --point-row-pitch: 52px;
     --point-rail-pad: 4px;
   }
 
   .eventMark {
-    width: 40px;
-    height: 40px;
-    margin-left: -20px;
+    width: 44px;
+    height: 44px;
+    margin-left: -22px;
   }
 
-  /* The same 40px floor the rate and rig cells take above. The glyph stays at
+  /* The same 44px floor the rate and rig cells take above. The glyph stays at
      10px. Packed rows add only when two focus footprints need the same time
      interval. */
   .manRail {
@@ -3888,7 +3911,7 @@
   .manMark {
     width: 44px;
     min-width: 44px;
-    height: 40px;
+    height: 44px;
     margin-left: -22px;
   }
 
@@ -3899,18 +3922,21 @@
   .comparisonRail {
     grid-row: 9;
     grid-column: 1 / -1;
-    height: 40px;
+    height: 44px;
   }
 
   .comparisonRangeBand {
-    min-width: 40px;
-    line-height: 34px;
+    top: 0;
+    bottom: auto;
+    height: 44px;
+    min-width: 44px;
+    line-height: 38px;
   }
 
   .track {
     grid-row: 11;
     grid-column: 1 / -1;
-    height: 40px;
+    height: 44px;
   }
 
   /* The two rows stop sharing a gutter here: the track and the trace each take
@@ -3974,6 +4000,22 @@
   }
 }
 
+/* Analyze adds a fourth desktop track. Remove secondary venue copy before it
+   can set the width of the 640px acceptance layout. */
+@media (max-width: 700px) {
+  .dockTopAnalysis {
+    column-gap: 8px;
+  }
+
+  /* The renderer can finish warming while the brief is still open. During
+     that interval the plain three-track bar is mounted behind the cover, not
+     the analysis variant, and its venue line otherwise pushes the wind block
+     37px past the 640px viewport. */
+  .dockTop .wordmarkMeta {
+    display: none;
+  }
+}
+
 /* Two bounded tracks keep long content from setting the phone width. Brand and
    clock share the first row. Truth, replay lens and wind wrap in the full-width
    status row, so each remains readable without hiding an action. */
@@ -3992,32 +4034,30 @@
   .dockTopAnalysis {
     grid-template-areas:
       "brand clock"
-      "status status"
-      "navigation navigation";
-    grid-template-rows: auto auto 40px;
-    min-height: 136px;
+      "status analyze";
+    grid-template-rows: auto auto;
+    min-height: 96px;
   }
 
-  .dockTopAnalysis .analysisWorkspaceTabs {
-    grid-area: navigation;
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 0;
-    height: 40px;
-    min-height: 40px;
+  .dockTopAnalysis:has(.analysisTaskPicker) {
+    grid-template-areas:
+      "brand clock"
+      "status analyze"
+      "picker picker";
+    grid-template-rows: auto auto auto;
+    height: auto;
+    min-height: 148px;
+  }
+
+  .dockTopAnalysis .analyzeButton {
+    grid-area: analyze;
+    justify-self: end;
+  }
+
+  .dockTopAnalysis .analysisTaskPicker {
+    grid-area: picker;
     margin-inline: -8px;
-    padding: 0;
-    overflow: hidden;
-    scrollbar-width: none;
-  }
-
-  .dockTopAnalysis .analysisWorkspaceTab {
-    min-width: 0;
-    min-height: 39px;
-    padding: 0 2px;
-    font-size: 8px;
-    letter-spacing: 0;
-    white-space: nowrap;
+    padding-inline: 8px;
   }
 
   .wordmarkBlock,
@@ -4064,7 +4104,7 @@
 
   .truthButton,
   .replayStatus {
-    min-height: 40px;
+    min-height: 44px;
   }
 
   .truthButtonState {
@@ -4081,6 +4121,20 @@
      still on screen while the race is in it. Beat and Run both fit. */
   .bandQuiet .bandLabel {
     display: none;
+  }
+}
+
+@media (max-width: 479px) {
+  .analysisTaskPicker {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .analysisWorkspaceTabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .analysisReplayButton {
+    width: 100%;
   }
 }
 

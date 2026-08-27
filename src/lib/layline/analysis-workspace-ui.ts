@@ -1,5 +1,4 @@
 import {
-  ANALYSIS_WORKSPACE_IDS,
   ANALYSIS_WORKSPACE_PRESETS,
   ANALYSIS_LAYER_IDS,
   type AnalysisWorkspaceSession,
@@ -18,7 +17,20 @@ import {
 } from "./analysis-layers";
 
 export const ANALYSIS_WORKSPACE_PANEL_ID = "analysis-workspace-panel";
+export const ANALYSIS_TASK_PICKER_ID = "analysis-task-picker";
 export const ANALYSIS_TIMELINE_PHONE_MAX_HEIGHT_PX = 320;
+
+/** Domain workspaces stay complete; this is the smaller set the race UI can offer. */
+export const ANALYSIS_AVAILABLE_TASK_IDS: readonly AnalysisWorkspaceId[] = Object.freeze([
+  "start",
+  "compare",
+  "evidence",
+]);
+
+export const ANALYSIS_POSTSTART_TASK_IDS: readonly AnalysisWorkspaceId[] = Object.freeze([
+  "compare",
+  "evidence",
+]);
 
 export type AnalysisWorkspacePanelDock = "left" | "right";
 
@@ -90,15 +102,19 @@ export function analysisWorkspaceTabId(id: AnalysisWorkspaceId): string {
 
 export function analysisWorkspaceTabModel(
   active: AnalysisWorkspaceId,
+  availableTaskIds: readonly AnalysisWorkspaceId[] = ANALYSIS_AVAILABLE_TASK_IDS,
 ): readonly AnalysisWorkspaceTabModel[] {
+  const focusId = availableTaskIds.includes(active)
+    ? active
+    : availableTaskIds[0];
   return Object.freeze(
-    ANALYSIS_WORKSPACE_IDS.map((id) =>
+    availableTaskIds.map((id) =>
       Object.freeze({
         id,
         label: ANALYSIS_WORKSPACE_PRESETS[id].label,
         role: "tab" as const,
         selected: id === active,
-        tabIndex: id === active ? 0 as const : -1 as const,
+        tabIndex: id === focusId ? 0 as const : -1 as const,
         tabId: analysisWorkspaceTabId(id),
         controls: ANALYSIS_WORKSPACE_PANEL_ID,
       }),
@@ -109,22 +125,33 @@ export function analysisWorkspaceTabModel(
 export function nextAnalysisWorkspaceTabId(
   current: AnalysisWorkspaceId,
   key: string,
+  availableTaskIds: readonly AnalysisWorkspaceId[] = ANALYSIS_AVAILABLE_TASK_IDS,
 ): AnalysisWorkspaceId | null {
-  const index = ANALYSIS_WORKSPACE_IDS.indexOf(current);
-  if (index < 0) return null;
-  if (key === "Home") return ANALYSIS_WORKSPACE_IDS[0];
-  if (key === "End") return ANALYSIS_WORKSPACE_IDS[ANALYSIS_WORKSPACE_IDS.length - 1];
+  if (availableTaskIds.length === 0) return null;
+  const index = availableTaskIds.indexOf(current);
+  if (key === "Home") return availableTaskIds[0];
+  if (key === "End") {
+    return availableTaskIds[availableTaskIds.length - 1];
+  }
   if (key !== "ArrowLeft" && key !== "ArrowRight") return null;
+  if (index < 0) {
+    return key === "ArrowRight"
+      ? availableTaskIds[0]
+      : availableTaskIds[availableTaskIds.length - 1];
+  }
   const delta = key === "ArrowRight" ? 1 : -1;
-  const next = (index + delta + ANALYSIS_WORKSPACE_IDS.length) % ANALYSIS_WORKSPACE_IDS.length;
-  return ANALYSIS_WORKSPACE_IDS[next];
+  const next =
+    (index + delta + availableTaskIds.length) %
+    availableTaskIds.length;
+  return availableTaskIds[next];
 }
 
 export function workspaceTabSelectionIntent(
   current: AnalysisWorkspaceId,
   key: string,
+  availableTaskIds: readonly AnalysisWorkspaceId[] = ANALYSIS_AVAILABLE_TASK_IDS,
 ): Readonly<{ workspaceId: AnalysisWorkspaceId; handled: boolean }> {
-  const workspaceId = nextAnalysisWorkspaceTabId(current, key);
+  const workspaceId = nextAnalysisWorkspaceTabId(current, key, availableTaskIds);
   return workspaceId === null
     ? Object.freeze({ workspaceId: current, handled: false })
     : Object.freeze({ workspaceId, handled: true });
@@ -203,7 +230,7 @@ export function analysisWorkspacePanelModel(
       panelId: workspace.panel,
       surface: "start-line",
       available: true,
-      title: "Start",
+      title: "Start review",
       description: "Start-line evidence is available before the gun.",
     });
   }

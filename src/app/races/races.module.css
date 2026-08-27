@@ -19,14 +19,6 @@
    own stacked rules take the viewer apart into its docks.
    ========================================================================= */
 
-/* The height of the composer bar the analyst pins to the foot of the viewport
-   below 1200px: a 42px field inside 8px of padding either side, over a 1px
-   rule. Declared on the page because two rules read it, the bar itself in the
-   analyst sheet and the room this page leaves under everything for it. */
-.page {
-  --composer-bar: 59px;
-}
-
 /* Five drawn readings, not five bare colour wells. The little ground inside
    each drawing belongs to the theme it names; the linework always takes the
    chrome's current ink, so every icon survives all five grounds. */
@@ -457,12 +449,8 @@
   font-weight: 400;
 }
 
-/* ---- the selected race, live ----
-
-   The status is part of its race row, not another card in the library. It
-   follows the same shared live sample as the console dock: rank moves React,
-   while clock, phase and readings write into their existing nodes. Six 36px
-   targets fit the deployed 220px rail without a nested scroll viewport. */
+/* The selected race owns the compact form while the library is open. The
+   replay dock carries the same live standings only when this rail is closed. */
 .raceStatus {
   min-width: 0;
   padding: 8px 8px 9px;
@@ -741,12 +729,6 @@
     left: 16px;
   }
 
-  /* The composer exists only while its drawer is open. Its fixed bar needs a
-     matching landing strip at the page foot, and a closed drawer needs none. */
-  .page:has(.workspace[data-analyst-open="true"]) {
-    padding-bottom: calc(var(--composer-bar) + env(safe-area-inset-bottom));
-  }
-
   /* The rail becomes a picker across the top, carrying the same four readings
      a row carries in the column: a chip that drops the fleet size and the
      winning time would ask a phone to choose between races on the name alone. */
@@ -765,12 +747,10 @@
     width: 168px;
   }
 
-  /* Live standings remain part of the selected race, but six stacked targets
-     made that one 168px chip taller than the rest of the phone viewport. Give
-     the active card nearly one handset and place the fleet in two measured
-     columns. All six 36px controls stay visible; the next race still peeks in
-     to state that the rail scrolls. */
-  .rowShell[data-current="true"] {
+  /* Six stacked targets would make the selected card taller than a phone.
+     Give only the card carrying live standings more room and measure its fleet
+     in two columns. The replay dock is absent while this card is present. */
+  .rowShell:has(.raceStatus) {
     width: min(316px, calc(100vw - 48px));
   }
 
@@ -822,14 +802,27 @@
     height: auto;
     min-height: 0;
   }
+
+  .themeButton,
+  .panelToggle {
+    width: 44px;
+    height: 44px;
+  }
+
+  .paneToggle,
+  .searchField,
+  .searchClear,
+  .rowAction,
+  .archiveSummary {
+    min-height: 44px;
+  }
 }
 
 /* ---- laptop: three columns, one viewport ---- */
 
 @media (min-width: 1200px) {
-  /* A live selected row is taller than the archive's ordinary race-only cap.
-     Let the library's existing flex column reclaim the blank active-list space
-     instead of putting six standings into a 300px nested peephole. */
+  /* The selected row grows to carry six live readings. Let the library use
+     its available height instead of trapping them in a nested scrollport. */
   .archive:has(.raceStatus) .archiveRows {
     max-height: none;
     overflow-y: visible;

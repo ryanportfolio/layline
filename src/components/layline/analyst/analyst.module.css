@@ -1520,6 +1520,15 @@
     padding: 12px;
   }
 
+  .dockChip,
+  .chip,
+  .input,
+  .sendButton,
+  .retryButton {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
   .cardGlyph svg {
     width: 40px;
     height: 26px;
@@ -1651,9 +1660,8 @@
    part, in the same markup, so a chip and a turn behave identically on both
    pages.
 
-   The panel pins the composer to its foot and gives the thread every pixel
-   above it. That is what holds the column still while an answer streams: the
-   text scrolls inside a box whose height never changes. */
+   The panel keeps the composer after a bounded thread. An answer streams into
+   that thread without growing the page one line at a time. */
 
 .dock {
   display: flex;
@@ -1795,25 +1803,6 @@
 @media (max-width: 1199px) {
   .dockConversation .thread {
     max-height: 360px;
-  }
-
-  /* The composer leaves the flow and pins to the foot of the viewport. On a
-     390px handset the analyst starts a screen and a half down the page, and a
-     composer that far down is a composer nobody knows is there. The page hands
-     back --composer-bar as bottom padding, so the transport, the timeline and
-     the last turn in the thread all still clear it. */
-  .dock .inputRow {
-    position: fixed;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    /* Over the console's own docks, which top out at 5, and under the skip
-       links at 20. */
-    z-index: 12;
-    height: calc(var(--composer-bar, 59px) + env(safe-area-inset-bottom));
-    padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
-    background: var(--page-ground);
-    border-top: 1px solid var(--rule);
   }
 }
 

@@ -137,10 +137,6 @@
      size carry the hierarchy instead. */
   --brief-head-line: color-mix(in srgb, var(--water-deep) 30%, transparent);
 
-  /* Nothing is pinned over the brief at this width, so the footer sits on the
-     padding it was drawn with. The narrow branch below hands this the height
-     of the analyst's composer. */
-  --brief-foot-gap: 0px;
 }
 
 .out {
@@ -165,7 +161,7 @@
   flex-direction: column;
   gap: 1.8cqw;
   height: 100%;
-  padding: 3cqw 3.2cqw calc(2.2cqw + var(--brief-foot-gap));
+  padding: 3cqw 3.2cqw 2.2cqw;
   overflow: hidden;
   color: var(--brief-ink);
   font-family: var(--brief-sans);
@@ -688,7 +684,7 @@
   .brief {
     gap: 0.8cqw;
     padding-top: 2cqw;
-    padding-bottom: calc(1.2cqw + var(--brief-foot-gap));
+    padding-bottom: 1.2cqw;
   }
 
   /* The footer's way through gives its slack padding back to the plates: with
@@ -957,15 +953,6 @@
   transition: opacity 180ms var(--ease);
 }
 
-.polarCap {
-  flex: none;
-  margin: 0;
-  color: var(--brief-dim);
-  font-family: var(--brief-mono);
-  font-size: 9px;
-  line-height: 14px;
-}
-
 .perfTable {
   display: flex;
   flex-direction: column;
@@ -1096,15 +1083,41 @@
   transition: opacity 180ms var(--ease);
 }
 
-/* What the figures rest on, stated under them rather than in a legend nobody
-   reads. Spans both columns: it describes the plate and the table equally. */
-.perfNote {
+/* The plots and figures stay visible. Their existing scaling, channel and
+   sampling notes share one native disclosure under both columns. */
+.perfMethod {
   grid-column: 1 / -1;
-  margin: 0;
+  background: color-mix(in srgb, var(--brief-ink) 4%, transparent);
+  border: 1px solid var(--brief-hair);
   color: var(--brief-dim);
+}
+
+.perfMethod > summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 12px;
+  color: var(--brief-ink);
+  font-family: var(--brief-sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  line-height: 16px;
+  text-transform: uppercase;
+  cursor: var(--house-cursor);
+}
+
+.perfMethodBody {
+  display: grid;
+  gap: 6px;
+  padding: 0 12px 12px;
   font-family: var(--brief-mono);
   font-size: 9px;
   line-height: 14px;
+}
+
+.perfMethodBody p {
+  margin: 0;
 }
 
 /* ---- footer ---- */
@@ -1208,32 +1221,28 @@
    top of one, the blocks scroll inside the brief and the footer stays where a
    thumb can reach it.
 
-   The screen it is held to ends where the analyst's composer begins: below
-   this same width the composer leaves the flow and pins to the foot of the
-   viewport at z-index 12 (analyst.module.css), and the page already gives it
-   that much back as bottom padding. A brief measured against the whole svh
-   would put Continue underneath it, unclickable. */
+   With the Debrief composer back in panel flow, the brief can use the complete
+   small viewport without reserving an overlay band. */
 @media (max-width: 1199px) {
   .brief {
     position: sticky;
     top: 0;
-    max-height: calc(100svh - var(--composer-bar, 59px) - env(safe-area-inset-bottom));
+    max-height: 100svh;
   }
+}
 
-  /* The composer's band, given back as padding so Continue is never drawn into
-     it. The cap above only holds while the brief is pinned; scrolled to where
-     the gate is simply fully in view, the gate's own bottom edge lands on the
-     viewport foot, and a footer flush with that edge lands under the composer.
-     Holding the footer this far off the edge clears it at both positions. */
-  .cover {
-    --brief-foot-gap: calc(var(--composer-bar, 59px) + env(safe-area-inset-bottom));
+/* These are the two ways through the brief's content, so they use the same
+   touch floor as Method and Start the race on tablet and phone layouts. */
+@media (max-width: 900px) {
+  .viewBtn {
+    min-height: 44px;
   }
 }
 
 @container (max-width: 760px) {
   .brief {
     gap: 12px;
-    padding: 16px 16px calc(16px + var(--brief-foot-gap));
+    padding: 16px;
   }
 
   .briefHead {

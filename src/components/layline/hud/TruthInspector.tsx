@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import { useEffect, useRef } from "react";
 import styles from "@/app/layline.module.css";
-import { MISSING, deg, fixStamp, heading, knots } from "@/lib/layline/format";
+import { fixStamp, heading } from "@/lib/layline/format";
 import { createPose, telemetryTruthAt } from "@/lib/layline/interpolate";
 import type { LaylineInspectionSurface } from "@/lib/layline/surfaces";
 import type { Pose, RaceData, TelemetryTruth } from "@/lib/layline/types";
@@ -51,27 +51,6 @@ function phaseLabel(truth: TelemetryTruth): string {
     : `${(truth.u * 100).toFixed(1)}% BETWEEN FIXES`;
 }
 
-function currentCaption(value: Pose | null): string {
-  if (value === null) return "Current components unavailable";
-  return value.telemetryProvenance === "recorded-fix"
-    ? "Recorded current sample"
-    : "Reconstructed current from recorded fixes";
-}
-
-/* The three velocities as a scannable table rather than the joined mono wall
- * the panel used to carry: one row per frame of reference, speed and bearing
- * as the readings. The x/y component pairs stayed in the sampled pose but left
- * the display; the vector triangle already draws that geometry. */
-function velocitySpeed(value: Pose | null, key: "stw" | "currentDrift" | "sog"): string {
-  return value === null ? MISSING : knots(value[key]);
-}
-
-function velocityToward(value: Pose | null, key: "ctw" | "currentSet" | "cog"): string {
-  if (value === null) return MISSING;
-  const bearing = value[key];
-  return bearing === null ? MISSING : `${deg(bearing)}°`;
-}
-
 export function TruthInspector({
   race,
   inspection,
@@ -79,17 +58,16 @@ export function TruthInspector({
 }: {
   race: RaceData;
   inspection?: LaylineInspectionSurface | null;
-  /* False when the app docks the velocity triangle on its own plate. */
+  /* The story Truth control keeps its proof. Race-library Evidence is the
+   * only analysis workspace that passes this proof through. */
   vector?: boolean;
 }) {
   const followId = useReplay((state) => state.followId);
   const chart2d = useReplay((state) => state.chart2d);
   const sceneUp = useReplay((state) => state.webglOk);
-  const rawMode = useReplay((state) => state.mode === "raw");
   const boat = race.boats.find((entry) => entry.id === followId) ?? race.boats[0];
   const buffer = useRef(truthBuffer());
   const initial = telemetryTruthAt(race, boat.id, sampleLive(race).t, buffer.current);
-  const initialVelocityPose = rawMode ? initial.raw : initial.reconstructed;
 
   const replayTime = useRef<HTMLSpanElement>(null);
   const beforeId = useRef<HTMLSpanElement>(null);
@@ -103,14 +81,6 @@ export function TruthInspector({
   const rawHeading = useRef<HTMLSpanElement>(null);
   const reconstructedPosition = useRef<HTMLSpanElement>(null);
   const reconstructedHeading = useRef<HTMLSpanElement>(null);
-  const velocityBlock = useRef<HTMLDivElement>(null);
-  const velocityCaption = useRef<HTMLElement>(null);
-  const waterSpeed = useRef<HTMLSpanElement>(null);
-  const waterToward = useRef<HTMLSpanElement>(null);
-  const currentSpeed = useRef<HTMLSpanElement>(null);
-  const currentToward = useRef<HTMLSpanElement>(null);
-  const groundSpeed = useRef<HTMLSpanElement>(null);
-  const groundToward = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     return onLive(race, (live) => {
@@ -133,27 +103,6 @@ export function TruthInspector({
       setText(rawHeading.current, poseHeading(truth.raw));
       setText(reconstructedPosition.current, posePosition(truth.reconstructed));
       setText(reconstructedHeading.current, poseHeading(truth.reconstructed));
-      /* One velocity block, following the active lens. The recorded and the
-       * reconstructed readouts repeated the same three component lines, so the
-       * pair collapsed into the pose the viewer is actually watching, with its
-       * provenance stated on the block. */
-      const velocityPose = live.mode === "raw" ? truth.raw : truth.reconstructed;
-      setText(velocityCaption.current, currentCaption(velocityPose));
-      setText(waterSpeed.current, velocitySpeed(velocityPose, "stw"));
-      setText(waterToward.current, velocityToward(velocityPose, "ctw"));
-      setText(currentSpeed.current, velocitySpeed(velocityPose, "currentDrift"));
-      setText(currentToward.current, velocityToward(velocityPose, "currentSet"));
-      setText(groundSpeed.current, velocitySpeed(velocityPose, "sog"));
-      setText(groundToward.current, velocityToward(velocityPose, "cog"));
-      /* Compared first: the value flips at fix cadence, not frame cadence, and
-       * [data-provenance] is a styled attribute, so a repeated setAttribute is
-       * a real style invalidation sixty times a second. */
-      const provenance =
-        velocityPose?.telemetryProvenance === "recorded-fix" ? "measured" : "reconstructed";
-      const block = velocityBlock.current;
-      if (block !== null && block.getAttribute("data-provenance") !== provenance) {
-        block.setAttribute("data-provenance", provenance);
-      }
     });
   }, [race]);
 
@@ -163,9 +112,9 @@ export function TruthInspector({
     <section
       id="truth-inspector"
       className={clsx(styles.panel, styles.truthInspector)}
-      aria-label="Telemetry truth inspector"
+      aria-label="Evidence"
     >
-      <h2 className={styles.dockLabel}>Telemetry truth</h2>
+      <h2 className={styles.dockLabel}>Evidence</h2>
 
       <div className={styles.truthHeader}>
         <span
@@ -183,6 +132,7 @@ export function TruthInspector({
         <span ref={replayTime}>{fixStamp(initial.t)}</span>
       </div>
 
+      <h3 className={styles.truthSectionHeading}>Measured fixes</h3>
       <div className={styles.truthFixes}>
         <div className={styles.truthFix} data-provenance="measured">
           <span className={styles.truthSource}>MEASURED · BEFORE / CURRENT</span>
@@ -203,10 +153,11 @@ export function TruthInspector({
       </div>
 
       <div className={styles.truthPhase} data-provenance="derived">
-        <span className={styles.truthSource}>DERIVED · CLOCK POSITION</span>
+        <span className={styles.truthSource}>INTERPOLATION POSITION</span>
         <strong ref={phase}>{phaseLabel(initial)}</strong>
       </div>
 
+      <h3 className={styles.truthSectionHeading}>Reconstructed state</h3>
       {/* Two cards rather than a three-column table: at the dock's width every
           label and value wrapped mid-word, and the fix cards above already set
           the label-then-reading pattern this panel scans by. */}
@@ -231,50 +182,12 @@ export function TruthInspector({
         </div>
       </div>
 
-      <div className={styles.truthVectors} aria-label="Velocity components with provenance">
-        <div
-          ref={velocityBlock}
-          data-provenance={
-            initialVelocityPose?.telemetryProvenance === "recorded-fix"
-              ? "measured"
-              : "reconstructed"
-          }
-        >
-          <strong ref={velocityCaption}>{currentCaption(initialVelocityPose)}</strong>
-          <div
-            className={styles.truthVelocityTable}
-            role="table"
-            aria-label="Velocity by frame of reference"
-          >
-            <div className={styles.truthVelocityHead} role="row">
-              <span role="columnheader">FRAME</span>
-              <span role="columnheader">KN</span>
-              <span role="columnheader">TOWARD</span>
-            </div>
-            <div className={styles.truthVelocityRow} role="row">
-              <span role="cell">WATER · STW</span>
-              <span role="cell" ref={waterSpeed}>{velocitySpeed(initialVelocityPose, "stw")}</span>
-              <span role="cell" ref={waterToward}>{velocityToward(initialVelocityPose, "ctw")}</span>
-            </div>
-            <div className={styles.truthVelocityRow} role="row">
-              <span role="cell">CURRENT · DRIFT</span>
-              <span role="cell" ref={currentSpeed}>
-                {velocitySpeed(initialVelocityPose, "currentDrift")}
-              </span>
-              <span role="cell" ref={currentToward}>
-                {velocityToward(initialVelocityPose, "currentSet")}
-              </span>
-            </div>
-            <div className={styles.truthVelocityRow} role="row">
-              <span role="cell">GROUND · SOG</span>
-              <span role="cell" ref={groundSpeed}>{velocitySpeed(initialVelocityPose, "sog")}</span>
-              <span role="cell" ref={groundToward}>{velocityToward(initialVelocityPose, "cog")}</span>
-            </div>
-          </div>
+      {vector ? (
+        <div className={styles.truthVectors}>
+          <h3 className={styles.truthSectionHeading}>Velocity proof</h3>
+          <VectorTriangle race={race} inspection={inspection} />
         </div>
-      </div>
-
-      {vector ? <VectorTriangle race={race} inspection={inspection} /> : null}
+      ) : null}
     </section>
   );
 }

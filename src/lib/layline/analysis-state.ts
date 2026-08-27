@@ -280,7 +280,7 @@ export type AnalysisCameraRecommendation =
 
 export interface AnalysisWorkspacePreset {
   readonly id: AnalysisWorkspaceId;
-  readonly label: "Overview" | "Start" | "Compare" | "Performance" | "Evidence";
+  readonly label: "Overview" | "Start review" | "Compare" | "Performance" | "Evidence";
   readonly panel: AnalysisPanelId;
   readonly timelineLaneIds: readonly AnalysisTimelineLaneId[];
   readonly rangePolicy: AnalysisRangePolicy;
@@ -400,7 +400,7 @@ export const ANALYSIS_WORKSPACE_PRESETS: Readonly<
   }),
   start: preset({
     id: "start",
-    label: "Start",
+    label: "Start review",
     panel: "start-line",
     timelineLaneIds: ["start", "phase", "event"],
     rangePolicy: "start-window",
@@ -440,7 +440,7 @@ export const ANALYSIS_WORKSPACE_PRESETS: Readonly<
     panel: "truth-provenance",
     timelineLaneIds: ["phase", "raw-fix", "event", "maneuver"],
     rangePolicy: "current-focus-10",
-    enabledLayers: [],
+    enabledLayers: ["raw-fixes"],
     surfaceCapability: "available",
     defaultReference: null,
     controls: ["truth-mode", "replay-mode"],

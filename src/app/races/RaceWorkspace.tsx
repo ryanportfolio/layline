@@ -199,19 +199,19 @@ function RaceListRow({
   current,
   pinned,
   archived,
+  status,
   onSelect,
   onPin,
   onArchive,
-  status,
 }: {
   row: RaceRow;
   current: boolean;
   pinned: boolean;
   archived: boolean;
+  status?: ReactNode;
   onSelect: () => void;
   onPin: () => void;
   onArchive: () => void;
-  status?: ReactNode;
 }) {
   return (
     <li className={styles.rowShell} data-current={current ? "true" : undefined}>
@@ -327,6 +327,7 @@ export function RaceWorkspace({
   const workspaceRef = useRef<HTMLElement>(null);
   const libraryRef = useRef<HTMLElement>(null);
   const analystRef = useRef<HTMLElement>(null);
+  const analystToggleRef = useRef<HTMLButtonElement>(null);
   const draggedPane = useRef<"rail" | "analyst" | null>(null);
   const [measuredWidths, setMeasuredWidths] = useState({
     rail: initialPreferences.railWidth ?? defaultPaneWidth("rail", 1600),
@@ -402,6 +403,11 @@ export function RaceWorkspace({
    * closed. A question thread and an in-flight answer belong to the selected
    * race, not to whether its panel is taking width this moment. */
   const [analystReady, setAnalystReady] = useState(false);
+
+  useEffect(() => {
+    if (analystOpen || !analystReady) return;
+    analystToggleRef.current?.focus({ preventScroll: true });
+  }, [analystOpen, analystReady]);
 
   /* Also the back button: a navigation changes the prop, and the store follows
    * it. Selecting a race the store already holds is a no-op, so the mount pass
@@ -482,6 +488,15 @@ export function RaceWorkspace({
   };
 
   const clearSearch = () => setQuery("");
+
+  const toggleAnalyst = () => {
+    if (analystOpen) {
+      setAnalystOpen(false);
+      return;
+    }
+    setAnalystReady(true);
+    setAnalystOpen(true);
+  };
 
   const sideFor = (pane: "rail" | "analyst"): PaneSide =>
     pane === "rail"
@@ -713,7 +728,11 @@ export function RaceWorkspace({
       onPin={() => togglePin(row.id)}
       onArchive={() => toggleArchive(row.id)}
       status={
-        current && briefDone && pendingRaceId === null && storeRaceId === initialRaceId
+        current &&
+        libraryOpen &&
+        briefDone &&
+        pendingRaceId === null &&
+        storeRaceId === initialRaceId
           ? <RaceSidebarStatus race={raceData()} />
           : null
       }
@@ -881,6 +900,7 @@ export function RaceWorkspace({
           }
           comparison
           analysisWorkspaces
+          showStandingsDock={!libraryOpen}
         >
           {children}
         </LaylineApp>
@@ -908,16 +928,14 @@ export function RaceWorkspace({
       >
         <div className={styles.paneBar}>
           <button
+            ref={analystToggleRef}
             id="race-analyst-toggle"
             type="button"
             className={styles.paneToggle}
             aria-controls="race-debrief-panel"
             aria-expanded={analystOpen}
             aria-label={analystOpen ? "Close debrief" : "Open debrief"}
-            onClick={() => {
-              if (!analystOpen) setAnalystReady(true);
-              setAnalystOpen((open) => !open);
-            }}
+            onClick={toggleAnalyst}
           >
             <span className={styles.paneLabel}>Debrief</span>
             <span className={styles.paneArrow} aria-hidden="true">

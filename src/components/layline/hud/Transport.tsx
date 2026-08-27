@@ -28,7 +28,7 @@ const RIGS: { name: RigName; label: string }[] = [
 const FRAMES: { target: FrameTarget; label: string; described: string }[] = [
   { target: "fleet", label: "Fleet", described: "Frame the whole fleet" },
   { target: "selected", label: "Boat", described: "Frame the followed boat" },
-  { target: "start", label: "Start", described: "Frame the start line" },
+  { target: "start", label: "Line", described: "Frame the start line" },
   { target: "windward", label: "Mark", described: "Frame the windward mark" },
 ];
 

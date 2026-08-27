@@ -16,6 +16,8 @@ import {
   rendererLayerVisibility,
 } from "@/lib/layline/analysis-layers";
 import {
+  ANALYSIS_AVAILABLE_TASK_IDS,
+  ANALYSIS_POSTSTART_TASK_IDS,
   analysisWorkspacePanelDock,
   analysisWorkspaceSelectedRange,
 } from "@/lib/layline/analysis-workspace-ui";
@@ -36,6 +38,7 @@ import { BoatCursor } from "./BoatCursor";
 import { requestInspectionSurface } from "./inspectionSurfaceClient";
 import { CaptureBridge } from "./CaptureBridge";
 import { Instruments } from "./hud/Instruments";
+import { AnalysisLayerDisclosure } from "./hud/AnalysisLayerDisclosure";
 import { AnalysisWorkspacePanel } from "./hud/AnalysisWorkspacePanel";
 import { AnalysisWorkspaceTabs } from "./hud/AnalysisWorkspaceTabs";
 import { ComparisonPanel } from "./hud/ComparisonPanel";
@@ -45,7 +48,6 @@ import { Timeline } from "./hud/Timeline";
 import { TopBar } from "./hud/TopBar";
 import { Transport } from "./hud/Transport";
 import { TruthInspector } from "./hud/TruthInspector";
-import { VectorTriangle } from "./hud/VectorTriangle";
 import { VmgStrip } from "./hud/VmgStrip";
 import { ChartView } from "./svg/ChartView";
 import { RaceBrief } from "./RaceBrief";
@@ -242,6 +244,7 @@ export function LaylineApp({
   bootBrief,
   comparison = false,
   analysisWorkspaces = false,
+  showStandingsDock = true,
   inspectionCadenceBudget,
 }: {
   children: ReactNode;
@@ -283,6 +286,10 @@ export function LaylineApp({
   comparison?: boolean;
   /* Race-library task composition. State remains in the replay store. */
   analysisWorkspaces?: boolean;
+  /* The race library carries these same live readings in its selected row
+   * while that rail is open. The story has no race rail, so its default is the
+   * replay dock. */
+  showStandingsDock?: boolean;
   inspectionCadenceBudget?: InspectionPlayingCadenceBudget;
 }) {
   const [localBudget] = useState(() => createInspectionPlayingCadenceBudget());
@@ -317,6 +324,33 @@ export function LaylineApp({
   const followId = useReplay((state) => state.followId);
   const replayMode = useReplay((state) => state.mode);
   const analysis = useReplay((state) => state.analysis);
+  /* Subscribe to the predicate, not the clock: crossing the gun causes one
+   * render, while every other replay tick is ignored. */
+  const beforeGun = useReplay((state) => !analysisWorkspaces || state.t < 0);
+  const [analysisAnnouncement, setAnalysisAnnouncement] = useState("");
+  const performanceUnavailableRequested =
+    analysisWorkspaces &&
+    analysis.active === "performance" &&
+    !STAGE7_ANALYSIS_LAYER_CAPABILITIES.performance.available;
+  const startUnavailableRequested =
+    analysisWorkspaces && analysis.active === "start" && !beforeGun;
+  /* Truth remains a valid story-player state, but the race library routes the
+   * same proof through Evidence. Clear a carried story value before it can
+   * become a second visible raw-fix path in Replay. */
+  useEffect(() => {
+    if (!analysisWorkspaces || !truthMode) return;
+    useReplay.getState().setTruthMode(false);
+  }, [analysisWorkspaces, truthMode]);
+  useEffect(() => {
+    if (!performanceUnavailableRequested) return;
+    useReplay.getState().selectAnalysisWorkspace("overview");
+    setAnalysisAnnouncement("Performance is unavailable. Replay selected.");
+  }, [performanceUnavailableRequested]);
+  useEffect(() => {
+    if (!startUnavailableRequested) return;
+    useReplay.getState().selectAnalysisWorkspace("overview");
+    setAnalysisAnnouncement("Start review ended at the gun. Replay selected.");
+  }, [startUnavailableRequested]);
   useEffect(() => {
     setWebglCapable(browserSupportsWebgl());
   }, []);
@@ -326,6 +360,21 @@ export function LaylineApp({
       ? analysisReplayCadenceKey(state.t)
       : 0,
   );
+  const visibleAnalysis = useMemo(() => {
+    if (performanceUnavailableRequested || startUnavailableRequested) {
+      return { ...analysis, active: "overview" as const };
+    }
+    if (analysisWorkspaces && beforeGun && analysis.active === "overview") {
+      return { ...analysis, active: "start" as const };
+    }
+    return analysis;
+  }, [
+    analysis,
+    analysisWorkspaces,
+    beforeGun,
+    performanceUnavailableRequested,
+    startUnavailableRequested,
+  ]);
   const analysisWorkspace = useMemo(() => {
     // This token advances at the bounded analysis cadence even though the
     // current replay time is intentionally read once at resolution below.
@@ -333,7 +382,7 @@ export function LaylineApp({
     return !analysisWorkspaces
         ? null
         : resolveAnalysisWorkspace(
-            analysis,
+            visibleAnalysis,
             race,
             useReplay.getState().t,
             {
@@ -342,7 +391,13 @@ export function LaylineApp({
                 STAGE7_ANALYSIS_LAYER_CAPABILITIES.performance.available,
             },
           );
-  }, [analysis, analysisReplayCadence, analysisWorkspaces, followId, race]);
+  }, [
+    analysisReplayCadence,
+    analysisWorkspaces,
+    followId,
+    race,
+    visibleAnalysis,
+  ]);
   const layerIntent = analysisWorkspace?.layers ?? LEGACY_REPLAY_LAYER_VISIBILITY;
   const sceneLayersFresh = useMemo(
     () => rendererLayerVisibility(layerIntent, "3d"),
@@ -522,40 +577,42 @@ export function LaylineApp({
   useSpaceToggle();
 
   const analysisWorkspaceReady = !briefed || briefDone;
+  const analysisActive =
+    analysisWorkspace !== null &&
+    analysisWorkspace.workspaceId !== "overview";
   const truthFallbackUp =
     !live && analysisWorkspaceReady && (analysisWorkspace !== null || truthMode);
-  const analysisPanelDock = analysisWorkspace === null
+  const analysisPanelDock = !analysisActive || analysisWorkspace === null
     ? null
     : analysisWorkspacePanelDock(analysisWorkspace.panel);
-  /* The velocity triangle leaves the busy right column and takes the open
-   * water beside the transport, everywhere that corner is actually open:
-   * Compare owns the bottom-left with its own panel, so there the triangle
-   * stays inline with the inspector it belongs to. */
-  const vectorDocked =
-    analysisWorkspaceReady &&
-    analysisWorkspace !== null &&
-    analysisWorkspace.workspaceId !== "compare" &&
-    (analysisPanelDock === "right" || truthMode || live);
   const selectWorkspace = (workspaceId: AnalysisWorkspaceId) => {
     useReplay.getState().selectAnalysisWorkspace(workspaceId);
   };
   const setLayer = (layerId: LayerId, override: LayerOverride | "default") => {
     useReplay.getState().setAnalysisLayer(layerId, override);
   };
+  const analysisTaskIds = beforeGun
+    ? ANALYSIS_AVAILABLE_TASK_IDS
+    : ANALYSIS_POSTSTART_TASK_IDS;
   const analysisTabs = analysisWorkspace === null ? null : (
     <AnalysisWorkspaceTabs
       active={analysisWorkspace.workspaceId}
+      availableTaskIds={analysisTaskIds}
       onSelect={selectWorkspace}
     />
   );
-  const analysisPanel = analysisWorkspace === null ? null : (
+  const analysisPanel = !analysisActive || analysisWorkspace === null ? null : (
     <AnalysisWorkspacePanel
       race={race}
       workspace={analysisWorkspace}
-      session={analysis}
       comparison={rangeComparison}
       inspection={visibleInspection}
-      vector={!vectorDocked}
+    />
+  );
+  const analysisLayers = analysisWorkspace === null ? null : (
+    <AnalysisLayerDisclosure
+      session={visibleAnalysis}
+      workspace={analysisWorkspace}
       onLayerChange={setLayer}
       onReset={() => useReplay.getState().resetAnalysisWorkspace()}
     />
@@ -568,8 +625,8 @@ export function LaylineApp({
       data-gate={briefed && !briefDone ? "brief" : undefined}
       data-analysis-ready={analysisWorkspace !== null && analysisWorkspaceReady ? "true" : undefined}
       data-analysis-workspace={analysisWorkspaceReady ? analysisWorkspace?.workspaceId : undefined}
+      data-analysis-active={analysisWorkspaceReady && analysisActive ? "true" : undefined}
       data-analysis-panel-dock={analysisWorkspaceReady ? analysisPanelDock ?? undefined : undefined}
-      data-vector-dock={vectorDocked ? "true" : undefined}
       data-analysis-flow="viewer"
     >
       <div
@@ -633,44 +690,41 @@ export function LaylineApp({
         race={race}
         venue={venue}
         analysisNavigation={analysisWorkspaceReady ? analysisTabs : undefined}
+        showTruthControl={!analysisWorkspaces}
       />
+
+      <p className={styles.srOnly} role="status" aria-live="polite">
+        {analysisAnnouncement}
+      </p>
 
       {/* Instruments describe a scene. Until there is one, the docks stay out
           of the way of the chart that is standing in for it. */}
       <div className={styles.dockLeft} data-dock="standings">
-        {live && analysisWorkspace === null ? <Standings race={race} /> : null}
+        {analysisWorkspaceReady ? analysisLayers : null}
+        {showStandingsDock && live && !analysisActive ? <Standings race={race} /> : null}
         {analysisWorkspaceReady && analysisPanelDock === "left" ? analysisPanel : null}
       </div>
-      {/* The truth branch outranks Compare's otherwise-empty dock: the TopBar
-          toggle advertises aria-controls="truth-inspector" in every workspace,
-          so the inspector must be able to exist in every workspace. Only the
-          Evidence panel, which contains the same inspector, still supersedes
-          it. */}
+      {/* Truth remains the story player's audit path. The race library owns the
+          same inspector through Evidence, so it never duplicates this branch. */}
       <div className={styles.dockRight} data-dock="instruments">
         {analysisWorkspaceReady && analysisPanelDock === "right" ? (
           analysisPanel
-        ) : truthMode && analysisWorkspace?.panel !== "truth-provenance" ? (
-          <TruthInspector race={race} inspection={visibleInspection} vector={!vectorDocked} />
-        ) : analysisWorkspace?.panel === "comparison" ? null : live ? (
-          <Instruments race={race} inspection={visibleInspection} vector={!vectorDocked} />
-        ) : null}
-      </div>
-      {/* The velocity triangle on its own plate in the open bottom-left water,
-          whenever the right column would otherwise carry it. Same surface,
-          same inspection, one mounted instance either way. */}
-      <div className={styles.dockVector} data-dock="vector">
-        {vectorDocked ? (
-          <section className={styles.panel} aria-label="Water current and ground vectors">
-            <VectorTriangle race={race} inspection={visibleInspection} />
-          </section>
+        ) : !analysisWorkspaces && truthMode && analysisWorkspace?.panel !== "truth-provenance" ? (
+          <TruthInspector
+            race={race}
+            inspection={visibleInspection}
+            vector={analysisWorkspace === null}
+          />
+        ) : analysisWorkspace?.panel === "comparison" ? null : live && !analysisActive ? (
+          <Instruments race={race} />
         ) : null}
       </div>
       <div className={styles.dockBottom} data-dock="transport">
         {(analysisWorkspace === null || analysisWorkspaceReady) && (live || comparison) ? (
           <div className={styles.panel}>
             {(live || comparison) ? <Transport /> : null}
-            {live && analysisWorkspace === null ? <StartLine race={race} /> : null}
-            {live && analysisWorkspace === null ? <VmgStrip race={race} /> : null}
+            {live && !analysisActive ? <StartLine race={race} /> : null}
+            {live && !analysisActive ? <VmgStrip race={race} /> : null}
             {comparison && analysisWorkspace === null ? (
               <ComparisonPanel race={race} comparison={rangeComparison} />
             ) : null}

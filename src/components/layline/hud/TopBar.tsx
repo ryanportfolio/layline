@@ -23,10 +23,12 @@ export function TopBar({
   race,
   venue = "Long Beach",
   analysisNavigation,
+  showTruthControl = true,
 }: {
   race: RaceData;
   venue?: string;
   analysisNavigation?: ReactNode;
+  showTruthControl?: boolean;
 }) {
   const clockRef = useRef<HTMLSpanElement>(null);
   const legRef = useRef<HTMLSpanElement>(null);
@@ -77,25 +79,29 @@ export function TopBar({
         {/* Independent of the playback lens. It exposes both evaluator answers
             without changing which one poses the fleet. Kept in the bar so a
             no-WebGL visitor can still open the 2D truth path. */}
-        <button
-          type="button"
-          className={truthMode ? `${styles.truthButton} ${styles.truthButtonOn}` : styles.truthButton}
-          aria-label={`Telemetry truth mode, ${truthMode ? "on" : "off"}`}
-          aria-pressed={truthMode}
-          aria-controls={truthMode ? "truth-inspector" : undefined}
-          aria-expanded={truthMode}
-          data-control="truth-mode"
-          onClick={() => setTruthMode(!truthMode)}
-        >
-          <span>Truth</span>
-          <span className={styles.truthButtonState}>{truthMode ? "ON" : "OFF"}</span>
-        </button>
-        <span
-          className={raw ? `${styles.replayStatus} ${styles.rawChip}` : styles.replayStatus}
-          data-chip="replay-status"
-        >
-          {raw ? "RAW 4 HZ" : "SMOOTH"}
-        </span>
+        {showTruthControl ? (
+          <button
+            type="button"
+            className={truthMode ? `${styles.truthButton} ${styles.truthButtonOn}` : styles.truthButton}
+            aria-label={`Telemetry truth mode, ${truthMode ? "on" : "off"}`}
+            aria-pressed={truthMode}
+            aria-controls={truthMode ? "truth-inspector" : undefined}
+            aria-expanded={truthMode}
+            data-control="truth-mode"
+            onClick={() => setTruthMode(!truthMode)}
+          >
+            <span>Truth</span>
+            <span className={styles.truthButtonState}>{truthMode ? "ON" : "OFF"}</span>
+          </button>
+        ) : null}
+        {raw ? (
+          <span
+            className={`${styles.replayStatus} ${styles.rawChip}`}
+            data-chip="replay-status"
+          >
+            RAW 4 HZ
+          </span>
+        ) : null}
         {sceneUp ? <WindDial race={race} /> : null}
       </div>
       {analysisNavigation}

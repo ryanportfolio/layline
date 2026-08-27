@@ -171,8 +171,6 @@ export function VectorTriangle({
     <section className={styles.vectorTriangle} aria-label="Replay velocity vector triangle">
       <div className={styles.vectorHeader}>
         <strong>Water + current = ground</strong>
-        <span ref={caption}>{initial.caption}</span>
-        <span ref={currentCaption}>{initial.currentCaption}</span>
       </div>
       <svg
         className={styles.vectorPlot}
@@ -204,9 +202,18 @@ export function VectorTriangle({
         <span ref={currentValue}>{initialLabels[1]}</span>
         <span ref={groundValue}>{initialLabels[2]}</span>
       </div>
-      <p className={styles.vectorTrace} data-trace-status="visible">
-        {inspectionStatus(inspection)}
-      </p>
+      <details className={styles.vectorMethod}>
+        <summary>Method and sources</summary>
+        <div className={styles.vectorMethodBody}>
+          <span ref={caption}>{initial.caption}</span>
+          <span ref={currentCaption}>{initial.currentCaption}</span>
+          <p className={styles.vectorTrace} data-trace-status="visible">
+            {inspectionStatus(inspection)}
+          </p>
+          <p>Recorded fixes are sampled at 4 Hz.</p>
+          <p>Water velocity plus current equals ground velocity in course-frame metres per second.</p>
+        </div>
+      </details>
       {/* Exact contract strings remain visible to source and assistive audits. */}
       <span className={styles.srOnly}>
         {RECORDED_CAPTION}; {RECONSTRUCTED_CAPTION}; {RECORDED_CURRENT_CAPTION}; {RECONSTRUCTED_CURRENT_CAPTION}

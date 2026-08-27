@@ -1054,8 +1054,7 @@ test("the sea cover briefs the race it is loading", () => {
     ".panelCount {",
     ".favored {",
     ".polarTick {",
-    ".polarCap {",
-    ".perfNote {",
+    ".perfMethodBody {",
   ]) {
     const block = cover.slice(cover.indexOf(measured));
     assert.ok(
@@ -1646,12 +1645,12 @@ test("the brief gates the replay, and re-arms with the race", () => {
   assert.ok(AUTOPLAY_FROM < 0, "the autoplay no longer starts inside the prestart");
   assert.ok(OPEN_AT > 0, "the reduced-motion open moved out of the race");
 
-  /* Enter releases it, except while a viewer is typing: the analyst's composer
-     is one Tab away. */
+  /* Enter releases it from the background, except while a viewer is typing or
+     when a native control or disclosure owns the key. */
   assert.ok(brief.includes('event.key !== "Enter"'), "Enter stopped releasing the brief");
   assert.ok(
-    brief.includes('tag === "INPUT" || tag === "TEXTAREA"'),
-    "Enter now fires from inside the analyst's composer",
+    brief.includes('target.closest("a, button, input, select, summary, textarea")'),
+    "Enter now escapes a native control or disclosure and releases the brief",
   );
   assert.ok(brief.includes("isContentEditable"), "Enter fires from a rich text field");
   assert.ok(
@@ -1662,7 +1661,7 @@ test("the brief gates the replay, and re-arms with the race", () => {
   assert.ok(brief.includes("Start the race"), "the way through changed its words");
 });
 
-test("a gated console is one screen tall, and Continue clears the composer", () => {
+test("a gated console is one screen tall with the Debrief composer in panel flow", () => {
   const app = source("src/components/layline/LaylineApp.tsx");
   /* The gate is the stage's business as well as the cover's: stacked, the
      console is a column of docks about 1300px tall, and a brief held to one
@@ -1678,7 +1677,7 @@ test("a gated console is one screen tall, and Continue clears the composer", () 
   const stacked = css.slice(css.indexOf("@media (max-width: 900px) {"));
   assert.ok(stacked.includes('.stage[data-gate="brief"] {'), "the gated console stopped being capped");
   assert.ok(
-    stacked.includes("max-height: calc(100svh - var(--composer-bar, 59px) - env(safe-area-inset-bottom));"),
+    stacked.includes("max-height: 100svh;"),
     "the cap stopped agreeing with the height the brief is held to",
   );
   /* Nothing under the cover may resize while it is up: the canvas states its
@@ -1687,23 +1686,10 @@ test("a gated console is one screen tall, and Continue clears the composer", () 
   assert.ok(stacked.includes('.stage[data-gate="brief"] > * {'), "the docks went back to shrinking under the cap");
 
   const cover = source("src/components/layline/bootSea.module.css");
-  /* The composer pins over the foot of the viewport below 1199px. The cap
-     above only holds while the brief is pinned; scrolled to where the gate is
-     simply fully in view, its bottom edge lands on the viewport foot, and a
-     footer flush with that edge lands under the composer. */
-  assert.ok(cover.includes("--brief-foot-gap: 0px;"), "the footer gap stopped being stated at full width");
-  assert.ok(
-    cover.includes("--brief-foot-gap: calc(var(--composer-bar, 59px) + env(safe-area-inset-bottom));"),
-    "the footer stopped being held off the composer's band",
-  );
-  assert.ok(
-    cover.includes("padding: 3cqw 3.2cqw calc(2.2cqw + var(--brief-foot-gap));"),
-    "the brief stopped spending the gap",
-  );
-  assert.ok(
-    cover.includes("padding: 16px 16px calc(16px + var(--brief-foot-gap));"),
-    "the stacked brief stopped spending the gap",
-  );
+  assert.doesNotMatch(cover, /--composer-bar|--brief-foot-gap/);
+  assert.ok(cover.includes("max-height: 100svh;"), "the brief stopped using the full small viewport");
+  assert.ok(cover.includes("padding: 3cqw 3.2cqw 2.2cqw;"), "the brief lost its desktop padding");
+  assert.ok(cover.includes("padding: 16px;"), "the stacked brief lost its padding");
 });
 
 test("the brief reads the race in two halves, on one switch", () => {
@@ -1731,12 +1717,12 @@ test("the brief reads the race in two halves, on one switch", () => {
      say it again when the rail swaps the race under them. */
   assert.ok(shell.includes('useState<BriefView>("panels")'), "the view stopped opening on the start");
 
-  /* A button answers Enter itself. Without this the switch both changed the
-     view and released the brief on one press, which handed the reader the race
-     when they asked to see the other half. */
+  /* Native controls and disclosures answer Enter themselves. Without this the
+     switch or Method disclosure can both act and release the brief on one
+     press, handing the reader the race when they asked to change the brief. */
   assert.ok(
-    shell.includes('if (tag === "INPUT" || tag === "TEXTAREA" || tag === "BUTTON" || tag === "A") return;'),
-    "Enter on the view switch releases the brief again",
+    shell.includes('target.closest("a, button, input, select, summary, textarea")'),
+    "Enter on an interactive brief element releases the brief again",
   );
 
   /* The prestart clock belongs to the shell, and it has to: only one view is
