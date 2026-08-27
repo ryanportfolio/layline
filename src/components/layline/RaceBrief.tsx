@@ -5,6 +5,7 @@ import { briefFacts, type BriefFacts } from "@/lib/layline/brief";
 import type { RaceData } from "@/lib/layline/types";
 import { BriefPanels, setText, signed } from "./BriefPanels";
 import { BriefPerformance } from "./BriefPerformance";
+import { RaceBriefDither } from "./RaceBriefDither";
 import styles from "./bootSea.module.css";
 import { AUTOPLAY_FROM, OPEN_AT, useReplay } from "./store";
 
@@ -246,6 +247,8 @@ export function RaceBrief({
       data-brief-view={view}
       aria-label={`Race brief, ${name}`}
     >
+      <RaceBriefDither reduced={reduced} />
+
       <header className={styles.briefHead}>
         <div className={styles.raceName} ref={title}>
           {name}
