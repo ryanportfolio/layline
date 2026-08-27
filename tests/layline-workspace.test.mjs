@@ -128,3 +128,26 @@ test("the race rail and panes keep their interaction contracts", async () => {
   assert.match(styles, /\.separator \{[\s\S]*?display: none;/);
   assert.match(styles, /@media \(min-width: 1200px\)[\s\S]*?\.separator \{\s*display: block;/);
 });
+
+test("analysis layers and contextual Start stay independent from the Analyze picker", async () => {
+  const [app, panel, disclosure, workspace] = await Promise.all([
+    read("src/components/layline/LaylineApp.tsx"),
+    read("src/components/layline/hud/AnalysisWorkspacePanel.tsx"),
+    read("src/components/layline/hud/AnalysisLayerDisclosure.tsx"),
+    read("src/app/races/RaceWorkspace.tsx"),
+  ]);
+
+  assert.match(disclosure, /<details className=\{styles\.analysisLayerDisclosure\}>/);
+  assert.match(disclosure, /Reset range and layers/);
+  assert.doesNotMatch(panel, /analysisLayerDisclosure|Reset range and layers/);
+  assert.match(
+    app,
+    /analysisWorkspaces && beforeGun && analysis\.active === "overview"[\s\S]*active: "start" as const/,
+  );
+  assert.match(app, /session=\{visibleAnalysis\}/);
+  assert.match(
+    app,
+    /analysisWorkspaceReady \? analysisLayers : null[\s\S]*showStandingsDock && live && !analysisActive/,
+  );
+  assert.match(workspace, /showStandingsDock=\{!libraryOpen\}/);
+});

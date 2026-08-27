@@ -65,6 +65,7 @@ interface Seat {
 export function useWaterPointer(
   target: RefObject<HTMLDivElement | null>,
   live: boolean,
+  zoomable = true,
 ): void {
   useEffect(() => {
     const node = target.current;
@@ -261,7 +262,7 @@ export function useWaterPointer(
       if (touch.spread > 0) {
         /* Pinching out is the fleet coming closer, so the range shrinks by the
          * same ratio the fingers grew by. */
-        zoom(freeform, (touch.spread - reach) * 1.4);
+        if (zoomable) zoom(freeform, (touch.spread - reach) * 1.4);
         pan(freeform, midX - touch.lastX, midY - touch.lastY, metresPerPixel(freeform, box().height));
         touch.moved = true;
         freeform.busy = true;
@@ -457,7 +458,7 @@ export function useWaterPointer(
       endTouchSession();
       setPointerHover(null);
     };
-  }, [target, live]);
+  }, [target, live, zoomable]);
 }
 
 /**

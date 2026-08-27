@@ -217,9 +217,9 @@ export function RaceBrief({
     state.releaseBrief();
   }, []);
 
-  /* Enter releases the brief from anywhere on the page, except while a viewer
-   * is typing, because the analyst's composer is one Tab away, and except on a
-   * control that already answers Enter itself.
+  /* Enter releases the brief from its background, except while a viewer is
+   * typing, because the analyst's composer is one Tab away, and except on a
+   * control or disclosure that already answers Enter itself.
    *
    * That last one is not hypothetical. A button takes Enter as its own
    * activation and the keydown reaches the document undefaulted, so with the
@@ -230,10 +230,14 @@ export function RaceBrief({
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.key !== "Enter" || event.defaultPrevented) return;
-      const active = document.activeElement;
-      const tag = active === null ? "" : active.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "BUTTON" || tag === "A") return;
-      if (active instanceof HTMLElement && active.isContentEditable) return;
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        (target.closest("a, button, input, select, summary, textarea") ||
+          (target instanceof HTMLElement && target.isContentEditable))
+      ) {
+        return;
+      }
       release();
     };
     document.addEventListener("keydown", onKey);

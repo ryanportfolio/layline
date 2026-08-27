@@ -369,9 +369,6 @@ export function BriefPerformance({ race }: { race: RaceData }) {
             })}
           </svg>
         </div>
-        <p className={styles.polarCap}>
-          {`Speed scaled to the ${meanKn.toFixed(1)} kn race mean, so a puff cannot read as pace. Port tack left, starboard right; dot size is heel. Turns and the ${STEADY_WINDOW} s either side are left out and counted as turn cost instead.`}
-        </p>
       </div>
 
       <div className={`${styles.panel} ${styles.perfTable}`}>
@@ -484,10 +481,6 @@ export function BriefPerformance({ race }: { race: RaceData }) {
             );
           })}
         </svg>
-        <div className={styles.fleetFoot}>
-          <span>{`a sample every ${VMG_STEP} s`}</span>
-          <span>broken off the legs</span>
-        </div>
       </div>
 
       <div className={`${styles.panel} ${styles.reads}`}>
@@ -517,9 +510,18 @@ export function BriefPerformance({ race }: { race: RaceData }) {
         </div>
       </div>
 
-      <p className={styles.perfNote}>
-        {`Breeze ran ${lo} to ${hi} kn across the race. ${review.fleet.steady} samples at 4 Hz behind the figures.`}
-      </p>
+      <details className={styles.perfMethod}>
+        <summary>Method</summary>
+        <div className={styles.perfMethodBody}>
+          <p>
+            {`Speed scaled to the ${meanKn.toFixed(1)} kn race mean, so a puff cannot read as pace. Port tack left, starboard right; dot size is heel. Turns and the ${STEADY_WINDOW} s either side are left out and counted as turn cost instead.`}
+          </p>
+          <p>{`A sample every ${VMG_STEP} s, broken off the legs.`}</p>
+          <p>
+            {`Breeze ran ${lo} to ${hi} kn across the race. ${review.fleet.steady} samples at 4 Hz behind the figures.`}
+          </p>
+        </div>
+      </details>
     </div>
   );
 }

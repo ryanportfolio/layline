@@ -277,7 +277,6 @@ export function AnalystSection({
   const [composerFocused, setComposerFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const threadRef = useRef<HTMLOListElement | null>(null);
-  const conversationRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const retryRef = useRef<Turn[] | null>(null);
   /* Boat metadata comes from the client's own seeded race build, same as the
@@ -544,19 +543,9 @@ export function AnalystSection({
       setInput("");
       inputRef.current?.focus();
       setRaced(true);
-      /* Stacked, the rail's composer is a bar pinned to the foot of the
-       * viewport and the thread it writes into can be most of a screen above
-       * it. Bring the answer to the person who asked for it. */
-      if (rail && window.matchMedia("(max-width: 1199px)").matches) {
-        const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-        conversationRef.current?.scrollIntoView({
-          behavior: reduced ? "auto" : "smooth",
-          block: "start",
-        });
-      }
       void stream([...turns, { role: "user", text }]);
     },
-    [rail, streaming, stream, turns],
+    [streaming, stream, turns],
   );
 
   const retry = useCallback(() => {
@@ -703,7 +692,7 @@ export function AnalystSection({
           </div>
           )}
 
-          <div className={rail ? styles.dockConversation : styles.conversation} ref={conversationRef}>
+          <div className={rail ? styles.dockConversation : styles.conversation}>
             {turns.length === 0 ? (
               rail ? (
                 <p className={styles.dockEmpty}>
