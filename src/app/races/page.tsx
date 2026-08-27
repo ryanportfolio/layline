@@ -5,6 +5,7 @@ import RailLogo from "@/components/chrome/RailLogo";
 import { TrackChart } from "@/components/layline/svg/TrackChart";
 import { raceFor } from "@/lib/layline/analyst/data";
 import { MISSING, clock } from "@/lib/layline/format";
+import { montserrat } from "@/lib/layline/fonts";
 import { DEFAULT_RACE_ID, RACES, isRaceId } from "@/lib/layline/races";
 import { RaceWorkspace, ThemePicker, type LaylineTheme, type RaceRow } from "./RaceWorkspace";
 import {
@@ -94,7 +95,7 @@ export default async function LaylineRacesPage({
 
   return (
     <div
-      className={`${layline.shell} ${styles.page}`}
+      className={`${layline.shell} ${styles.page} ${montserrat.variable}`}
       data-layline-page
       data-layline-theme={initialTheme}
       suppressHydrationWarning

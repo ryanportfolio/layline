@@ -224,7 +224,7 @@ export function BriefPanels({
   return (
     <div className={styles.panelMain} ref={root}>
       <div className={styles.panel}>
-        <div className={styles.panelLabel}>
+        <div className={`${styles.panelLabel} ${styles.panelLabelHead}`}>
           <span>Fleet at the line</span>
           <span className={styles.panelCount}>{facts.boats.length}</span>
         </div>
@@ -243,7 +243,7 @@ export function BriefPanels({
       </div>
 
       <div className={styles.panel}>
-        <div className={styles.panelLabel}>
+        <div className={`${styles.panelLabel} ${styles.panelLabelHead}`}>
           <span>Wind, live off the seed</span>
         </div>
         <div className={styles.dialWrap}>
@@ -297,7 +297,7 @@ export function BriefPanels({
       </div>
 
       <div className={styles.panel}>
-        <div className={styles.panelLabel}>
+        <div className={`${styles.panelLabel} ${styles.panelLabelHead}`}>
           <span>Start line</span>
           <span className={styles.panelCount} ref={twdTag}>
             {`${signed(seed.twd, 0)}°`}

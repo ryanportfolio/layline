@@ -102,6 +102,15 @@
   --brief-mono: var(--font-martian), monospace;
   --brief-sans: var(--font-archivo), sans-serif;
 
+  /* A fourth face, and it gets exactly three headings: the section heads on
+     the start view. Montserrat is what the sailing-instrument brands set their
+     section heads in, and this borrows their setting rather than their size,
+     which is 400 weight and 0.15em of tracking in caps. Both layline routes
+     put the font's variable on their shell; Archivo stands behind it so a
+     capture harness or an embed that renders this component outside those two
+     shells still gets a label rather than the browser's default sans. */
+  --brief-display: var(--font-montserrat), var(--font-archivo), sans-serif;
+
   /* The header sits on the gradient's top band, which is the sky-horizon token
      nearly neat, so its ink has to follow that token rather than the plates'.
      Stated here as the light-sky branch because the shipped token is light:
@@ -383,6 +392,20 @@
   flex: none;
   justify-content: space-between;
   color: var(--brief-dim);
+}
+
+/* The start view's three section heads, and nothing else on the layer. They
+   keep the 10px label size so the layer still holds to three sizes; only the
+   face, the weight and the tracking move. 600 Archivo at this size reads as a
+   dock label, which is the console's voice and the wrong one for a panel the
+   reader meets before the race starts. The performance view's labels stay on
+   the Archivo rule: they head a table of mono numbers and have to carry weight
+   against it. Ordered after the shared rule so it wins on source order at the
+   same specificity. */
+.panelLabelHead {
+  font-family: var(--brief-display);
+  font-weight: 400;
+  letter-spacing: 0.15em;
 }
 
 /* A measured value, so it leaves the label's face for the mono. */
