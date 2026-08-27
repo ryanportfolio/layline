@@ -639,9 +639,12 @@
   gap: 4px;
 }
 
+/* Two segments are narrow enough to sit beside the longest label the dock
+   carries, so the row keeps the shape the select had and the panel keeps its
+   height. */
 .analysisLayerControl {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(120px, auto);
+  grid-template-columns: minmax(0, 1fr) minmax(104px, auto);
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -652,7 +655,79 @@
   text-transform: uppercase;
 }
 
-.analysisLayerControl select,
+.analysisLayerChoices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-width: 0;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+
+/* One hairline between segments, drawn by the segment that follows: an outline
+   on each would double up on the shared edge. */
+.analysisLayerChoice + .analysisLayerChoice {
+  border-left: 1px solid var(--rule);
+}
+
+.analysisLayerChoice {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  min-width: 0;
+  padding: 0 8px;
+  color: var(--ink-dim);
+  cursor: var(--house-cursor);
+}
+
+.analysisLayerChoice:first-child {
+  border-radius: 5px 0 0 5px;
+}
+
+.analysisLayerChoice:last-child {
+  border-radius: 0 5px 5px 0;
+}
+
+/* The radio carries the state and the keyboard; the segment carries the paint.
+   Kept in the layout rather than display: none so it stays focusable. */
+.analysisLayerChoice input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.analysisLayerChoice > span {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analysisLayerChoice[data-selected="yes"] {
+  background: color-mix(in srgb, var(--ink) 14%, transparent);
+  color: var(--ink);
+}
+
+.analysisLayerChoice:hover:not([data-selected="yes"]) {
+  background: color-mix(in srgb, var(--ink) 9%, transparent);
+}
+
+.analysisLayerChoice:has(input:focus-visible) {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
 .analysisLayerReset {
   min-height: 32px;
   padding: 0 9px;
@@ -661,27 +736,6 @@
   border-radius: 6px;
   color: var(--ink);
   font: inherit;
-}
-
-.analysisLayerControl select {
-  width: 100%;
-  min-width: 120px;
-  max-width: 144px;
-  color-scheme: dark;
-}
-
-.analysisLayerControl select option {
-  background: var(--page-ground);
-  color: var(--ink);
-}
-
-.shell[data-layline-theme="sailcloth"] .analysisLayerControl select {
-  color-scheme: light;
-}
-
-.shell[data-layline-theme="chart"] .analysisLayerControl select,
-.shell[data-layline-theme="ice"] .analysisLayerControl select {
-  color-scheme: light;
 }
 
 .analysisLayerUnavailable {
@@ -708,16 +762,15 @@
   text-transform: none;
 }
 
-.analysisLayerControl[data-layer-override="on"] select {
+/* An overridden layer is the one thing on this list a reader has to be able to
+   find at a glance: it is the reason the workspace is not showing what its
+   preset says it shows. The selected segment already reads as selected, so the
+   override marks the whole row rather than repeating that. */
+.analysisLayerControl[data-layer-override="on"] .analysisLayerChoices,
+.analysisLayerControl[data-layer-override="off"] .analysisLayerChoices {
   border-color: var(--focus-ring);
 }
 
-.analysisLayerControl[data-layer-override="off"] select {
-  color: var(--ink-dim);
-  text-decoration: line-through;
-}
-
-.analysisLayerControl select:focus-visible,
 .analysisLayerReset:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
