@@ -22,6 +22,19 @@ import {
   analysisWorkspaceTabId,
 } from "@/lib/layline/analysis-workspace-ui";
 
+/* What a layer is doing, both states on the panel at once rather than behind a
+ * select: the state is legible without opening anything and changing it costs
+ * one click instead of two.
+ *
+ * The preset's own call has no segment of its own. It is not a third thing a
+ * layer can be doing, it is where the current state came from, so the segments
+ * read the resolved visibility and the row marks itself when an override is
+ * what put it there. Reset range and layers is the way back to the preset. */
+const LAYER_CHOICES: readonly { value: LayerOverride; label: string }[] = Object.freeze([
+  { value: "on", label: "On" },
+  { value: "off", label: "Off" },
+]);
+
 export function AnalysisWorkspacePanel({
   race,
   workspace,
@@ -97,30 +110,43 @@ export function AnalysisWorkspacePanel({
           <div className={styles.analysisLayerGrid}>
             {layerControls.map((layer) => (
               layer.available ? (
-                <label
+                <div
                   key={layer.id}
                   className={styles.analysisLayerControl}
                   data-layer-override={layer.value}
                   data-layer-resolved={layer.resolvedVisible ? "on" : "off"}
                 >
-                  <span>{layer.label}</span>
-                  <select
-                    value={layer.value}
-                    aria-label={`${layer.label} layer`}
-                    onChange={(event) =>
-                      onLayerChange(
-                        layer.id,
-                        event.currentTarget.value as LayerOverride | "default",
-                      )
-                    }
+                  <span id={`analysis-layer-name-${layer.id}`}>{layer.label}</span>
+                  {/* Native radios rather than buttons with aria-checked: the
+                      group already gets arrow-key roving and one tab stop from
+                      the browser, and the checked state a screen reader reads
+                      is the same state the highlight is drawn from. */}
+                  <div
+                    className={styles.analysisLayerChoices}
+                    role="radiogroup"
+                    aria-labelledby={`analysis-layer-name-${layer.id}`}
                   >
-                    <option value="default">
-                      Default ({layer.defaultVisible ? "on" : "off"})
-                    </option>
-                    <option value="on">On</option>
-                    <option value="off">Off</option>
-                  </select>
-                </label>
+                    {LAYER_CHOICES.map((choice) => (
+                      <label
+                        key={choice.value}
+                        className={styles.analysisLayerChoice}
+                        data-choice={choice.value}
+                        data-selected={
+                          layer.resolvedVisible === (choice.value === "on") ? "yes" : "no"
+                        }
+                      >
+                        <input
+                          type="radio"
+                          name={`analysis-layer-${layer.id}`}
+                          value={choice.value}
+                          checked={layer.resolvedVisible === (choice.value === "on")}
+                          onChange={() => onLayerChange(layer.id, choice.value)}
+                        />
+                        <span>{choice.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
               ) : (
                 <div
                   key={layer.id}
