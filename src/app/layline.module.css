@@ -2950,8 +2950,56 @@
   border-left-color: var(--ink);
 }
 
-.eventMark span {
+.eventMark > span:first-child {
   color: var(--ink);
+}
+
+/* What the letter on the mark stands for, on hover and on keyboard focus.
+   Immediate by design: the native title attribute this replaces waits about a
+   second before it appears, which is the whole complaint about it.
+
+   Hidden with opacity rather than visibility or display so the span stays in
+   the accessibility tree, because it is also the aria-describedby target the
+   mark points at. pointer-events: none keeps it from eating the hover that
+   summoned it, which would flicker the tooltip against its own mark. */
+.pointTip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  z-index: 7;
+  width: max-content;
+  max-width: 190px;
+  padding: 5px 7px;
+  /* Centred on the mark, then nudged by whatever Timeline measured it needed
+     to stay inside the viewport. Zero for every mark that already fits. */
+  transform: translateX(calc(-50% + var(--tip-shift, 0px)));
+  background: var(--page-ground);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 22%);
+  color: var(--ink);
+  font-family: var(--font-archivo), sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 14px;
+  text-align: left;
+  text-transform: none;
+  white-space: normal;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 60ms linear;
+}
+
+.pointMark:hover .pointTip,
+.pointMark:focus-visible .pointTip {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pointTip {
+    transition: none;
+  }
 }
 
 /* Phases separate by weight and their own label, never by borrowing a colour
