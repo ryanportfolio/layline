@@ -37,6 +37,33 @@ import { onLive, sampleLive, setText } from "./live";
 const TACK_GLYPH = "M1.5 6.9 L5 2.7 L8.5 6.9";
 const GYBE_GLYPH = "M1.5 3.1 L5 7.3 L8.5 3.1";
 
+/* How much room a tooltip has to keep between itself and the viewport edge. */
+const TIP_MARGIN = 8;
+
+/**
+ * Keep a mark's tooltip inside the viewport.
+ *
+ * The tooltip is centred on its mark, and a mark can sit hard against either
+ * end of the rail: measured at 390px, the last event's tooltip ran 37px past
+ * the right edge and lost the end of its own text. Nothing scrolled, so there
+ * was no way to read it.
+ *
+ * CSS alone cannot do this. The offset needed is the tooltip's own width
+ * against the viewport, and the tooltip is inside the mark, so a percentage
+ * resolves against a 24px box rather than the rail. This measures once when
+ * the pointer arrives or focus lands, not per frame.
+ */
+function clampTipToViewport(event: { currentTarget: HTMLElement }): void {
+  const tip = event.currentTarget.querySelector<HTMLElement>('[role="tooltip"]');
+  if (tip === null) return;
+  tip.style.setProperty("--tip-shift", "0px");
+  const box = tip.getBoundingClientRect();
+  const past = box.right - (document.documentElement.clientWidth - TIP_MARGIN);
+  const short = TIP_MARGIN - box.left;
+  const shift = past > 0 ? -past : short > 0 ? short : 0;
+  tip.style.setProperty("--tip-shift", `${Math.round(shift)}px`);
+}
+
 /* Raw fixes either side of the playhead. 4 Hz across ten seconds stays
  * legible while the whole-race view is open and becomes the axis at 10 s. */
 const RAW_WINDOW = 10;
@@ -443,10 +470,21 @@ export function Timeline({
                   data-event={item.eventKind}
                   aria-label={`Go to ${item.label} at ${clock(item.at)}`}
                   aria-describedby={descriptionId}
+                  onPointerEnter={clampTipToViewport}
+                  onFocus={clampTipToViewport}
                   onClick={() => seekEvidence(item.at)}
                 >
                   <span>{item.shortLabel}</span>
-                  <span id={descriptionId} className={styles.srOnly}>{detail}</span>
+                  {/* One letter on the mark and the whole event on hover. The
+                      element the description already lived in becomes the
+                      tooltip rather than a second copy of the same string, so
+                      what a pointer reads and what aria-describedby reads
+                      cannot drift apart. Revealed with opacity, never
+                      visibility or display: those two take it out of the
+                      accessibility tree and the description with it. */}
+                  <span id={descriptionId} role="tooltip" className={styles.pointTip}>
+                    {detail}
+                  </span>
                 </button>
               );
             }}
