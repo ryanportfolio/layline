@@ -13,6 +13,7 @@ import { PageGround } from "@/components/layline/PageGround";
 import { SceneKey } from "@/components/layline/SceneKey";
 import { TrackChart } from "@/components/layline/svg/TrackChart";
 import RailLogo from "@/components/chrome/RailLogo";
+import { montserrat } from "@/lib/layline/fonts";
 import { BindShippedRace } from "./BindShippedRace";
 import styles from "./layline.module.css";
 import "./scrollbar.css";
@@ -35,7 +36,7 @@ export default function LaylinePage() {
   const libraryLabel = `Race library // ${RACES.length} races`;
 
   return (
-    <div className={styles.shell} data-layline-page>
+    <div className={`${styles.shell} ${montserrat.variable}`} data-layline-page>
       {/* Pangram Display is declared font-display: block and this is the only
           route that sets anything in it, so the file is asked for here rather
           than in the root layout, where every other page would carry 21 kB it
